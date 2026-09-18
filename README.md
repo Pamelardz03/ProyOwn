@@ -1,8 +1,8 @@
 # Organizador de Gastos
 
-App personal (React + Vite) para organizar sueldo, gastos, gasto hormiga y una wishlist de productos con prioridad. El plan completo (arquitectura, modelo de datos, fórmula de prioridad y roadmap por fases) vive en el doc del proyecto "Aplicaciones Pame".
+App personal (React + Vite) para organizar sueldo, gastos, gasto hormiga, una lista de Whimms (cosas que quieres) con prioridad y Vitalls (servicios recurrentes). El plan completo (arquitectura, modelo de datos, fórmula de prioridad y roadmap por fases) vive en el doc del proyecto "Aplicaciones Pame".
 
-Este README cubre solo el setup técnico de la **Fase 0**: repo + Firebase + despliegue a GitHub Pages.
+Este README cubre el setup técnico: repo + Firebase + despliegue a GitHub Pages.
 
 ## 1. Requisitos
 
@@ -15,7 +15,17 @@ Este README cubre solo el setup técnico de la **Fase 0**: repo + Firebase + des
 npm install
 ```
 
-## 3. Crear el proyecto de Firebase
+## 3. Correr en local sin Firebase (para revisar el diseño)
+
+```bash
+npm run dev
+```
+
+Si todavía no existe `.env.local`, la app entra en **"modo local"**: se salta el login y muestra las 9 pantallas con datos de ejemplo (con un banner arriba avisando que falta configurar Firebase). Sirve para revisar el diseño sin tener que crear el proyecto de Firebase primero.
+
+La terminal también imprime una URL de red (`Network: http://192.168.x.x:5174/...`) — esa es la que usas para abrir la app desde el celular, siempre que estén en la misma red WiFi.
+
+## 4. Crear el proyecto de Firebase (para que guarde de verdad)
 
 1. Ve a https://console.firebase.google.com/ → **Crear proyecto** (el plan gratuito "Spark" es suficiente).
 2. **Authentication** → pestaña *Sign-in method* → habilita **Google**.
@@ -23,7 +33,7 @@ npm install
 4. En **Firestore Database → Reglas**, pega el contenido de [`firestore.rules`](./firestore.rules) y publica. Esto asegura que cada usuario solo pueda leer/escribir sus propios datos.
 5. En **Configuración del proyecto → General**, baja hasta "Tus apps" → agrega una app **Web** (ícono `</>`). Copia los valores del objeto `firebaseConfig` que te da.
 
-## 4. Configurar variables de entorno locales
+## 5. Configurar variables de entorno locales
 
 ```bash
 cp .env.example .env.local
@@ -40,15 +50,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 ```
 
-`.env.local` está en `.gitignore` — nunca se sube al repo.
-
-## 5. Correr en local
-
-```bash
-npm run dev
-```
-
-Abre la URL que te muestre la terminal. Inicia sesión con Google y usa el botón "Escribir dato de prueba en Firestore" — si ves el JSON de vuelta, la Fase 0 está completa.
+`.env.local` está en `.gitignore` — nunca se sube al repo. Reinicia `npm run dev` después de crearlo/editarlo (Vite solo lee las variables de entorno al arrancar). Con esto puesto, ya no aparece el banner de "modo local" y el login con Google pide tu cuenta de verdad.
 
 ## 6. Subir a GitHub y desplegar
 
@@ -78,16 +80,19 @@ Abre la URL que te muestre la terminal. Inicia sesión con Google y usa el botó
 ```
 src/
   lib/
-    firebase.js       # inicializa Firebase (Auth + Firestore)
-    AuthContext.jsx    # contexto de sesión (login/logout con Google)
+    firebase.js         # inicializa Firebase (Auth + Firestore); "modo local" si faltan las llaves
+    AuthContext.jsx      # contexto de sesión (login/logout con Google)
+  components/            # Icons, BottomNav, AddSheet, Toast, Toggle — compartidos entre pantallas
+  hooks/useToast.js
   pages/
-    Home.jsx           # Fase 0: prueba de conexión con Firestore
-    Placeholder.jsx     # placeholder para secciones futuras (Gastos, Wishlist)
-  App.jsx               # navegación y rutas
+    Login.jsx             Inicio.jsx        Gastos.jsx         Compras.jsx
+    Calendario.jsx         Perfil.jsx        MetricasStats.jsx  HistorialCompleto.jsx
+    PreciosFijos.jsx       Sueldos.jsx
+  App.jsx                 # navegación, rutas y el "gate" de login/modo local
 firestore.rules          # reglas de seguridad (pegar en la consola de Firebase)
 .github/workflows/deploy.yml   # build + deploy automático a GitHub Pages
 ```
 
 ## Siguiente paso
 
-Con la Fase 0 funcionando (login + lectura/escritura en Firestore + desplegado en GitHub Pages), lo que sigue es la **Fase 1 — Sueldo y saldo** del roadmap.
+Las 9 pantallas del diseño ya están portadas a React con datos de ejemplo (Fase 1 — UI del roadmap). Lo que sigue es conectar cada pantalla a Firestore de verdad, empezando por la **Fase 2 — Sueldo y presupuesto diario** del plan.
