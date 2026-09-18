@@ -10,5 +10,11 @@ export default defineConfig({
     // host:true expone el server en la red local (te da una IP tipo
     // http://192.168.x.x:5174) para poder probar desde el celular.
     host: true,
+    // Sin esto, el navegador bloquea que la ventana emergente de Google le
+    // avise a la página cuando el login termina — la ventana se abre, no
+    // logra comunicarse y se cierra sola casi de inmediato.
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
   },
 })
