@@ -10,6 +10,7 @@ export function useUserCollection(name) {
   const { user } = useAuth()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!firebaseReady || !user) {
@@ -18,6 +19,7 @@ export function useUserCollection(name) {
       return
     }
     setLoading(true)
+    setError(null)
     const q = query(collection(db, 'users', user.uid, name), orderBy('creadoEn', 'asc'))
     const unsubscribe = onSnapshot(
       q,
@@ -27,13 +29,14 @@ export function useUserCollection(name) {
       },
       (err) => {
         console.error(`Error leyendo ${name}:`, err)
+        setError(`No se pudo cargar${err?.code ? ` (${err.code})` : ''}. ${err?.message || ''}`)
         setLoading(false)
       }
     )
     return unsubscribe
   }, [user, name])
 
-  return { data, loading }
+  return { data, loading, error }
 }
 
 export function addUserDoc(uid, name, data) {

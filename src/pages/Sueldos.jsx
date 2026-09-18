@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconChevronLeft, IconPlus, IconTrash } from '../components/Icons'
 import Toast from '../components/Toast'
@@ -17,13 +17,17 @@ function monthlyEq(s) {
   return monto
 }
 
+function errMsg(err) {
+  return `${err?.code ? `(${err.code}) ` : ''}${err?.message || 'Error desconocido'}`
+}
+
 const emptyFijo = { name: '', monto: '', fecha: '' }
 const emptyRapido = { desc: '', monto: '' }
 
 export default function Sueldos() {
   const { user } = useAuth()
-  const { data: fijos, loading: loadingFijos } = useUserCollection('sueldosFijos')
-  const { data: rapidos, loading: loadingRapidos } = useUserCollection('sueldosRapidos')
+  const { data: fijos, loading: loadingFijos, error: errorFijos } = useUserCollection('sueldosFijos')
+  const { data: rapidos, loading: loadingRapidos, error: errorRapidos } = useUserCollection('sueldosRapidos')
 
   const [addFijoOpen, setAddFijoOpen] = useState(false)
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
@@ -32,6 +36,24 @@ export default function Sueldos() {
   const [rapidoForm, setRapidoForm] = useState(emptyRapido)
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
+
+  // Confirmación de borrado sin window.confirm (algunos navegadores de PWA
+  // instaladas no muestran el diálogo nativo): toca el bote de basura una
+  // vez para armarlo, otra vez para confirmar. Se desarma solo a los 3s.
+  const [confirmDelete, setConfirmDelete] = useState(null) // { type: 'fijo' | 'rapido', id }
+  const confirmTimeout = useRef(null)
+
+  function armOrDelete(type, id, doDelete) {
+    if (confirmDelete && confirmDelete.type === type && confirmDelete.id === id) {
+      clearTimeout(confirmTimeout.current)
+      setConfirmDelete(null)
+      doDelete()
+      return
+    }
+    clearTimeout(confirmTimeout.current)
+    setConfirmDelete({ type, id })
+    confirmTimeout.current = setTimeout(() => setConfirmDelete(null), 3000)
+  }
 
   const fijosTotal = fijos.reduce((sum, s) => sum + monthlyEq(s), 0)
   const rapidosTotal = rapidos.reduce((sum, r) => sum + (Number(r.monto) || 0), 0)
@@ -55,7 +77,7 @@ export default function Sueldos() {
       show('Sueldo fijo guardado')
     } catch (err) {
       console.error(err)
-      show('No se pudo guardar. Intenta de nuevo')
+      show(`No se pudo guardar: ${errMsg(err)}`)
     } finally {
       setSaving(false)
     }
@@ -76,31 +98,29 @@ export default function Sueldos() {
       show('Sueldo rápido guardado')
     } catch (err) {
       console.error(err)
-      show('No se pudo guardar. Intenta de nuevo')
+      show(`No se pudo guardar: ${errMsg(err)}`)
     } finally {
       setSaving(false)
     }
   }
 
   async function removeFijo(id) {
-    if (!window.confirm('¿Eliminar este sueldo fijo?')) return
     try {
       await deleteUserDoc(user.uid, 'sueldosFijos', id)
       show('Sueldo fijo eliminado')
     } catch (err) {
       console.error(err)
-      show('No se pudo eliminar')
+      show(`No se pudo eliminar: ${errMsg(err)}`)
     }
   }
 
   async function removeRapido(id) {
-    if (!window.confirm('¿Eliminar este sueldo rápido?')) return
     try {
       await deleteUserDoc(user.uid, 'sueldosRapidos', id)
       show('Sueldo rápido eliminado')
     } catch (err) {
       console.error(err)
-      show('No se pudo eliminar')
+      show(`No se pudo eliminar: ${errMsg(err)}`)
     }
   }
 
@@ -176,9 +196,12 @@ export default function Sueldos() {
             </div>
           )}
 
+          {errorFijos && <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 8 }}>{errorFijos}</div>}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {fijos.map((s) => {
               const dias = daysUntil(s.fecha)
+              const armed = confirmDelete?.type === 'fijo' && confirmDelete?.id === s.id
               return (
                 <div key={s.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -192,14 +215,19 @@ export default function Sueldos() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
-                    <button aria-label="Eliminar" style={{ padding: 2 }} onClick={() => removeFijo(s.id)}>
-                      <IconTrash size={14} color="var(--muted)" />
+                    <button
+                      aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'}
+                      style={{ padding: 2, display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={() => armOrDelete('fijo', s.id, () => removeFijo(s.id))}
+                    >
+                      {armed && <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
+                      <IconTrash size={14} color={armed ? 'var(--red)' : 'var(--muted)'} />
                     </button>
                   </div>
                 </div>
               )
             })}
-            {!loadingFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
+            {!loadingFijos && !errorFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
           </div>
         </div>
 
@@ -233,21 +261,31 @@ export default function Sueldos() {
             </div>
           )}
 
+          {errorRapidos && <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 10 }}>{errorRapidos}</div>}
+
           <div className="row-list" style={{ marginTop: 10 }}>
-            {rapidos.map((r) => (
-              <div key={r.id} className="row-list-item">
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 13 }}>{r.desc}</span>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
+            {rapidos.map((r) => {
+              const armed = confirmDelete?.type === 'rapido' && confirmDelete?.id === r.id
+              return (
+                <div key={r.id} className="row-list-item">
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 13 }}>{r.desc}</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
+                  </div>
+                  <button
+                    aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'}
+                    style={{ padding: 2, marginLeft: 6, display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => armOrDelete('rapido', r.id, () => removeRapido(r.id))}
+                  >
+                    {armed && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
+                    <IconTrash size={13} color={armed ? 'var(--red)' : 'var(--muted)'} />
+                  </button>
                 </div>
-                <button aria-label="Eliminar" style={{ padding: 2, marginLeft: 6 }} onClick={() => removeRapido(r.id)}>
-                  <IconTrash size={13} color="var(--muted)" />
-                </button>
-              </div>
-            ))}
-            {!loadingRapidos && rapidos.length === 0 && <div className="empty-state">Sin sueldos rápidos todavía</div>}
+              )
+            })}
+            {!loadingRapidos && !errorRapidos && rapidos.length === 0 && <div className="empty-state">Sin sueldos rápidos todavía</div>}
           </div>
         </div>
       </div>
