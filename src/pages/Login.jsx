@@ -12,7 +12,9 @@ export default function Login() {
     try {
       await loginWithGoogle()
     } catch (err) {
-      setError('No se pudo iniciar sesión. Intenta de nuevo.')
+      // Se muestra el código real del error (ej. auth/unauthorized-domain)
+      // para poder diagnosticar sin tener que abrir la consola del navegador.
+      setError(`No se pudo iniciar sesión${err?.code ? ` (${err.code})` : ''}. ${err?.message || ''}`)
       console.error(err)
     } finally {
       setLoading(false)
