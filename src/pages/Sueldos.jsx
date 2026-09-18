@@ -1,55 +1,107 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { IconChevronLeft, IconPlus, IconEdit } from '../components/Icons'
+import { IconChevronLeft, IconPlus, IconTrash } from '../components/Icons'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
+import { useAuth } from '../lib/AuthContext'
+import { useUserCollection, addUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
+import { daysUntil, formatShortDate, todayISO } from '../lib/date'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 
 function monthlyEq(s) {
-  if (s.frecuencia === 'Semanal') return s.monto * 4.33
-  if (s.frecuencia === 'Quincenal') return s.monto * 2.166
-  return s.monto
+  const monto = Number(s.monto) || 0
+  if (s.frecuencia === 'Semanal') return monto * 4.33
+  if (s.frecuencia === 'Quincenal') return monto * 2.166
+  return monto
 }
 
-// Datos de ejemplo — Fase 1 del roadmap (Sueldo/presupuesto) los reemplaza por
-// sueldos fijos y rápidos reales guardados en Firestore.
-const FIJOS_INICIALES = [
-  { id: 1, name: 'Sueldo principal', frecuencia: 'Quincenal', fecha: '30 sep', dias: 13, monto: 18000 },
-  { id: 2, name: 'Domingo de mi papá', frecuencia: 'Semanal', fecha: '20 sep', dias: 3, monto: 200 },
-]
-
-const RAPIDOS_INICIALES = [
-  { id: 1, desc: 'Lavado de ropa', fecha: '14 sep', monto: 150 },
-  { id: 2, desc: 'Uñas', fecha: '10 sep', monto: 300 },
-]
+const emptyFijo = { name: '', monto: '', fecha: '' }
+const emptyRapido = { desc: '', monto: '' }
 
 export default function Sueldos() {
-  const [fijos, setFijos] = useState(FIJOS_INICIALES)
-  const [rapidos, setRapidos] = useState(RAPIDOS_INICIALES)
+  const { user } = useAuth()
+  const { data: fijos, loading: loadingFijos } = useUserCollection('sueldosFijos')
+  const { data: rapidos, loading: loadingRapidos } = useUserCollection('sueldosRapidos')
+
   const [addFijoOpen, setAddFijoOpen] = useState(false)
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
   const [formFreq, setFormFreq] = useState('Quincenal')
+  const [fijoForm, setFijoForm] = useState(emptyFijo)
+  const [rapidoForm, setRapidoForm] = useState(emptyRapido)
+  const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
 
   const fijosTotal = fijos.reduce((sum, s) => sum + monthlyEq(s), 0)
-  const rapidosTotal = rapidos.reduce((sum, r) => sum + r.monto, 0)
+  const rapidosTotal = rapidos.reduce((sum, r) => sum + (Number(r.monto) || 0), 0)
   const total = fijosTotal + rapidosTotal
   const fijosPct = total > 0 ? Math.round((fijosTotal / total) * 100) : 0
 
-  function saveFijo() {
-    const nuevo = { id: Date.now(), name: 'Nuevo sueldo fijo', frecuencia: formFreq, fecha: 'por definir', dias: 0, monto: 1000 }
-    setFijos((prev) => [...prev, nuevo])
-    setAddFijoOpen(false)
-    show('Sueldo fijo guardado')
+  async function saveFijo() {
+    const monto = Number(fijoForm.monto)
+    if (!fijoForm.name.trim() || !monto) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'sueldosFijos', {
+        name: fijoForm.name.trim(),
+        monto,
+        frecuencia: formFreq,
+        fecha: fijoForm.fecha || '',
+      })
+      setFijoForm(emptyFijo)
+      setFormFreq('Quincenal')
+      setAddFijoOpen(false)
+      show('Sueldo fijo guardado')
+    } catch (err) {
+      console.error(err)
+      show('No se pudo guardar. Intenta de nuevo')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function saveRapido() {
-    const nuevo = { id: Date.now(), desc: 'Nuevo sueldo rápido', fecha: 'hoy', monto: 100 }
-    setRapidos((prev) => [...prev, nuevo])
-    setAddRapidoOpen(false)
-    show('Sueldo rápido guardado')
+  async function saveRapido() {
+    const monto = Number(rapidoForm.monto)
+    if (!rapidoForm.desc.trim() || !monto) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'sueldosRapidos', {
+        desc: rapidoForm.desc.trim(),
+        monto,
+        fecha: todayISO(),
+      })
+      setRapidoForm(emptyRapido)
+      setAddRapidoOpen(false)
+      show('Sueldo rápido guardado')
+    } catch (err) {
+      console.error(err)
+      show('No se pudo guardar. Intenta de nuevo')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function removeFijo(id) {
+    if (!window.confirm('¿Eliminar este sueldo fijo?')) return
+    try {
+      await deleteUserDoc(user.uid, 'sueldosFijos', id)
+      show('Sueldo fijo eliminado')
+    } catch (err) {
+      console.error(err)
+      show('No se pudo eliminar')
+    }
+  }
+
+  async function removeRapido(id) {
+    if (!window.confirm('¿Eliminar este sueldo rápido?')) return
+    try {
+      await deleteUserDoc(user.uid, 'sueldosRapidos', id)
+      show('Sueldo rápido eliminado')
+    } catch (err) {
+      console.error(err)
+      show('No se pudo eliminar')
+    }
   }
 
   return (
@@ -88,8 +140,25 @@ export default function Sueldos() {
 
           {addFijoOpen && (
             <div className="card" style={{ padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input className="fld" placeholder="Nombre (ej. Sueldo principal)" />
-              <input className="fld" placeholder="Monto" inputMode="decimal" />
+              <input
+                className="fld"
+                placeholder="Nombre (ej. Sueldo principal)"
+                value={fijoForm.name}
+                onChange={(e) => setFijoForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <input
+                className="fld"
+                placeholder="Monto"
+                inputMode="decimal"
+                value={fijoForm.monto}
+                onChange={(e) => setFijoForm((f) => ({ ...f, monto: e.target.value }))}
+              />
+              <input
+                className="fld"
+                type="date"
+                value={fijoForm.fecha}
+                onChange={(e) => setFijoForm((f) => ({ ...f, fecha: e.target.value }))}
+              />
               <div style={{ display: 'flex', gap: 8 }}>
                 {FREQS.map((f) => (
                   <span
@@ -101,28 +170,36 @@ export default function Sueldos() {
                   </span>
                 ))}
               </div>
-              <button className="btn-primary" style={{ marginTop: 4 }} onClick={saveFijo}>Guardar sueldo fijo</button>
+              <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveFijo} disabled={saving}>
+                Guardar sueldo fijo
+              </button>
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {fijos.map((s) => (
-              <div key={s.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round"><path d="M10 14V6M6.5 9.5 10 6l3.5 3.5" /></svg>
+            {fijos.map((s) => {
+              const dias = daysUntil(s.fecha)
+              return (
+                <div key={s.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round"><path d="M10 14V6M6.5 9.5 10 6l3.5 3.5" /></svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                      {s.frecuencia} · Próximo {formatShortDate(s.fecha)}{dias != null ? ` · en ${dias} días` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
+                    <button aria-label="Eliminar" style={{ padding: 2 }} onClick={() => removeFijo(s.id)}>
+                      <IconTrash size={14} color="var(--muted)" />
+                    </button>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{s.frecuencia} · Próximo {s.fecha} · en {s.dias} días</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
-                  <button aria-label="Editar" style={{ padding: 2 }}>
-                    <IconEdit />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
+            {!loadingFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
           </div>
         </div>
 
@@ -137,9 +214,22 @@ export default function Sueldos() {
 
           {addRapidoOpen && (
             <div className="card" style={{ padding: 14, marginTop: 10, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input className="fld" placeholder="Descripción (ej. Lavado de ropa)" />
-              <input className="fld" placeholder="Monto" inputMode="decimal" />
-              <button className="btn-primary" style={{ marginTop: 4 }} onClick={saveRapido}>Guardar sueldo rápido</button>
+              <input
+                className="fld"
+                placeholder="Descripción (ej. Lavado de ropa)"
+                value={rapidoForm.desc}
+                onChange={(e) => setRapidoForm((f) => ({ ...f, desc: e.target.value }))}
+              />
+              <input
+                className="fld"
+                placeholder="Monto"
+                inputMode="decimal"
+                value={rapidoForm.monto}
+                onChange={(e) => setRapidoForm((f) => ({ ...f, monto: e.target.value }))}
+              />
+              <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveRapido} disabled={saving}>
+                Guardar sueldo rápido
+              </button>
             </div>
           )}
 
@@ -150,10 +240,14 @@ export default function Sueldos() {
                 <span style={{ flex: 1, fontSize: 13 }}>{r.desc}</span>
                 <div style={{ textAlign: 'right' }}>
                   <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{r.fecha}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
                 </div>
+                <button aria-label="Eliminar" style={{ padding: 2, marginLeft: 6 }} onClick={() => removeRapido(r.id)}>
+                  <IconTrash size={13} color="var(--muted)" />
+                </button>
               </div>
             ))}
+            {!loadingRapidos && rapidos.length === 0 && <div className="empty-state">Sin sueldos rápidos todavía</div>}
           </div>
         </div>
       </div>
