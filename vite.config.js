@@ -6,4 +6,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/organizador-gastos/',
   plugins: [react()],
+  server: {
+    // host:true expone el server en la red local (te da una IP tipo
+    // http://192.168.x.x:5174) para poder probar desde el celular.
+    host: true,
+  },
 })

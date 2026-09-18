@@ -11,7 +11,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
-export const db = getFirestore(app)
+// Mientras no exista .env.local con las llaves reales de Firebase (ver README),
+// la app sigue funcionando en "modo local" para poder revisar el diseño sin
+// tronar — no hay login ni guardado real todavía, solo datos de ejemplo.
+export const firebaseReady = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId)
+
+export const app = firebaseReady ? initializeApp(firebaseConfig) : null
+export const auth = firebaseReady ? getAuth(app) : null
+export const db = firebaseReady ? getFirestore(app) : null
 export const googleProvider = new GoogleAuthProvider()

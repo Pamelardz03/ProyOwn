@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
-import { auth, googleProvider } from './firebase'
+import { auth, googleProvider, firebaseReady } from './firebase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(firebaseReady)
 
   useEffect(() => {
+    if (!firebaseReady) return
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
@@ -16,11 +17,16 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
-  const loginWithGoogle = () => signInWithPopup(auth, googleProvider)
-  const logout = () => signOut(auth)
+  const loginWithGoogle = () => {
+    if (!firebaseReady) {
+      return Promise.reject(new Error('Firebase no está configurado todavía (falta .env.local, ver README)'))
+    }
+    return signInWithPopup(auth, googleProvider)
+  }
+  const logout = () => (firebaseReady ? signOut(auth) : Promise.resolve())
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, firebaseReady }}>
       {children}
     </AuthContext.Provider>
   )
