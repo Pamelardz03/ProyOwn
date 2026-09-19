@@ -6,9 +6,38 @@ import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, addUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
-import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, compareISOAsc } from '../lib/date'
+import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
+const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+// Metadatos del mes del mini-calendario del paso "Validar fechas" (igual
+// patrón que Calendario.jsx: huecos iniciales + total de días del mes).
+function monthMeta(offset) {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const year = first.getFullYear()
+  const month = first.getMonth()
+  return { year, month, leading: first.getDay(), total: daysInMonth(year, month), label: `${MES_FULL[month]} ${year}` }
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
+function isoOfDay(year, month, day) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${year}-${pad(month + 1)}-${pad(day)}`
+}
+
+// A qué mes (offset relativo a hoy) navegar al abrir el calendario, para
+// que abra directo en el mes de la primera fecha calculada.
+function monthOffsetFromISO(iso) {
+  const d = parseISODate(iso)
+  if (!d) return 0
+  const now = new Date()
+  return (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth())
+}
 
 function monthlyEq(s) {
   const monto = Number(s.monto) || 0
@@ -37,6 +66,11 @@ export default function Sueldos() {
   const [formFreq, setFormFreq] = useState('Quincenal')
   const [fijoForm, setFijoForm] = useState(emptyFijo())
   const [fechasPreview, setFechasPreview] = useState([])
+  const [validarMonthOffset, setValidarMonthOffset] = useState(0)
+  const [selectedFecha, setSelectedFecha] = useState(null)
+  const [swipeOpen, setSwipeOpen] = useState(false)
+  const [confirmDeleteFechaOpen, setConfirmDeleteFechaOpen] = useState(false)
+  const detailStartX = useRef(0)
   const [rapidoForm, setRapidoForm] = useState(emptyRapido)
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
@@ -68,8 +102,21 @@ export default function Sueldos() {
     setFijoForm(emptyFijo())
     setFormFreq('Quincenal')
     setFechasPreview([])
+    setSelectedFecha(null)
+    setSwipeOpen(false)
+    setConfirmDeleteFechaOpen(false)
     setFijoStep('form')
     setAddFijoOpen(false)
+  }
+
+  // Vuelve al paso 1 sin cerrar todo el flujo (botón "Volver" y tocar fuera
+  // del calendario) — a diferencia de resetFijoFlow, conserva lo escrito
+  // en el formulario (nombre/monto/fecha ancla/frecuencia).
+  function backToForm() {
+    setSelectedFecha(null)
+    setSwipeOpen(false)
+    setConfirmDeleteFechaOpen(false)
+    setFijoStep('form')
   }
 
   // Paso 1 → 2: calcula las fechas de pago a partir de la fecha ancla para
@@ -81,7 +128,12 @@ export default function Sueldos() {
     if (!fijoForm.name.trim()) { show('Falta el nombre del sueldo'); return }
     if (!monto) { show('Falta el monto'); return }
     if (!fijoForm.fecha) { show('Falta la fecha del último pago'); return }
-    setFechasPreview(generarFechasPago(formFreq, fijoForm.fecha))
+    const fechas = generarFechasPago(formFreq, fijoForm.fecha)
+    setFechasPreview(fechas)
+    setValidarMonthOffset(monthOffsetFromISO(fechas[0]))
+    setSelectedFecha(null)
+    setSwipeOpen(false)
+    setConfirmDeleteFechaOpen(false)
     setFijoStep('validar')
   }
 
@@ -91,6 +143,25 @@ export default function Sueldos() {
       next[idx] = value
       return [...next].sort(compareISOAsc)
     })
+  }
+
+  // Edita la fecha que está abierta en el detalle del calendario (paso
+  // "Validar fechas") — reemplaza la lista de inputs de antes.
+  function editSelectedFecha(value) {
+    if (!selectedFecha) return
+    const idx = fechasPreview.indexOf(selectedFecha)
+    if (idx === -1) return
+    editFecha(idx, value)
+    setSelectedFecha(value)
+  }
+
+  // Única forma de quitar una fecha calculada: swipe a la izquierda sobre
+  // su detalle (revela el bote de basura) + confirmar en el mensaje.
+  function confirmRemoveSelectedFecha() {
+    setFechasPreview((prev) => prev.filter((f) => f !== selectedFecha))
+    setSelectedFecha(null)
+    setSwipeOpen(false)
+    setConfirmDeleteFechaOpen(false)
   }
 
   async function saveFijo() {
@@ -159,6 +230,16 @@ export default function Sueldos() {
       show(`No se pudo eliminar: ${errMsg(err)}`)
     }
   }
+
+  const validarMeta = monthMeta(validarMonthOffset)
+  const fechaSet = new Set(fechasPreview)
+  const calDays = []
+  for (let i = 0; i < validarMeta.leading; i++) calDays.push(null)
+  for (let d = 1; d <= validarMeta.total; d++) {
+    const iso = isoOfDay(validarMeta.year, validarMeta.month, d)
+    calDays.push({ day: d, iso, marcado: fechaSet.has(iso), domingo: isSunday(iso) })
+  }
+  while (calDays.length % 7 !== 0) calDays.push(null)
 
   return (
     <div className="screen" style={{ paddingBottom: 40 }}>
@@ -230,43 +311,6 @@ export default function Sueldos() {
               <button className="btn-primary" style={{ marginTop: 4 }} onClick={goValidarFechas}>
                 Validar fechas
               </button>
-            </div>
-          )}
-
-          {addFijoOpen && fijoStep === 'validar' && (
-            <div className="card" style={{ padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>Revisa las fechas calculadas</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                Corrige a mano las que caigan domingo o feriado — se marcan en rojo.
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
-                {fechasPreview.map((f, idx) => {
-                  const domingo = isSunday(f)
-                  return (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className="mono" style={{ fontSize: 10, color: 'var(--muted)', width: 20 }}>{idx + 1}</span>
-                      <input
-                        className="fld"
-                        type="date"
-                        style={{ flex: 1, borderColor: domingo ? 'var(--red)' : undefined }}
-                        value={f}
-                        onChange={(e) => editFecha(idx, e.target.value)}
-                      />
-                      <span style={{ fontSize: 10, fontWeight: 600, color: domingo ? 'var(--red)' : 'var(--muted)', width: 34 }}>
-                        {weekdayShort(f)}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button className="btn-primary" style={{ flex: 1, background: 'var(--beige2)', color: 'var(--text)' }} onClick={() => setFijoStep('form')}>
-                  Volver
-                </button>
-                <button className="btn-primary" style={{ flex: 1, opacity: saving ? 0.7 : 1 }} onClick={saveFijo} disabled={saving}>
-                  Confirmar y guardar
-                </button>
-              </div>
             </div>
           )}
 
@@ -366,6 +410,166 @@ export default function Sueldos() {
           </div>
         </div>
       </div>
+
+      {addFijoOpen && fijoStep === 'validar' && (
+        <>
+          <div className="sheet-backdrop" onClick={backToForm} />
+          <div className="sheet" style={{ maxHeight: '90%' }}>
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Revisa las fechas calculadas</div>
+
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <button
+                    aria-label="Mes anterior"
+                    onClick={() => setValidarMonthOffset((i) => i - 1)}
+                    style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 4.5 6 10l6.5 5.5" /></svg>
+                  </button>
+                  <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>{validarMeta.label}</div>
+                  <button
+                    aria-label="Mes siguiente"
+                    onClick={() => setValidarMonthOffset((i) => i + 1)}
+                    style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5l5 5.5-5 5.5" /></svg>
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, fontSize: 10, color: 'var(--muted)', fontWeight: 600, textAlign: 'center', marginBottom: 6 }}>
+                  {['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'].map((d) => <div key={d}>{d}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+                  {calDays.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32 }}>
+                      {d && (
+                        <span
+                          className="mono"
+                          onClick={() => {
+                            if (!d.marcado) return
+                            setSelectedFecha((cur) => (cur === d.iso ? null : d.iso))
+                            setSwipeOpen(false)
+                            setConfirmDeleteFechaOpen(false)
+                          }}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 9,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxSizing: 'border-box',
+                            fontSize: 12,
+                            cursor: d.marcado ? 'pointer' : 'default',
+                            ...(d.marcado
+                              ? d.domingo
+                                ? { background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, border: '2px solid var(--red)' }
+                                : { background: 'var(--wine)', color: '#fff', fontWeight: 700 }
+                              : {}),
+                            ...(selectedFecha === d.iso ? { boxShadow: '0 0 0 2px var(--text)' } : {}),
+                          }}
+                        >
+                          {d.day}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedFecha && (
+                <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      opacity: swipeOpen ? 1 : 0,
+                      pointerEvents: swipeOpen ? 'auto' : 'none',
+                      transition: 'opacity .18s ease',
+                    }}
+                  >
+                    <button
+                      aria-label="Eliminar esta fecha"
+                      onClick={() => setConfirmDeleteFechaOpen(true)}
+                      style={{ width: 72, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <IconTrash color="#fff" />
+                    </button>
+                  </div>
+                  <div
+                    className="card"
+                    style={{
+                      position: 'relative',
+                      padding: 14,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      transform: `translateX(${swipeOpen ? -72 : 0}px)`,
+                      transition: 'transform .18s ease',
+                    }}
+                  >
+                    <div
+                      onPointerDown={(e) => { detailStartX.current = e.clientX }}
+                      onPointerUp={(e) => {
+                        const delta = e.clientX - detailStartX.current
+                        if (delta < -40) setSwipeOpen(true)
+                        else if (delta > 40) setSwipeOpen(false)
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', touchAction: 'pan-y' }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {capitalize(weekdayShort(selectedFecha))} · {formatShortDate(selectedFecha)}
+                      </div>
+                      {isSunday(selectedFecha) && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--red)' }}>Cae domingo</span>}
+                    </div>
+                    <input
+                      className="fld"
+                      type="date"
+                      value={selectedFecha}
+                      onChange={(e) => editSelectedFecha(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {confirmDeleteFechaOpen && selectedFecha && (
+                <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>¿Eliminar esta fecha de pago ({formatShortDate(selectedFecha)})?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn-primary"
+                      style={{ flex: 1, background: 'var(--beige2)', color: 'var(--text)' }}
+                      onClick={() => { setConfirmDeleteFechaOpen(false); setSwipeOpen(false) }}
+                    >
+                      Cancelar
+                    </button>
+                    <button className="btn-primary" style={{ flex: 1, background: 'var(--red)' }} onClick={confirmRemoveSelectedFecha}>
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button className="btn-primary" style={{ flex: 1, background: 'var(--beige2)', color: 'var(--text)' }} onClick={backToForm}>
+                  Volver
+                </button>
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1, opacity: saving || fechasPreview.length === 0 ? 0.7 : 1 }}
+                  onClick={saveFijo}
+                  disabled={saving || fechasPreview.length === 0}
+                >
+                  Confirmar y guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <Toast message={message} />
     </div>
