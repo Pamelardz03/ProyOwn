@@ -21,7 +21,9 @@ function errMsg(err) {
   return `${err?.code ? `(${err.code}) ` : ''}${err?.message || 'Error desconocido'}`
 }
 
-const emptyFijo = { name: '', monto: '', fecha: '' }
+function emptyFijo() {
+  return { name: '', monto: '', fecha: todayISO() }
+}
 const emptyRapido = { desc: '', monto: '' }
 
 export default function Sueldos() {
@@ -33,7 +35,7 @@ export default function Sueldos() {
   const [fijoStep, setFijoStep] = useState('form') // form | validar
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
   const [formFreq, setFormFreq] = useState('Quincenal')
-  const [fijoForm, setFijoForm] = useState(emptyFijo)
+  const [fijoForm, setFijoForm] = useState(emptyFijo())
   const [fechasPreview, setFechasPreview] = useState([])
   const [rapidoForm, setRapidoForm] = useState(emptyRapido)
   const [saving, setSaving] = useState(false)
@@ -63,7 +65,7 @@ export default function Sueldos() {
   const fijosPct = total > 0 ? Math.round((fijosTotal / total) * 100) : 0
 
   function resetFijoFlow() {
-    setFijoForm(emptyFijo)
+    setFijoForm(emptyFijo())
     setFormFreq('Quincenal')
     setFechasPreview([])
     setFijoStep('form')
@@ -72,9 +74,13 @@ export default function Sueldos() {
 
   // Paso 1 → 2: calcula las fechas de pago a partir de la fecha ancla para
   // que Pame las revise (y corrija domingos/feriados) antes de guardar.
+  // Antes fallaba en silencio si faltaba un campo (parecía que el botón no
+  // hacía nada) — ahora avisa con un toast cuál es el que falta.
   function goValidarFechas() {
     const monto = Number(fijoForm.monto)
-    if (!fijoForm.name.trim() || !monto || !fijoForm.fecha) return
+    if (!fijoForm.name.trim()) { show('Falta el nombre del sueldo'); return }
+    if (!monto) { show('Falta el monto'); return }
+    if (!fijoForm.fecha) { show('Falta la fecha del último pago'); return }
     setFechasPreview(generarFechasPago(formFreq, fijoForm.fecha))
     setFijoStep('validar')
   }
