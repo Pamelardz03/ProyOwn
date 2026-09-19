@@ -171,3 +171,32 @@ export function generarFechasPago(frecuencia, anclaISO) {
 export function compareISOAsc(a, b) {
   return (a || '').localeCompare(b || '')
 }
+
+// --- Días feriados oficiales (México, Art. 74 LFT) ---
+// Solo los de descanso obligatorio con fecha fija o "enésimo lunes del
+// mes" — no incluye el traspaso de poder ejecutivo (1 vez cada 6 años).
+function nthWeekdayOfMonth(year, monthIndex, weekday, n) {
+  const first = new Date(year, monthIndex, 1)
+  const firstWeekday = first.getDay()
+  return 1 + ((weekday - firstWeekday + 7) % 7) + (n - 1) * 7
+}
+
+function feriadosMX(year) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const iso = (monthIndex, day) => `${year}-${pad(monthIndex + 1)}-${pad(day)}`
+  return new Set([
+    iso(0, 1), // Año Nuevo
+    iso(1, nthWeekdayOfMonth(year, 1, 1, 1)), // 1er lunes de feb — Constitución
+    iso(2, nthWeekdayOfMonth(year, 2, 1, 3)), // 3er lunes de mar — natalicio Juárez
+    iso(4, 1), // Día del Trabajo
+    iso(8, 16), // Independencia
+    iso(10, nthWeekdayOfMonth(year, 10, 1, 3)), // 3er lunes de nov — Revolución
+    iso(11, 25), // Navidad
+  ])
+}
+
+export function isFeriadoMX(iso) {
+  const date = parseISODate(iso)
+  if (!date) return false
+  return feriadosMX(date.getFullYear()).has(iso)
+}

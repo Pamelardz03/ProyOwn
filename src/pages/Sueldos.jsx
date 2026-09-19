@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, addUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
-import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
+import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, isFeriadoMX, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -237,7 +237,7 @@ export default function Sueldos() {
   for (let i = 0; i < validarMeta.leading; i++) calDays.push(null)
   for (let d = 1; d <= validarMeta.total; d++) {
     const iso = isoOfDay(validarMeta.year, validarMeta.month, d)
-    calDays.push({ day: d, iso, marcado: fechaSet.has(iso), domingo: isSunday(iso) })
+    calDays.push({ day: d, iso, marcado: fechaSet.has(iso), alerta: isSunday(iso) || isFeriadoMX(iso) })
   }
   while (calDays.length % 7 !== 0) calDays.push(null)
 
@@ -463,9 +463,9 @@ export default function Sueldos() {
                             fontSize: 12,
                             cursor: d.marcado ? 'pointer' : 'default',
                             ...(d.marcado
-                              ? d.domingo
+                              ? d.alerta
                                 ? { background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, border: '2px solid var(--red)' }
-                                : { background: 'var(--wine)', color: '#fff', fontWeight: 700 }
+                                : { background: 'var(--green)', color: '#fff', fontWeight: 700 }
                               : {}),
                             ...(selectedFecha === d.iso ? { boxShadow: '0 0 0 2px var(--text)' } : {}),
                           }}
@@ -475,6 +475,16 @@ export default function Sueldos() {
                       )}
                     </div>
                   ))}
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--beige2)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: 'var(--green)' }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Día de pago</span>
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: 'var(--red)' }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Domingo o feriado</span>
+                  </span>
                 </div>
               </div>
 
@@ -524,6 +534,9 @@ export default function Sueldos() {
                         {capitalize(weekdayShort(selectedFecha))} · {formatShortDate(selectedFecha)}
                       </div>
                       {isSunday(selectedFecha) && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--red)' }}>Cae domingo</span>}
+                      {!isSunday(selectedFecha) && isFeriadoMX(selectedFecha) && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--red)' }}>Es día feriado</span>
+                      )}
                     </div>
                     <input
                       className="fld"
