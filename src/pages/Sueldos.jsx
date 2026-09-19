@@ -387,8 +387,8 @@ export default function Sueldos() {
         </div>
 
         <div className="hero" style={{ padding: '16px 18px' }}>
-          <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Total mensual estimado</div>
-          <div className="mono" style={{ fontSize: 26, fontWeight: 500, marginTop: 4 }}>{fmt(total)}</div>
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Total mensual estimado</div>
+          <div className="mono stat-display" style={{ fontSize: 28, marginTop: 6 }}>{fmt(total)}</div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 12px' }}>
               <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Fijos ({fijosPct}%)</div>
@@ -402,6 +402,7 @@ export default function Sueldos() {
         </div>
 
         <div>
+          <div className="eyebrow" style={{ marginBottom: 2 }}>Ingresos recurrentes</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Sueldos fijos</div>
             <button onClick={() => (addFijoOpen ? resetFijoFlow() : setAddFijoOpen(true))} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
@@ -469,6 +470,7 @@ export default function Sueldos() {
         </div>
 
         <div>
+          <div className="eyebrow" style={{ marginBottom: 2 }}>Ingresos únicos</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Sueldos rápidos</div>
             <button onClick={() => setAddRapidoOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>

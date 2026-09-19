@@ -6,7 +6,7 @@ import { IconProduct } from '../components/Icons'
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
-import { daysUntil, isThisMonth } from '../lib/date'
+import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
 import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 
@@ -125,11 +125,14 @@ export default function Inicio() {
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ fontSize: 22, fontWeight: 600 }}>Hola, {primerNombre}</div>
+        <div>
+          <div className="eyebrow">{weekdayShort(todayISO())} · {formatShortDate(todayISO())}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {primerNombre}</div>
+        </div>
 
         <div className="hero">
-          <div style={{ fontSize: 12, fontWeight: 500, opacity: 0.75 }}>Saldo del mes</div>
-          <div className="mono" style={{ fontSize: 38, fontWeight: 500, lineHeight: 1.1, marginTop: 5 }}>
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Saldo del mes</div>
+          <div className="mono stat-display" style={{ fontSize: 40, lineHeight: 1.05, marginTop: 6 }}>
             {fmt(saldoMes)}
             <span style={{ fontSize: 16, opacity: 0.7 }}> MXN</span>
           </div>
@@ -146,6 +149,7 @@ export default function Inicio() {
         </div>
 
         <div className="card" style={{ padding: 18 }}>
+          <div className="eyebrow" style={{ marginBottom: 2 }}>Presupuesto</div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Distribución del mes</div>
           {totalDistribucion > 0 ? (
             <>
@@ -172,6 +176,7 @@ export default function Inicio() {
         </div>
 
         <div>
+          <div className="eyebrow" style={{ marginBottom: 2 }}>Lista de espera</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Whimms</div>
             <Link to="/compras" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
@@ -206,6 +211,7 @@ export default function Inicio() {
         </div>
 
         <div>
+          <div className="eyebrow" style={{ marginBottom: 2 }}>Actividad</div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Historial reciente</div>
           {historial.length > 0 ? (
             <div className="row-list">
