@@ -1,49 +1,18 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
+import { useUserCollection } from '../lib/firestoreCollections'
+import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc } from '../lib/date'
+import { computeWhimmScore } from '../lib/score'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms } from '../lib/budget'
 
-const DUE_SERVICIO = { border: '2px solid #7c8c5a', color: '#7c8c5a', fontWeight: 600 }
-const DUE_COMPRA = { border: '2px solid #b8783f', color: '#b8783f', fontWeight: 600 }
-const DUE_NOMINA = { border: '2px solid #3a0f1f', color: '#3a0f1f', fontWeight: 600 }
-const REM_SERVICIO = { background: '#dde3c8', color: '#7c8c5a', fontWeight: 600 }
-const DUE_REM_SERVICIO = { border: '2px solid #7c8c5a', background: '#dde3c8', color: '#1a1208', fontWeight: 600 }
-const DUE_SERVICIO_REM_COMPRA = { border: '2px solid #7c8c5a', background: '#ecdfc7', color: '#1a1208', fontWeight: 600 }
 const TODAY_STYLE = { background: '#3a0f1f', color: '#fff', fontWeight: 700 }
+const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
+const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
 
-function buildDays(leading, total, special) {
-  const arr = []
-  for (let i = 0; i < leading; i++) arr.push(null)
-  for (let d = 1; d <= total; d++) arr.push({ day: d, style: special[d] || {} })
-  while (arr.length % 7 !== 0) arr.push(null)
-  return arr
-}
-
-const AUG_SPECIAL = { 31: DUE_NOMINA }
-const SEP_SPECIAL = { 16: REM_SERVICIO, 17: TODAY_STYLE, 18: DUE_REM_SERVICIO, 20: DUE_SERVICIO, 23: REM_SERVICIO, 25: DUE_SERVICIO_REM_COMPRA, 27: DUE_COMPRA, 30: DUE_NOMINA }
-const OCT_SPECIAL = { 15: DUE_NOMINA }
-
-const MONTHS = [
-  { name: 'Agosto 2026', days: buildDays(6, 31, AUG_SPECIAL) },
-  { name: 'Septiembre 2026', days: buildDays(2, 30, SEP_SPECIAL) },
-  { name: 'Octubre 2026', days: buildDays(4, 31, OCT_SPECIAL) },
-]
-
-// Datos de ejemplo — Fase 6 del roadmap calcula estos eventos a partir de
-// Vitalls, Whimms y sueldos reales guardados en Firestore.
-const EVENTS = [
-  { id: 1, cat: 'servicio', title: 'Vencimiento — Gym', date: '18 sep', amount: '$650', amountColor: '#1a1208', dotColor: '#7c8c5a', reminder: 'Recordatorio · 16 sep', remBg: '#dde3c8' },
-  { id: 2, cat: 'servicio', title: 'Vencimiento — Netflix', date: '20 sep', amount: '$219', amountColor: '#1a1208', dotColor: '#7c8c5a', reminder: 'Recordatorio · 18 sep', remBg: '#dde3c8' },
-  { id: 3, cat: 'servicio', title: 'Vencimiento — Spotify', date: '25 sep', amount: '$99', amountColor: '#1a1208', dotColor: '#7c8c5a', reminder: 'Recordatorio · 23 sep', remBg: '#dde3c8' },
-  { id: 4, cat: 'compra', title: 'Sony WH-1000XM5 disponible', date: '27 sep', amount: '$7,499', amountColor: '#1a1208', dotColor: '#b8783f', reminder: 'Recordatorio · 25 sep', remBg: '#ecdfc7' },
-  { id: 5, cat: 'nomina', title: 'Quincena depositada', date: '30 sep', amount: '+$18,000', amountColor: '#3f6b45', dotColor: '#3a0f1f', reminder: null, remBg: '' },
-]
-
-const COLA_WHIMM = [
-  { rank: 1, name: 'Sony WH-1000XM5', hint: '10 días de ahorro · desbloquea 27 sep', price: 7499 },
-  { rank: 2, name: 'Suero Vitamina C', hint: '1 día de ahorro · desbloquea 28 sep', price: 450 },
-]
+const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 const FILTERS = [
   { key: 'todos', label: 'Todos' },
@@ -52,13 +21,87 @@ const FILTERS = [
   { key: 'nomina', label: 'Nómina' },
 ]
 
+// Metadatos del mes que muestra la grilla (año, mes 0-indexado, huecos
+// iniciales según el día de la semana del día 1, total de días).
+function monthMeta(offset) {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const year = first.getFullYear()
+  const month = first.getMonth()
+  return { year, month, leading: first.getDay(), total: daysInMonth(year, month), label: `${MES_FULL[month]} ${year}` }
+}
+
+function isoOf(year, month, day) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${year}-${pad(month + 1)}-${pad(day)}`
+}
+
+function styleForDay(cats, isToday) {
+  if (isToday) return TODAY_STYLE
+  if (cats.length === 0) return {}
+  const main = cats[0]
+  return cats.length > 1
+    ? { border: `2px solid ${CAT_COLOR[main]}`, background: CAT_BG[main], color: '#1a1208', fontWeight: 600 }
+    : { border: `2px solid ${CAT_COLOR[main]}`, color: CAT_COLOR[main], fontWeight: 600 }
+}
+
 export default function Calendario() {
-  const [monthIdx, setMonthIdx] = useState(1)
+  const [monthOffset, setMonthOffset] = useState(0)
   const [eventFilter, setEventFilter] = useState('todos')
   const { message, show } = useToast()
 
-  const month = MONTHS[monthIdx]
-  const events = EVENTS.filter((e) => eventFilter === 'todos' || e.cat === eventFilter)
+  const { data: sueldosFijos } = useUserCollection('sueldosFijos')
+  const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
+  const { data: pagosFijos } = useUserCollection('pagosFijos')
+  const { data: whimms } = useUserCollection('whimms')
+
+  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
+  const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+  const colaWhimm = proyectarColaWhimms(
+    whimms
+      .filter((w) => w.estado !== 'comprado')
+      .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+      .sort((a, b) => b._score - a._score),
+    presupuestoDiarioNeto
+  )
+
+  // Eventos reales: pagos de sueldos fijos (nómina), vencimientos de pagos
+  // fijos/Vitall activos (servicio), y la fecha estimada de compra del
+  // Whimm top de la cola (compra) — reemplaza los datos de ejemplo.
+  const allEvents = useMemo(() => {
+    const out = []
+    sueldosFijos.forEach((s) => {
+      const fechas = Array.isArray(s.fechasPago) && s.fechasPago.length ? s.fechasPago : s.fecha ? [s.fecha] : []
+      fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f' }))
+    })
+    pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
+      out.push({ id: `pf-${p.id}`, cat: 'servicio', title: `Vencimiento — ${p.name}`, dateISO: p.fecha, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
+    })
+    colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {
+      out.push({ id: `w-${w.id}`, cat: 'compra', title: `${w.name} — estimado disponible`, dateISO: w.fechaProyectada, amount: fmt(w.precio), amountColor: '#1a1208', dotColor: '#b8783f' })
+    })
+    return out.sort((a, b) => compareISOAsc(a.dateISO, b.dateISO))
+  }, [sueldosFijos, pagosFijos, colaWhimm])
+
+  const hoy = todayISO()
+  const proximos = allEvents.filter((e) => e.dateISO >= hoy && (eventFilter === 'todos' || e.cat === eventFilter)).slice(0, 20)
+
+  const meta = monthMeta(monthOffset)
+  const specialByDay = {}
+  allEvents.forEach((e) => {
+    const [y, m, d] = e.dateISO.split('-').map(Number)
+    if (y === meta.year && m - 1 === meta.month) {
+      specialByDay[d] = specialByDay[d] || []
+      specialByDay[d].push(e.cat)
+    }
+  })
+  const days = []
+  for (let i = 0; i < meta.leading; i++) days.push(null)
+  for (let d = 1; d <= meta.total; d++) {
+    const iso = isoOf(meta.year, meta.month, d)
+    days.push({ day: d, style: styleForDay(specialByDay[d] || [], iso === hoy) })
+  }
+  while (days.length % 7 !== 0) days.push(null)
 
   return (
     <div className="screen">
@@ -69,16 +112,16 @@ export default function Calendario() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <button
               aria-label="Mes anterior"
-              onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
-              style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: monthIdx > 0 ? 1 : 0.35 }}
+              onClick={() => setMonthOffset((i) => i - 1)}
+              style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 4.5 6 10l6.5 5.5" /></svg>
             </button>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{month.name}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{meta.label}</div>
             <button
               aria-label="Mes siguiente"
-              onClick={() => setMonthIdx((i) => Math.min(2, i + 1))}
-              style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: monthIdx < 2 ? 1 : 0.35 }}
+              onClick={() => setMonthOffset((i) => i + 1)}
+              style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5l5 5.5-5 5.5" /></svg>
             </button>
@@ -87,7 +130,7 @@ export default function Calendario() {
             {['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'].map((d) => <div key={d}>{d}</div>)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
-            {month.days.map((d, i) => (
+            {days.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32 }}>
                 {d && (
                   <span className="mono" style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', fontSize: 12, ...d.style }}>
@@ -120,38 +163,39 @@ export default function Calendario() {
             ))}
           </div>
           <div className="row-list">
-            {events.map((ev) => (
+            {proximos.map((ev) => (
               <div key={ev.id} className="row-list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: ev.dotColor, flexShrink: 0 }} />
                   <span style={{ flex: 1, fontSize: 13 }}>{ev.title}</span>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{ev.date}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{formatShortDate(ev.dateISO)}</span>
                   <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: ev.amountColor }}>{ev.amount}</span>
                 </div>
-                {ev.reminder && (
-                  <div style={{ marginLeft: 18 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, background: ev.remBg, color: ev.dotColor, padding: '3px 8px', borderRadius: 6 }}>{ev.reminder}</span>
-                  </div>
-                )}
               </div>
             ))}
-            {events.length === 0 && <div className="empty-state">Sin eventos para este filtro</div>}
+            {proximos.length === 0 && <div className="empty-state">Sin eventos próximos para este filtro</div>}
           </div>
         </div>
 
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Cola Whimm proyectada</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {COLA_WHIMM.map((it) => (
-              <div key={it.rank} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--wine4)' }}>#{it.rank}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{it.hint}</div>
+            {colaWhimm.slice(0, 5).map((it, idx) => {
+              const dias = it.fechaProyectada ? daysUntil(it.fechaProyectada) : null
+              return (
+                <div key={it.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--wine4)' }}>#{idx + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                      {dias != null ? `${dias} día${dias === 1 ? '' : 's'} · estimado ${formatShortDate(it.fechaProyectada)}` : 'Sin estimado todavía'}
+                    </div>
+                  </div>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(it.precio)}</div>
                 </div>
-                <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(it.price)}</div>
-              </div>
-            ))}
+              )
+            })}
+            {colaWhimm.length === 0 && <div className="empty-state">Sin Whimms en espera</div>}
           </div>
         </div>
       </div>
