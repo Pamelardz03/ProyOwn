@@ -7,7 +7,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, addUserDoc, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
 import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, isFeriadoMX, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, ingresoDelMesSueldo } from '../lib/budget'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -54,13 +54,6 @@ function buildCalDays(offset, fechaSet) {
   }
   while (days.length % 7 !== 0) days.push(null)
   return { meta, days }
-}
-
-function monthlyEq(s) {
-  const monto = Number(s.monto) || 0
-  if (s.frecuencia === 'Semanal') return monto * 4.33
-  if (s.frecuencia === 'Quincenal') return monto * 2.166
-  return monto
 }
 
 function errMsg(err) {
@@ -197,7 +190,7 @@ export default function Sueldos() {
     confirmTimeout.current = setTimeout(() => setConfirmDelete(null), 3000)
   }
 
-  const fijosTotal = fijos.reduce((sum, s) => sum + monthlyEq(s), 0)
+  const fijosTotal = fijos.reduce((sum, s) => sum + ingresoDelMesSueldo(s), 0)
   const rapidosTotal = rapidos.reduce((sum, r) => sum + (Number(r.monto) || 0), 0)
   const total = fijosTotal + rapidosTotal
   const fijosPct = total > 0 ? Math.round((fijosTotal / total) * 100) : 0
@@ -387,7 +380,7 @@ export default function Sueldos() {
         </div>
 
         <div className="hero" style={{ padding: '16px 18px' }}>
-          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Total mensual estimado</div>
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Ingresos de este mes</div>
           <div className="mono stat-display" style={{ fontSize: 28, marginTop: 6 }}>{fmt(total)}</div>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '10px 12px' }}>

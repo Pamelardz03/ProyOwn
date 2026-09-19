@@ -28,8 +28,6 @@ export function proximaFechaSueldo(sueldo, hoyISO) {
 }
 
 // --- Ingresos mensuales reales (no mensualizado ciego) ---
-// Sueldos fijos nuevos (con fechasPago + fechaInicio) solo cuentan las
-// fechas de pago que ya ocurrieron este mes desde que se registraron.
 // Sueldos fijos sin ninguna fecha guardada (caso extremo, no debería
 // pasar) caen al estimado mensualizado como respaldo.
 function monthlyEqSueldoLegacy(s) {
@@ -39,17 +37,23 @@ function monthlyEqSueldoLegacy(s) {
   return monto
 }
 
-export function ingresosFijosDelMes(sueldosFijos) {
+// Cuánto de un sueldo fijo ya se pagó en lo que va del mes actual — cuenta
+// cualquier fecha de pago (fechasPagoVivas, incluye la fecha "anterior" que
+// se haya declarado como ancla) que ya ocurrió este mes. Antes se excluían
+// las fechas previas a `fechaInicio` (la fecha en que se dio de alta el
+// sueldo), pero eso descartaba pagos que el usuario declaró explícitamente
+// como ya ocurridos (p. ej. "el pago anterior fue el 15"), dando $0 cuando
+// el sueldo se agregaba o editaba el mismo día que un pago ya vencido.
+export function ingresoDelMesSueldo(s) {
   const hoy = todayISO()
-  return sueldosFijos.reduce((sum, s) => {
-    const fechas = fechasPagoVivas(s)
-    if (fechas.length) {
-      const inicio = s.fechaInicio || fechas[0]
-      const ocurridos = fechas.filter((f) => isThisMonth(f) && f <= hoy && f >= inicio)
-      return sum + ocurridos.length * (Number(s.monto) || 0)
-    }
-    return sum + monthlyEqSueldoLegacy(s)
-  }, 0)
+  const fechas = fechasPagoVivas(s)
+  if (!fechas.length) return monthlyEqSueldoLegacy(s)
+  const ocurridos = fechas.filter((f) => isThisMonth(f) && f <= hoy)
+  return ocurridos.length * (Number(s.monto) || 0)
+}
+
+export function ingresosFijosDelMes(sueldosFijos) {
+  return sueldosFijos.reduce((sum, s) => sum + ingresoDelMesSueldo(s), 0)
 }
 
 export function monthlyEqPagoFijo(p) {
