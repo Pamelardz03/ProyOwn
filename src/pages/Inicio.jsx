@@ -7,7 +7,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, isThisMonth } from '../lib/date'
-import { ingresosFijosDelMes, monthlyEqPagoFijo } from '../lib/budget'
+import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 
 const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
@@ -91,8 +91,11 @@ export default function Inicio() {
 
   const saldoMes = ingresoMensual - gastoMensual - vitallMensual - otrosFijosMensual
 
+  // El próximo pago de un sueldo fijo se calcula en vivo (no lee el campo
+  // `fecha` guardado, que se fija una sola vez al dar de alta el sueldo y
+  // se queda obsoleto — los sueldos fijos no tienen fecha de fin).
   const proximosDias = [
-    ...sueldosFijos.map((s) => daysUntil(s.fecha)),
+    ...sueldosFijos.map((s) => daysUntil(proximaFechaSueldo(s))),
     ...pagosActivos.map((p) => daysUntil(p.fecha)),
   ].filter((d) => d != null && d >= 0)
   const proximoPagoDias = proximosDias.length ? Math.min(...proximosDias) : null

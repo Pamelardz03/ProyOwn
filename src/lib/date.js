@@ -172,6 +172,53 @@ export function compareISOAsc(a, b) {
   return (a || '').localeCompare(b || '')
 }
 
+// Un sueldo fijo no tiene fecha de fin — pero `fechasPago` (calculada al
+// darlo de alta, o al validar sus fechas) solo cubre unas cuantas
+// ocurrencias. Esto sigue esa misma serie hacia el futuro, indefinidamente,
+// hasta cubrir `hastaISO` — para que el sueldo siga apareciendo "para
+// siempre" en Calendario/Inicio/Perfil en vez de desaparecer cuando se
+// acaban las fechas que se generaron al principio.
+export function extenderFechasPago(frecuencia, fechasBase, hastaISO) {
+  if (!Array.isArray(fechasBase) || fechasBase.length === 0) return []
+  const fechas = [...new Set(fechasBase)].sort(compareISOAsc)
+  let guard = 0
+  while (fechas[fechas.length - 1] < hastaISO && guard < 2000) {
+    const last = parseISODate(fechas[fechas.length - 1])
+    let next
+
+    if (frecuencia === 'Semanal') {
+      next = new Date(last)
+      next.setDate(next.getDate() + 7)
+    } else if (frecuencia === 'Mensual') {
+      // El día objetivo es el máximo observado en la serie — un mes corto
+      // pudo haber recortado alguna ocurrencia (ej. día 31 en febrero),
+      // pero el objetivo real siempre queda como el mayor valor visto.
+      const diaObjetivo = Math.max(...fechas.map((f) => parseISODate(f).getDate()))
+      let y = last.getFullYear()
+      let m = last.getMonth() + 1
+      if (m > 11) { m = 0; y += 1 }
+      next = new Date(y, m, Math.min(diaObjetivo, daysInMonth(y, m)))
+    } else {
+      // Quincenal real: primera mitad del mes → último día de ese mismo
+      // mes; segunda mitad → día 15 del mes siguiente.
+      const y = last.getFullYear()
+      const m = last.getMonth()
+      if (last.getDate() <= 15) {
+        next = new Date(y, m, daysInMonth(y, m))
+      } else {
+        let ny = y
+        let nm = m + 1
+        if (nm > 11) { nm = 0; ny += 1 }
+        next = new Date(ny, nm, 15)
+      }
+    }
+
+    fechas.push(toISO(next))
+    guard++
+  }
+  return fechas
+}
+
 // --- Días feriados oficiales (México, Art. 74 LFT) ---
 // Solo los de descanso obligatorio con fecha fija o "enésimo lunes del
 // mes" — no incluye el traspaso de poder ejecutivo (1 vez cada 6 años).

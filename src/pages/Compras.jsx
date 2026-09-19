@@ -22,7 +22,7 @@ export default function Compras() {
   const { message, show } = useToast()
   const [tab, setTab] = useState('deseos')
   const [detailId, setDetailId] = useState(null)
-  const [notifFor, setNotifFor] = useState(null)
+  const [notifFor, setNotifFor] = useState(null) // { id, collection, name, notifFormal, notifMini }
   const [dismissed, setDismissed] = useState({})
 
   const { data: whimms, loading: loadingWhimms, error: errorWhimms } = useUserCollection('whimms')
@@ -56,6 +56,33 @@ export default function Compras() {
     } catch (err) {
       console.error(err)
       show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  // Abre la hoja de notificaciones para un Whimm o un Vitall — antes solo
+  // existía para Vitall; ahora ambos tienen sus propios recordatorios.
+  function openNotif(item, collection) {
+    setNotifFor({
+      id: item.id,
+      collection,
+      name: item.name,
+      notifFormal: item.notifFormal !== false,
+      notifMini: item.notifMini !== false,
+    })
+  }
+
+  async function saveNotif() {
+    if (!notifFor) return
+    try {
+      await updateUserDoc(user.uid, notifFor.collection, notifFor.id, {
+        notifFormal: notifFor.notifFormal,
+        notifMini: notifFor.notifMini,
+      })
+      setNotifFor(null)
+      show('Notificaciones guardadas')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
     }
   }
 
@@ -111,6 +138,13 @@ export default function Compras() {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
                     <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precio)}</div>
+                    <button
+                      aria-label="Notificaciones"
+                      onClick={(e) => { e.stopPropagation(); openNotif(w, 'whimms') }}
+                      style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      <IconBell />
+                    </button>
                   </div>
 
                   <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -156,7 +190,7 @@ export default function Compras() {
                         {s.frecuencia} · Próximo {formatShortDate(s.fecha)}{dias != null ? ` · ${dias} día${dias === 1 ? '' : 's'}` : ''}
                       </div>
                     </div>
-                    <button aria-label="Notificaciones" onClick={() => setNotifFor(s.name)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <button aria-label="Notificaciones" onClick={() => openNotif(s, 'pagosFijos')} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <IconBell />
                     </button>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
@@ -178,12 +212,22 @@ export default function Compras() {
           <div className="sheet">
             <div className="sheet-grabber"><span /></div>
             <div className="sheet-body">
-              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 14px' }}>Notificaciones — {notifFor}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 14px' }}>Notificaciones — {notifFor.name}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <NotifRow label="Recordatorio formal" hint="2 días antes del vencimiento" />
-                <NotifRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" />
+                <NotifRow
+                  label="Recordatorio formal"
+                  hint="2 días antes del vencimiento"
+                  on={notifFor.notifFormal}
+                  onClick={() => setNotifFor((f) => ({ ...f, notifFormal: !f.notifFormal }))}
+                />
+                <NotifRow
+                  label="Recordatorio mini"
+                  hint="Diario, desde que se activa hasta el día de pago"
+                  on={notifFor.notifMini}
+                  onClick={() => setNotifFor((f) => ({ ...f, notifMini: !f.notifMini }))}
+                />
               </div>
-              <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => { setNotifFor(null); show('Notificaciones guardadas') }}>
+              <button className="btn-primary" style={{ marginTop: 14 }} onClick={saveNotif}>
                 Guardar
               </button>
             </div>
@@ -298,15 +342,14 @@ export default function Compras() {
   )
 }
 
-function NotifRow({ label, hint }) {
-  const [on, setOn] = useState(true)
+function NotifRow({ label, hint, on, onClick }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--beige2)', borderRadius: 10, padding: '11px 12px' }}>
       <div>
         <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>
       </div>
-      <Toggle on={on} onClick={() => setOn((v) => !v)} ariaLabel={label} />
+      <Toggle on={on} onClick={onClick} ariaLabel={label} />
     </div>
   )
 }

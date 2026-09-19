@@ -6,8 +6,8 @@ import { IconWarning, IconClock, IconCard, IconSalary, IconBars, IconChevronRigh
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
-import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { estimatePresupuestoDiarioNeto } from '../lib/budget'
+import { daysUntil, formatShortDate, isThisMonth } from '../lib/date'
+import { estimatePresupuestoDiarioNeto, proximaFechaSueldo } from '../lib/budget'
 
 const LINKS = [
   { to: '/perfil/historial', Icon: IconClock, title: 'Historial completo', hint: 'Todo el desglose, filtrable' },
@@ -27,13 +27,12 @@ export default function Perfil() {
   const displayName = user?.displayName || 'Pame'
   const initial = displayName.charAt(0).toUpperCase()
 
-  // Próximo pago real de cada sueldo fijo (el primero de fechasPago que
-  // sea hoy o después; si no tiene fechasPago calculadas, cae a `fecha`).
-  const hoy = todayISO()
+  // Próximo pago real de cada sueldo fijo, calculado en vivo — los
+  // sueldos fijos no tienen fecha de fin, así que se extiende la serie
+  // hacia adelante en vez de depender solo de lo que ya se generó.
   const proximosSueldos = sueldosFijos
     .map((s) => {
-      const fechas = Array.isArray(s.fechasPago) && s.fechasPago.length ? s.fechasPago : s.fecha ? [s.fecha] : []
-      const proxima = fechas.find((f) => f >= hoy) || fechas[fechas.length - 1] || null
+      const proxima = proximaFechaSueldo(s)
       return proxima ? { id: s.id, name: s.name, fecha: proxima, monto: s.monto } : null
     })
     .filter(Boolean)

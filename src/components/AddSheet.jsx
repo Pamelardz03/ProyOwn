@@ -44,6 +44,8 @@ export default function AddSheet({ onToast, cats }) {
   const [linksList, setLinksList] = useState([''])
   const [necesidadSel, setNecesidadSel] = useState(3)
   const [deseoSel, setDeseoSel] = useState(3)
+  const [objNotifFormal, setObjNotifFormal] = useState(true)
+  const [objNotifMini, setObjNotifMini] = useState(true)
 
   const [servicioForm, setServicioForm] = useState(emptyServicio)
   const [servicioFreq, setServicioFreq] = useState('Mensual')
@@ -116,12 +118,16 @@ export default function AddSheet({ onToast, cats }) {
         deseo: deseoSel,
         score,
         estado: estadoSel,
+        notifFormal: objNotifFormal,
+        notifMini: objNotifMini,
       })
       setObjetoForm(emptyObjeto)
       setEstadoSel('espera')
       setLinksList([''])
       setNecesidadSel(3)
       setDeseoSel(3)
+      setObjNotifFormal(true)
+      setObjNotifMini(true)
       setStep('closed')
       onToast?.('Whimm guardado')
     } catch (err) {
@@ -405,6 +411,11 @@ export default function AddSheet({ onToast, cats }) {
                         Apartando fondos
                       </span>
                     </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
+                      Notificaciones
+                    </div>
+                    <ToggleRow label="Recordatorio formal" hint="2 días antes" on={objNotifFormal} onClick={() => setObjNotifFormal((v) => !v)} />
+                    <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día estimado" on={objNotifMini} onClick={() => setObjNotifMini((v) => !v)} />
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveObjeto} disabled={saving}>
                     Guardar Whimm

@@ -1,18 +1,20 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { IconChevronLeft, IconPlus, IconTrash } from '../components/Icons'
+import { IconChevronLeft, IconPlus, IconTrash, IconEdit } from '../components/Icons'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, addUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, addUserDoc, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
 import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, isFeriadoMX, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
+import { proximaFechaSueldo, fechasPagoVivas } from '../lib/budget'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-// Metadatos del mes del mini-calendario del paso "Validar fechas" (igual
-// patrón que Calendario.jsx: huecos iniciales + total de días del mes).
+// Metadatos del mes de un mini-calendario (igual patrón que Calendario.jsx:
+// huecos iniciales + total de días del mes). Se reusa tanto para "Validar
+// fechas" (paso 2 de agregar) como para el detalle de un sueldo existente.
 function monthMeta(offset) {
   const now = new Date()
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
@@ -30,13 +32,28 @@ function isoOfDay(year, month, day) {
   return `${year}-${pad(month + 1)}-${pad(day)}`
 }
 
-// A qué mes (offset relativo a hoy) navegar al abrir el calendario, para
-// que abra directo en el mes de la primera fecha calculada.
+// A qué mes (offset relativo a hoy) navegar al abrir un calendario, para
+// que abra directo en el mes de la fecha dada.
 function monthOffsetFromISO(iso) {
   const d = parseISODate(iso)
   if (!d) return 0
   const now = new Date()
   return (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth())
+}
+
+// Construye los días marcados de un mes dado un set de fechas ISO — usado
+// por el calendario de "Validar fechas" y por el detalle de un sueldo ya
+// guardado, para no duplicar la lógica de armado del grid.
+function buildCalDays(offset, fechaSet) {
+  const meta = monthMeta(offset)
+  const days = []
+  for (let i = 0; i < meta.leading; i++) days.push(null)
+  for (let d = 1; d <= meta.total; d++) {
+    const iso = isoOfDay(meta.year, meta.month, d)
+    days.push({ day: d, iso, marcado: fechaSet.has(iso), alerta: isSunday(iso) || isFeriadoMX(iso) })
+  }
+  while (days.length % 7 !== 0) days.push(null)
+  return { meta, days }
 }
 
 function monthlyEq(s) {
@@ -55,6 +72,81 @@ function emptyFijo() {
 }
 const emptyRapido = { desc: '', monto: '' }
 
+// Fila de un sueldo fijo: tocar el cuerpo abre el detalle-calendario,
+// el lápiz abre el formulario de edición, y la única forma de eliminar
+// es swipe a la izquierda (revela el bote de basura), igual patrón que
+// ExpenseRow en Gastos.jsx.
+function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete }) {
+  const startX = useRef(0)
+  const proxima = proximaFechaSueldo(s)
+  const dias = daysUntil(proxima)
+  return (
+    <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          opacity: isSwipeOpen ? 1 : 0,
+          pointerEvents: isSwipeOpen ? 'auto' : 'none',
+          transition: 'opacity .18s ease',
+        }}
+      >
+        <button
+          aria-label="Eliminar sueldo fijo"
+          onClick={onDelete}
+          style={{ width: 72, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <IconTrash color="#fff" />
+        </button>
+      </div>
+      <div
+        className="card"
+        onPointerDown={(e) => { startX.current = e.clientX }}
+        onPointerUp={(e) => {
+          if (e.target.closest('button')) return
+          const delta = e.clientX - startX.current
+          if (delta < -40) { onSwipeChange(true); return }
+          if (delta > 40) { onSwipeChange(false); return }
+          if (isSwipeOpen) { onSwipeChange(false); return }
+          onOpenDetail()
+        }}
+        style={{
+          position: 'relative',
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          transform: `translateX(${isSwipeOpen ? -72 : 0}px)`,
+          transition: 'transform .18s ease',
+          touchAction: 'pan-y',
+          cursor: 'pointer',
+        }}
+      >
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round"><path d="M10 14V6M6.5 9.5 10 6l3.5 3.5" /></svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+            {s.frecuencia}{proxima ? ` · Próximo ${formatShortDate(proxima)}${dias != null ? ` · en ${dias} días` : ''}` : ' · sin próxima fecha'}
+          </div>
+          {s.fechaInicio && (
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>Desde {formatShortDate(s.fechaInicio)}</div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
+          <button aria-label="Editar sueldo fijo" onClick={onEdit} style={{ padding: 2 }}>
+            <IconEdit size={14} color="var(--muted)" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Sueldos() {
   const { user } = useAuth()
   const { data: fijos, loading: loadingFijos, error: errorFijos } = useUserCollection('sueldosFijos')
@@ -62,6 +154,7 @@ export default function Sueldos() {
 
   const [addFijoOpen, setAddFijoOpen] = useState(false)
   const [fijoStep, setFijoStep] = useState('form') // form | validar
+  const [editingFijoId, setEditingFijoId] = useState(null)
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
   const [formFreq, setFormFreq] = useState('Quincenal')
   const [fijoForm, setFijoForm] = useState(emptyFijo())
@@ -75,10 +168,21 @@ export default function Sueldos() {
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
 
+  // Fila de sueldo fijo con swipe abierto (revela el bote de basura) —
+  // solo una a la vez, igual que swipeOpenKey en Gastos.jsx.
+  const [swipeOpenFijoId, setSwipeOpenFijoId] = useState(null)
+
+  // Detalle de calendario (solo lectura) de un sueldo fijo ya guardado,
+  // abierto al tocar su fila.
+  const [detailFijo, setDetailFijo] = useState(null)
+  const [detailMonthOffset, setDetailMonthOffset] = useState(0)
+
   // Confirmación de borrado sin window.confirm (algunos navegadores de PWA
   // instaladas no muestran el diálogo nativo): toca el bote de basura una
   // vez para armarlo, otra vez para confirmar. Se desarma solo a los 3s.
-  const [confirmDelete, setConfirmDelete] = useState(null) // { type: 'fijo' | 'rapido', id }
+  // (Ya solo se usa para "Sueldos rápidos" — los fijos se eliminan con
+  // swipe a la izquierda.)
+  const [confirmDelete, setConfirmDelete] = useState(null) // { type: 'rapido', id }
   const confirmTimeout = useRef(null)
 
   function armOrDelete(type, id, doDelete) {
@@ -105,13 +209,15 @@ export default function Sueldos() {
     setSelectedFecha(null)
     setSwipeOpen(false)
     setConfirmDeleteFechaOpen(false)
+    setEditingFijoId(null)
     setFijoStep('form')
     setAddFijoOpen(false)
   }
 
   // Vuelve al paso 1 sin cerrar todo el flujo (botón "Volver" y tocar fuera
   // del calendario) — a diferencia de resetFijoFlow, conserva lo escrito
-  // en el formulario (nombre/monto/fecha ancla/frecuencia).
+  // en el formulario (nombre/monto/fecha ancla/frecuencia) y si se está
+  // editando un sueldo existente.
   function backToForm() {
     setSelectedFecha(null)
     setSwipeOpen(false)
@@ -164,6 +270,31 @@ export default function Sueldos() {
     setConfirmDeleteFechaOpen(false)
   }
 
+  // Abre el formulario de edición de un sueldo fijo ya guardado (lápiz):
+  // reusa el mismo flujo de 2 pasos que "Agregar", precargado con sus
+  // datos y sus fechas ya calculadas (en vez de regenerarlas desde cero).
+  function openFijoEdit(s) {
+    setFijoForm({ name: s.name, monto: String(s.monto), fecha: s.fecha || todayISO() })
+    setFormFreq(s.frecuencia)
+    setEditingFijoId(s.id)
+    setFechasPreview(Array.isArray(s.fechasPago) && s.fechasPago.length ? [...s.fechasPago] : s.fecha ? [s.fecha] : [])
+    setValidarMonthOffset(monthOffsetFromISO(proximaFechaSueldo(s) || s.fecha))
+    setSelectedFecha(null)
+    setSwipeOpen(false)
+    setConfirmDeleteFechaOpen(false)
+    setSwipeOpenFijoId(null)
+    setAddFijoOpen(true)
+    setFijoStep('form')
+  }
+
+  // Abre el detalle-calendario (solo lectura) de un sueldo fijo ya
+  // guardado, marcando sus fechas de pago vigentes (indefinidas — se
+  // extienden solas hacia el futuro, ver lib/budget.js).
+  function openFijoDetail(s) {
+    setDetailFijo(s)
+    setDetailMonthOffset(monthOffsetFromISO(proximaFechaSueldo(s) || s.fecha))
+  }
+
   async function saveFijo() {
     const monto = Number(fijoForm.monto)
     if (!fijoForm.name.trim() || !monto || fechasPreview.length === 0) return
@@ -172,16 +303,21 @@ export default function Sueldos() {
       const hoy = todayISO()
       const fechasOrdenadas = [...fechasPreview].sort(compareISOAsc)
       const proximaFecha = fechasOrdenadas.find((f) => f >= hoy) || fechasOrdenadas[fechasOrdenadas.length - 1]
-      await addUserDoc(user.uid, 'sueldosFijos', {
+      const payload = {
         name: fijoForm.name.trim(),
         monto,
         frecuencia: formFreq,
         fecha: proximaFecha,
-        fechaInicio: hoy,
         fechasPago: fechasOrdenadas,
-      })
+      }
+      if (editingFijoId) {
+        await updateUserDoc(user.uid, 'sueldosFijos', editingFijoId, payload)
+        show('Sueldo fijo actualizado')
+      } else {
+        await addUserDoc(user.uid, 'sueldosFijos', { ...payload, fechaInicio: hoy })
+        show('Sueldo fijo guardado')
+      }
       resetFijoFlow()
-      show('Sueldo fijo guardado')
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${errMsg(err)}`)
@@ -214,6 +350,7 @@ export default function Sueldos() {
   async function removeFijo(id) {
     try {
       await deleteUserDoc(user.uid, 'sueldosFijos', id)
+      setSwipeOpenFijoId(null)
       show('Sueldo fijo eliminado')
     } catch (err) {
       console.error(err)
@@ -231,15 +368,13 @@ export default function Sueldos() {
     }
   }
 
-  const validarMeta = monthMeta(validarMonthOffset)
   const fechaSet = new Set(fechasPreview)
-  const calDays = []
-  for (let i = 0; i < validarMeta.leading; i++) calDays.push(null)
-  for (let d = 1; d <= validarMeta.total; d++) {
-    const iso = isoOfDay(validarMeta.year, validarMeta.month, d)
-    calDays.push({ day: d, iso, marcado: fechaSet.has(iso), alerta: isSunday(iso) || isFeriadoMX(iso) })
-  }
-  while (calDays.length % 7 !== 0) calDays.push(null)
+  const { meta: validarMeta, days: calDays } = buildCalDays(validarMonthOffset, fechaSet)
+
+  const detailFechaSet = detailFijo ? new Set(fechasPagoVivas(detailFijo)) : new Set()
+  const { meta: detailMeta, days: detailCalDays } = detailFijo
+    ? buildCalDays(detailMonthOffset, detailFechaSet)
+    : { meta: null, days: [] }
 
   return (
     <div className="screen" style={{ paddingBottom: 40 }}>
@@ -277,6 +412,7 @@ export default function Sueldos() {
 
           {addFijoOpen && fijoStep === 'form' && (
             <div className="card" style={{ padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {editingFijoId && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>Editando sueldo fijo</div>}
               <input
                 className="fld"
                 placeholder="Nombre (ej. Sueldo principal)"
@@ -317,37 +453,17 @@ export default function Sueldos() {
           {errorFijos && <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 8 }}>{errorFijos}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {fijos.map((s) => {
-              const dias = daysUntil(s.fecha)
-              const armed = confirmDelete?.type === 'fijo' && confirmDelete?.id === s.id
-              return (
-                <div key={s.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round"><path d="M10 14V6M6.5 9.5 10 6l3.5 3.5" /></svg>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {s.frecuencia} · Próximo {formatShortDate(s.fecha)}{dias != null ? ` · en ${dias} días` : ''}
-                    </div>
-                    {s.fechaInicio && (
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>Desde {formatShortDate(s.fechaInicio)}</div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
-                    <button
-                      aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'}
-                      style={{ padding: 2, display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => armOrDelete('fijo', s.id, () => removeFijo(s.id))}
-                    >
-                      {armed && <span style={{ fontSize: 10, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
-                      <IconTrash size={14} color={armed ? 'var(--red)' : 'var(--muted)'} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+            {fijos.map((s) => (
+              <FijoRow
+                key={s.id}
+                s={s}
+                isSwipeOpen={swipeOpenFijoId === s.id}
+                onSwipeChange={(open) => setSwipeOpenFijoId(open ? s.id : null)}
+                onOpenDetail={() => openFijoDetail(s)}
+                onEdit={() => openFijoEdit(s)}
+                onDelete={() => removeFijo(s.id)}
+              />
+            ))}
             {!loadingFijos && !errorFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
           </div>
         </div>
@@ -576,9 +692,93 @@ export default function Sueldos() {
                   onClick={saveFijo}
                   disabled={saving || fechasPreview.length === 0}
                 >
-                  Confirmar y guardar
+                  {editingFijoId ? 'Guardar cambios' : 'Confirmar y guardar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {detailFijo && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setDetailFijo(null)} />
+          <div className="sheet" style={{ maxHeight: '90%' }}>
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{detailFijo.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {detailFijo.frecuencia} · {fmtSigned(detailFijo.monto)}{detailFijo.fechaInicio ? ` · Desde ${formatShortDate(detailFijo.fechaInicio)}` : ''}
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <button
+                    aria-label="Mes anterior"
+                    onClick={() => setDetailMonthOffset((i) => i - 1)}
+                    style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 4.5 6 10l6.5 5.5" /></svg>
+                  </button>
+                  <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>{detailMeta.label}</div>
+                  <button
+                    aria-label="Mes siguiente"
+                    onClick={() => setDetailMonthOffset((i) => i + 1)}
+                    style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--wine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5l5 5.5-5 5.5" /></svg>
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, fontSize: 10, color: 'var(--muted)', fontWeight: 600, textAlign: 'center', marginBottom: 6 }}>
+                  {['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'].map((d) => <div key={d}>{d}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+                  {detailCalDays.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32 }}>
+                      {d && (
+                        <span
+                          className="mono"
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 9,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxSizing: 'border-box',
+                            fontSize: 12,
+                            ...(d.marcado
+                              ? d.alerta
+                                ? { background: 'var(--red-bg)', color: 'var(--red)', fontWeight: 700, border: '2px solid var(--red)' }
+                                : { background: 'var(--green)', color: '#fff', fontWeight: 700 }
+                              : {}),
+                          }}
+                        >
+                          {d.day}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--beige2)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: 'var(--green)' }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Día de pago</span>
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: 'var(--red)' }} />
+                    <span style={{ fontSize: 10, color: 'var(--muted)' }}>Domingo o feriado</span>
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>Sueldo fijo indefinido — sigue pagándose hasta que lo elimines</div>
+
+              <button className="btn-primary" style={{ background: 'var(--beige2)', color: 'var(--text)' }} onClick={() => setDetailFijo(null)}>
+                Cerrar
+              </button>
             </div>
           </div>
         </>

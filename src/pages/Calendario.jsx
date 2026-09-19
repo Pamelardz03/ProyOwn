@@ -4,9 +4,9 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
 import { useUserCollection } from '../lib/firestoreCollections'
-import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc } from '../lib/date'
+import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, fechasPagoVivas } from '../lib/budget'
 
 const TODAY_STYLE = { background: '#3a0f1f', color: '#fff', fontWeight: 700 }
 const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
@@ -18,7 +18,7 @@ const FILTERS = [
   { key: 'todos', label: 'Todos' },
   { key: 'servicio', label: 'Vitall' },
   { key: 'compra', label: 'Whimm' },
-  { key: 'nomina', label: 'Nómina' },
+  { key: 'nomina', label: 'Sueldos' },
 ]
 
 // Metadatos del mes que muestra la grilla (año, mes 0-indexado, huecos
@@ -48,6 +48,7 @@ function styleForDay(cats, isToday) {
 export default function Calendario() {
   const [monthOffset, setMonthOffset] = useState(0)
   const [eventFilter, setEventFilter] = useState('todos')
+  const [proximosVisible, setProximosVisible] = useState(10)
   const { message, show } = useToast()
 
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
@@ -70,8 +71,9 @@ export default function Calendario() {
   // Whimm top de la cola (compra) — reemplaza los datos de ejemplo.
   const allEvents = useMemo(() => {
     const out = []
+    const horizonte = addDaysISO(todayISO(), 365)
     sueldosFijos.forEach((s) => {
-      const fechas = Array.isArray(s.fechasPago) && s.fechasPago.length ? s.fechasPago : s.fecha ? [s.fecha] : []
+      const fechas = fechasPagoVivas(s, horizonte)
       fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f' }))
     })
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
@@ -84,7 +86,8 @@ export default function Calendario() {
   }, [sueldosFijos, pagosFijos, colaWhimm])
 
   const hoy = todayISO()
-  const proximos = allEvents.filter((e) => e.dateISO >= hoy && (eventFilter === 'todos' || e.cat === eventFilter)).slice(0, 20)
+  const proximosFiltrados = allEvents.filter((e) => e.dateISO >= hoy && (eventFilter === 'todos' || e.cat === eventFilter))
+  const proximos = proximosFiltrados.slice(0, proximosVisible)
 
   const meta = monthMeta(monthOffset)
   const specialByDay = {}
@@ -141,7 +144,7 @@ export default function Calendario() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--beige2)' }}>
-            <LegendItem color="var(--wine)" solid label="Nómina" />
+            <LegendItem color="var(--wine)" solid label="Sueldos" />
             <LegendItem color="var(--wine4)" label="Vitall" />
             <LegendItem color="var(--amber)" label="Whimm" />
             <LegendItem color="#dde3c8" solid label="Recordatorio" />
@@ -154,7 +157,7 @@ export default function Calendario() {
             {FILTERS.map((f) => (
               <span
                 key={f.key}
-                onClick={() => setEventFilter(f.key)}
+                onClick={() => { setEventFilter(f.key); setProximosVisible(10) }}
                 className="pill"
                 style={{ background: eventFilter === f.key ? 'var(--wine)' : 'transparent', color: eventFilter === f.key ? '#fff' : 'var(--muted)' }}
               >
@@ -175,6 +178,14 @@ export default function Calendario() {
             ))}
             {proximos.length === 0 && <div className="empty-state">Sin eventos próximos para este filtro</div>}
           </div>
+          {proximosFiltrados.length > proximos.length && (
+            <button
+              onClick={() => setProximosVisible((n) => n + 10)}
+              style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}
+            >
+              Ver más
+            </button>
+          )}
         </div>
 
         <div>

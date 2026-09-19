@@ -1,10 +1,37 @@
-import { isThisMonth, todayISO, addDaysISO } from './date'
+import { isThisMonth, todayISO, addDaysISO, extenderFechasPago } from './date'
+
+// Un sueldo fijo no tiene fecha de fin — 2 años hacia adelante es más que
+// suficiente para cualquier vista/paginación real de la app.
+const HORIZONTE_DIAS_SUELDO = 730
+
+// Serie de fechas de pago de un sueldo fijo, extendida hacia el futuro
+// indefinidamente a partir de lo que ya se calculó/guardó (`fechasPago`, o
+// `fecha` como respaldo para sueldos viejos que no tienen ese arreglo) —
+// para que el sueldo siga "vivo" aunque ya pasó la ventana que se generó
+// al darlo de alta o al validar sus fechas.
+export function fechasPagoVivas(sueldo, hastaISO) {
+  const base = Array.isArray(sueldo.fechasPago) && sueldo.fechasPago.length
+    ? sueldo.fechasPago
+    : sueldo.fecha ? [sueldo.fecha] : []
+  if (base.length === 0) return []
+  const hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_SUELDO)
+  return extenderFechasPago(sueldo.frecuencia, base, hasta)
+}
+
+// La próxima fecha de pago real (hoy o después) de un sueldo fijo —
+// reemplaza leer el campo `fecha` guardado en el documento, que se calculó
+// una sola vez al dar de alta el sueldo y se queda obsoleto con el tiempo.
+export function proximaFechaSueldo(sueldo, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const fechas = fechasPagoVivas(sueldo)
+  return fechas.find((f) => f >= hoy) || null
+}
 
 // --- Ingresos mensuales reales (no mensualizado ciego) ---
 // Sueldos fijos nuevos (con fechasPago + fechaInicio) solo cuentan las
 // fechas de pago que ya ocurrieron este mes desde que se registraron.
-// Sueldos fijos viejos (sin fechasPago, agregados antes de este cambio)
-// caen al estimado mensualizado como respaldo.
+// Sueldos fijos sin ninguna fecha guardada (caso extremo, no debería
+// pasar) caen al estimado mensualizado como respaldo.
 function monthlyEqSueldoLegacy(s) {
   const monto = Number(s.monto) || 0
   if (s.frecuencia === 'Semanal') return monto * 4.33
@@ -15,9 +42,10 @@ function monthlyEqSueldoLegacy(s) {
 export function ingresosFijosDelMes(sueldosFijos) {
   const hoy = todayISO()
   return sueldosFijos.reduce((sum, s) => {
-    if (Array.isArray(s.fechasPago) && s.fechasPago.length) {
-      const inicio = s.fechaInicio || s.fechasPago[0]
-      const ocurridos = s.fechasPago.filter((f) => isThisMonth(f) && f <= hoy && f >= inicio)
+    const fechas = fechasPagoVivas(s)
+    if (fechas.length) {
+      const inicio = s.fechaInicio || fechas[0]
+      const ocurridos = fechas.filter((f) => isThisMonth(f) && f <= hoy && f >= inicio)
       return sum + ocurridos.length * (Number(s.monto) || 0)
     }
     return sum + monthlyEqSueldoLegacy(s)
