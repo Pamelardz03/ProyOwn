@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { IconChevronLeft, IconCard } from '../components/Icons'
+import { IconChevronLeft, IconCard, IconTrash } from '../components/Icons'
 import Toggle from '../components/Toggle'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
+import { useAuth } from '../lib/AuthContext'
+import { useUserCollection, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
+import { formatShortDate } from '../lib/date'
 
 const TIPOS = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
 
@@ -13,31 +18,47 @@ const TIPO_COLORS = {
   Deuda: { color: 'var(--red)', bg: 'var(--red-bg)' },
 }
 
-// Datos de ejemplo — Fase 5 del roadmap (Servicios/Vitall) los reemplaza por
-// pagos recurrentes reales guardados en Firestore.
-const ITEMS = [
-  { id: 1, name: 'Gym', tipo: 'Vitall', frecuencia: 'Mensual', fecha: '18 sep', monto: 650, activo: true },
-  { id: 2, name: 'Netflix', tipo: 'Vitall', frecuencia: 'Mensual', fecha: '20 sep', monto: 219, activo: true },
-  { id: 3, name: 'Spotify', tipo: 'Vitall', frecuencia: 'Mensual', fecha: '25 sep', monto: 99, activo: true },
-  { id: 4, name: 'iCloud+', tipo: 'Vitall', frecuencia: 'Mensual', fecha: '5 oct', monto: 29, activo: true },
-  { id: 5, name: 'Renta', tipo: 'Vivienda', frecuencia: 'Mensual', fecha: '1 oct', monto: 6500, activo: true },
-  { id: 6, name: 'Boleto estacionamiento', tipo: 'Transporte', frecuencia: 'Semanal', fecha: '21 sep', monto: 150, activo: true },
-  { id: 7, name: 'Deuda con mi papá — teléfono', tipo: 'Deuda', frecuencia: 'Mensual', fecha: '28 sep', monto: 300, activo: true },
-]
-
 function monthlyEq(p) {
-  return p.frecuencia === 'Semanal' ? Math.round(p.monto * 4.33) : p.monto
+  const monto = Number(p.monto) || 0
+  return p.frecuencia === 'Semanal' ? Math.round(monto * 4.33) : monto
 }
 
 export default function PreciosFijos() {
+  const { user } = useAuth()
+  const { data: items, loading, error } = useUserCollection('pagosFijos')
   const [tipo, setTipo] = useState('todos')
-  const [items, setItems] = useState(ITEMS)
+  const { message, show } = useToast()
+
+  const confirmDelete = useRef(null)
+  const [armedId, setArmedId] = useState(null)
 
   const totalMonthly = items.reduce((sum, p) => sum + monthlyEq(p), 0)
-  const filtered = items.filter((p) => tipo === 'todos' || p.tipo.toLowerCase() === tipo)
+  const filtered = items.filter((p) => tipo === 'todos' || (p.tipo || '').toLowerCase() === tipo)
 
-  function toggleActivo(id) {
-    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, activo: !p.activo } : p)))
+  async function toggleActivo(id, activo) {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', id, { activo: !activo })
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  function askDelete(id) {
+    if (armedId === id) {
+      clearTimeout(confirmDelete.current)
+      setArmedId(null)
+      deleteUserDoc(user.uid, 'pagosFijos', id)
+        .then(() => show('Pago fijo eliminado'))
+        .catch((err) => {
+          console.error(err)
+          show(`No se pudo eliminar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+        })
+      return
+    }
+    clearTimeout(confirmDelete.current)
+    setArmedId(id)
+    confirmDelete.current = setTimeout(() => setArmedId(null), 3000)
   }
 
   return (
@@ -57,7 +78,7 @@ export default function PreciosFijos() {
           </div>
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Pagos activos</div>
-            <div className="mono" style={{ fontSize: 18, fontWeight: 500, marginTop: 4 }}>{items.length}</div>
+            <div className="mono" style={{ fontSize: 18, fontWeight: 500, marginTop: 4 }}>{items.filter((p) => p.activo).length}</div>
           </div>
         </div>
 
@@ -75,9 +96,12 @@ export default function PreciosFijos() {
           ))}
         </div>
 
+        {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map((p) => {
-            const colors = TIPO_COLORS[p.tipo]
+            const colors = TIPO_COLORS[p.tipo] || TIPO_COLORS.Vitall
+            const armed = armedId === p.id
             return (
               <div key={p.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div className="icon-tile" style={{ width: 38, height: 38 }}>
@@ -88,18 +112,26 @@ export default function PreciosFijos() {
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
                     <span style={{ fontSize: 9, fontWeight: 600, color: colors.color, background: colors.bg, padding: '2px 7px', borderRadius: 6 }}>{p.tipo}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{p.frecuencia} · Próximo {p.fecha}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{p.frecuencia} · Próximo {formatShortDate(p.fecha)}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{fmt(p.monto)}</div>
-                  <Toggle on={p.activo} onClick={() => toggleActivo(p.id)} ariaLabel={`Activar ${p.name}`} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'} onClick={() => askDelete(p.id)} style={{ padding: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {armed && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
+                      <IconTrash size={13} color={armed ? 'var(--red)' : 'var(--muted)'} />
+                    </button>
+                    <Toggle on={p.activo} onClick={() => toggleActivo(p.id, p.activo)} ariaLabel={`Activar ${p.name}`} />
+                  </div>
                 </div>
               </div>
             )
           })}
-          {filtered.length === 0 && <div className="empty-state">Sin pagos fijos de este tipo</div>}
+          {!loading && !error && filtered.length === 0 && <div className="empty-state">Sin pagos fijos de este tipo</div>}
         </div>
       </div>
+
+      <Toast message={message} />
     </div>
   )
 }

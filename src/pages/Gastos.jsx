@@ -4,46 +4,20 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { IconProduct, IconTrash, IconEdit } from '../components/Icons'
 import { fmt } from '../lib/format'
+import { useAuth } from '../lib/AuthContext'
+import { useUserCollection, deleteUserDoc } from '../lib/firestoreCollections'
+import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc } from '../lib/date'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
 const PERIODO_LABEL = { dia: 'Día', semana: 'Semana', mes: 'Mes', anio: 'Año' }
+const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-// Datos de ejemplo — Fase 2 del roadmap los reemplaza por gastos reales en Firestore.
-const DATA = {
-  dia: { label: 'hoy', necesario: 0, shopping: 85, items: [{ id: 0, name: 'Café / antojo', cat: 'Shopping', date: 'Hoy', amount: 85, shopping: true }] },
-  semana: {
-    label: 'esta semana', necesario: 200, shopping: 984,
-    items: [
-      { id: 0, name: 'Gasolina', cat: 'Necesario', date: '15 sep', amount: 200, shopping: false },
-      { id: 1, name: 'Ropa', cat: 'Shopping', date: '16 sep', amount: 899, shopping: true },
-      { id: 2, name: 'Café / antojo', cat: 'Shopping', date: '17 sep', amount: 85, shopping: true },
-    ],
-  },
-  mes: {
-    label: 'septiembre', necesario: 10468, shopping: 984,
-    items: [
-      { id: 0, name: 'Renta', cat: 'Necesario', date: '1 sep', amount: 6500, shopping: false },
-      { id: 1, name: 'Despensa', cat: 'Necesario', date: '3 sep', amount: 2800, shopping: false },
-      { id: 2, name: 'Gasolina', cat: 'Necesario', date: '15 sep', amount: 200, shopping: false },
-      { id: 3, name: 'Ropa', cat: 'Shopping', date: '16 sep', amount: 899, shopping: true },
-      { id: 4, name: 'Café / antojo', cat: 'Shopping', date: '17 sep', amount: 85, shopping: true },
-      { id: 5, name: 'Gym', cat: 'Servicios y suscripciones', date: '18 sep', amount: 650, shopping: false },
-      { id: 6, name: 'Netflix', cat: 'Servicios y suscripciones', date: '20 sep', amount: 219, shopping: false },
-      { id: 7, name: 'Spotify', cat: 'Servicios y suscripciones', date: '25 sep', amount: 99, shopping: false },
-    ],
-  },
-  anio: {
-    label: '2026', necesario: 10700, shopping: 1634,
-    items: [
-      { id: 0, name: 'Renta', cat: 'Necesario', date: '1 sep', amount: 6500, shopping: false },
-      { id: 1, name: 'Despensa', cat: 'Necesario', date: '3 sep', amount: 2800, shopping: false },
-      { id: 2, name: 'Servicio dental', cat: 'Necesario', date: '12 jun', amount: 1200, shopping: false },
-      { id: 3, name: 'Gasolina', cat: 'Necesario', date: '15 sep', amount: 200, shopping: false },
-      { id: 4, name: 'Regalo cumpleaños', cat: 'Shopping', date: '8 mar', amount: 650, shopping: true },
-      { id: 5, name: 'Ropa', cat: 'Shopping', date: '16 sep', amount: 899, shopping: true },
-      { id: 6, name: 'Café / antojo', cat: 'Shopping', date: '17 sep', amount: 85, shopping: true },
-    ],
-  },
+const PERIODO_FILTER = { dia: isToday, semana: isThisWeek, mes: isThisMonth, anio: isThisYear }
+const PERIODO_LABEL_TEXT = {
+  dia: 'hoy',
+  semana: 'esta semana',
+  mes: MES_FULL[new Date().getMonth()],
+  anio: String(new Date().getFullYear()),
 }
 
 function ExpenseRow({ item, isOpen, onSwipe, onDelete }) {
@@ -81,20 +55,37 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete }) {
 }
 
 export default function Gastos() {
+  const { user } = useAuth()
   const { message, show } = useToast()
   const [periodo, setPeriodo] = useState('mes')
-  const [data, setData] = useState(DATA)
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
+  const { data: gastos, loading, error } = useUserCollection('gastos')
 
-  const cur = data[periodo]
-
-  function deleteItem(id) {
-    setData((prev) => ({
-      ...prev,
-      [periodo]: { ...prev[periodo], items: prev[periodo].items.filter((it) => it.id !== id) },
+  const filterFn = PERIODO_FILTER[periodo]
+  const items = gastos
+    .filter((g) => filterFn(g.fecha))
+    .sort((a, b) => compareISODesc(a.fecha, b.fecha))
+    .map((g) => ({
+      id: g.id,
+      name: g.concepto,
+      cat: g.categoria,
+      date: formatShortDate(g.fecha),
+      amount: Number(g.monto) || 0,
+      shopping: g.categoria === 'Shopping',
     }))
-    setSwipeOpenKey(null)
-    show('Gasto eliminado')
+
+  const necesario = items.filter((it) => !it.shopping).reduce((s, it) => s + it.amount, 0)
+  const shopping = items.filter((it) => it.shopping).reduce((s, it) => s + it.amount, 0)
+
+  async function deleteItem(id) {
+    try {
+      await deleteUserDoc(user.uid, 'gastos', id)
+      setSwipeOpenKey(null)
+      show('Gasto eliminado')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo eliminar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
   }
 
   return (
@@ -116,35 +107,34 @@ export default function Gastos() {
         </div>
 
         <div className="hero" style={{ padding: '16px 18px' }}>
-          <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Gastado en {cur.label}</div>
-          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(cur.necesario + cur.shopping)}</div>
+          <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Gastado en {PERIODO_LABEL_TEXT[periodo]}</div>
+          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(necesario + shopping)}</div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Necesario</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(cur.necesario)}</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(necesario)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Shopping</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(cur.shopping)}</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(shopping)}</div>
           </div>
         </div>
 
+        {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {cur.items.map((it) => {
-            const key = periodo + '-' + it.id
-            return (
-              <ExpenseRow
-                key={key}
-                item={it}
-                isOpen={swipeOpenKey === key}
-                onSwipe={(open) => setSwipeOpenKey(open ? key : null)}
-                onDelete={() => deleteItem(it.id)}
-              />
-            )
-          })}
-          {cur.items.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
+          {items.map((it) => (
+            <ExpenseRow
+              key={it.id}
+              item={it}
+              isOpen={swipeOpenKey === it.id}
+              onSwipe={(open) => setSwipeOpenKey(open ? it.id : null)}
+              onDelete={() => deleteItem(it.id)}
+            />
+          ))}
+          {!loading && !error && items.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
         </div>
       </div>
 

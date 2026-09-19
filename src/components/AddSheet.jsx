@@ -1,29 +1,159 @@
 import { useState } from 'react'
 import { IconPlus, IconClose, IconChevronLeft, IconReceipt, IconHeart, IconVitall, IconCard } from './Icons'
 import Toggle from './Toggle'
+import { useAuth } from '../lib/AuthContext'
+import { addUserDoc } from '../lib/firestoreCollections'
+import { todayISO } from '../lib/date'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
+const TIPOS_PAGO = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
+
+function errMsg(err) {
+  return `${err?.code ? `(${err.code}) ` : ''}${err?.message || 'Error desconocido'}`
+}
+
+const emptyGasto = { concepto: '', monto: '', lugar: '' }
+const emptyObjeto = { nombre: '', precio: '', lugar: '', link: '' }
+const emptyServicio = { nombre: '', costo: '' }
+const emptyPago = { nombre: '', monto: '' }
 
 // Botón "+" flotante + hoja inferior para agregar Gasto / Whimm / Vitall / Pago fijo.
 // Reutilizado en Inicio, Gastos, Compras, Calendario y Perfil — igual que en el mockup.
-// Por ahora guarda solo localmente (toast de confirmación); la Fase que corresponda
-// del roadmap conecta cada guardado a Firestore.
-export default function AddSheet({ onToast, cats, onAddCat }) {
+// Guarda de verdad en Firestore: /users/{uid}/gastos, /whimms y /pagosFijos
+// (Vitall y Pago fijo son el mismo tipo de dato — pagosFijos — con distinto
+// punto de entrada; Vitall preselecciona tipo="Vitall").
+export default function AddSheet({ onToast, cats }) {
+  const { user } = useAuth()
   const [step, setStep] = useState('closed') // closed | picker | gasto | objeto | servicio | pago
+  const [saving, setSaving] = useState(false)
+
+  const [gastoForm, setGastoForm] = useState(emptyGasto)
+  const [necesarioSel, setNecesarioSel] = useState(true)
+  const [recurrente, setRecurrente] = useState(false)
+
+  const [objetoForm, setObjetoForm] = useState(emptyObjeto)
   const [catSel, setCatSel] = useState(cats?.[0] ?? 'Accesorios')
   const [newCatOpen, setNewCatOpen] = useState(false)
-  const [freq, setFreq] = useState('Mensual')
-  const [necesarioSel, setNecesarioSel] = useState(true)
+  const [newCatValue, setNewCatValue] = useState('')
+  const [estadoSel, setEstadoSel] = useState('espera')
+
+  const [servicioForm, setServicioForm] = useState(emptyServicio)
+  const [servicioFreq, setServicioFreq] = useState('Mensual')
+  const [notifFormal, setNotifFormal] = useState(true)
+  const [notifMini, setNotifMini] = useState(true)
+
+  const [pagoForm, setPagoForm] = useState(emptyPago)
+  const [pagoTipo, setPagoTipo] = useState('Vitall')
+  const [pagoFreq, setPagoFreq] = useState('Mensual')
 
   const close = () => setStep('closed')
   const open = () => setStep(step === 'closed' ? 'picker' : 'closed')
 
-  function save(kind, msg) {
-    setStep('closed')
-    onToast?.(msg)
+  const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
+
+  async function saveGasto() {
+    const monto = Number(gastoForm.monto)
+    if (!gastoForm.concepto.trim() || !monto) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'gastos', {
+        concepto: gastoForm.concepto.trim(),
+        monto,
+        lugar: gastoForm.lugar.trim(),
+        categoria: necesarioSel ? 'Necesario' : 'Shopping',
+        recurrente,
+        fecha: todayISO(),
+      })
+      setGastoForm(emptyGasto)
+      setNecesarioSel(true)
+      setRecurrente(false)
+      setStep('closed')
+      onToast?.('Gasto guardado')
+    } catch (err) {
+      console.error(err)
+      onToast?.(`No se pudo guardar: ${errMsg(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Makeup']
+  async function saveObjeto() {
+    const precio = Number(objetoForm.precio)
+    if (!objetoForm.nombre.trim() || !precio) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'whimms', {
+        name: objetoForm.nombre.trim(),
+        categoria: catSel,
+        precio,
+        lugar: objetoForm.lugar.trim(),
+        link: objetoForm.link.trim(),
+        estado: estadoSel,
+      })
+      setObjetoForm(emptyObjeto)
+      setEstadoSel('espera')
+      setStep('closed')
+      onToast?.('Whimm guardado')
+    } catch (err) {
+      console.error(err)
+      onToast?.(`No se pudo guardar: ${errMsg(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveServicio() {
+    const monto = Number(servicioForm.costo)
+    if (!servicioForm.nombre.trim() || !monto) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'pagosFijos', {
+        name: servicioForm.nombre.trim(),
+        monto,
+        frecuencia: servicioFreq,
+        tipo: 'Vitall',
+        activo: true,
+        fecha: '',
+        notifFormal,
+        notifMini,
+      })
+      setServicioForm(emptyServicio)
+      setServicioFreq('Mensual')
+      setStep('closed')
+      onToast?.('Vitall guardado')
+    } catch (err) {
+      console.error(err)
+      onToast?.(`No se pudo guardar: ${errMsg(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function savePago() {
+    const monto = Number(pagoForm.monto)
+    if (!pagoForm.nombre.trim() || !monto) return
+    setSaving(true)
+    try {
+      await addUserDoc(user.uid, 'pagosFijos', {
+        name: pagoForm.nombre.trim(),
+        monto,
+        frecuencia: pagoFreq,
+        tipo: pagoTipo,
+        activo: true,
+        fecha: '',
+      })
+      setPagoForm(emptyPago)
+      setPagoTipo('Vitall')
+      setPagoFreq('Mensual')
+      setStep('closed')
+      onToast?.('Pago fijo guardado')
+    } catch (err) {
+      console.error(err)
+      onToast?.(`No se pudo guardar: ${errMsg(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <>
@@ -65,10 +195,26 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                 <>
                   <SheetHeader title="Nuevo gasto" onBack={() => setStep('picker')} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input className="fld" placeholder="Concepto" />
+                    <input
+                      className="fld"
+                      placeholder="Concepto"
+                      value={gastoForm.concepto}
+                      onChange={(e) => setGastoForm((f) => ({ ...f, concepto: e.target.value }))}
+                    />
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="fld" placeholder="Monto" inputMode="decimal" />
-                      <input className="fld" placeholder="Lugar" />
+                      <input
+                        className="fld"
+                        placeholder="Monto"
+                        inputMode="decimal"
+                        value={gastoForm.monto}
+                        onChange={(e) => setGastoForm((f) => ({ ...f, monto: e.target.value }))}
+                      />
+                      <input
+                        className="fld"
+                        placeholder="Lugar"
+                        value={gastoForm.lugar}
+                        onChange={(e) => setGastoForm((f) => ({ ...f, lugar: e.target.value }))}
+                      />
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
@@ -86,9 +232,9 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                         Shopping
                       </button>
                     </div>
-                    <ToggleRow label="Recurrente" />
+                    <ToggleRow label="Recurrente" on={recurrente} onClick={() => setRecurrente((v) => !v)} />
                   </div>
-                  <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => save('gasto', 'Gasto guardado')}>
+                  <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveGasto} disabled={saving}>
                     Guardar gasto
                   </button>
                 </>
@@ -98,7 +244,12 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                 <>
                   <SheetHeader title="Nuevo Whimm" onBack={() => setStep('picker')} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input className="fld" placeholder="Nombre del producto" />
+                    <input
+                      className="fld"
+                      placeholder="Nombre del producto"
+                      value={objetoForm.nombre}
+                      onChange={(e) => setObjetoForm((f) => ({ ...f, nombre: e.target.value }))}
+                    />
                     <div>
                       <div className="chiprow">
                         {categorias.map((c) => (
@@ -117,18 +268,20 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                       </div>
                       {newCatOpen && (
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                          <input className="fld" style={{ flex: 1 }} placeholder="Nombre de la categoría" id="new-cat-input" />
+                          <input
+                            className="fld"
+                            style={{ flex: 1 }}
+                            placeholder="Nombre de la categoría"
+                            value={newCatValue}
+                            onChange={(e) => setNewCatValue(e.target.value)}
+                          />
                           <button
                             style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 600 }}
                             onClick={() => {
-                              const el = document.getElementById('new-cat-input')
-                              const name = el?.value?.trim()
-                              if (name) {
-                                onAddCat?.(name)
-                                setCatSel(name)
-                              }
+                              const name = newCatValue.trim()
+                              if (name) setCatSel(name)
+                              setNewCatValue('')
                               setNewCatOpen(false)
-                              onToast?.('Categoría creada')
                             }}
                           >
                             Crear
@@ -136,15 +289,43 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                         </div>
                       )}
                     </div>
-                    <input className="fld" placeholder="Precio" inputMode="decimal" />
-                    <input className="fld" placeholder="Lugar de compra" />
-                    <input className="fld" placeholder="Link de dónde lo encontré" />
+                    <input
+                      className="fld"
+                      placeholder="Precio"
+                      inputMode="decimal"
+                      value={objetoForm.precio}
+                      onChange={(e) => setObjetoForm((f) => ({ ...f, precio: e.target.value }))}
+                    />
+                    <input
+                      className="fld"
+                      placeholder="Lugar de compra"
+                      value={objetoForm.lugar}
+                      onChange={(e) => setObjetoForm((f) => ({ ...f, lugar: e.target.value }))}
+                    />
+                    <input
+                      className="fld"
+                      placeholder="Link de dónde lo encontré"
+                      value={objetoForm.link}
+                      onChange={(e) => setObjetoForm((f) => ({ ...f, link: e.target.value }))}
+                    />
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <span className="pill" style={{ flex: 1, textAlign: 'center', background: 'var(--wine)', color: '#fff' }}>En espera</span>
-                      <span className="pill" style={{ flex: 1, textAlign: 'center', background: 'var(--card)', border: '1px solid var(--beige3)', color: 'var(--muted)' }}>Apartando fondos</span>
+                      <span
+                        onClick={() => setEstadoSel('espera')}
+                        className="pill"
+                        style={{ flex: 1, textAlign: 'center', background: estadoSel === 'espera' ? 'var(--wine)' : 'var(--card)', color: estadoSel === 'espera' ? '#fff' : 'var(--muted)', border: estadoSel === 'espera' ? 'none' : '1px solid var(--beige3)' }}
+                      >
+                        En espera
+                      </span>
+                      <span
+                        onClick={() => setEstadoSel('apartando')}
+                        className="pill"
+                        style={{ flex: 1, textAlign: 'center', background: estadoSel === 'apartando' ? 'var(--wine)' : 'var(--card)', color: estadoSel === 'apartando' ? '#fff' : 'var(--muted)', border: estadoSel === 'apartando' ? 'none' : '1px solid var(--beige3)' }}
+                      >
+                        Apartando fondos
+                      </span>
                     </div>
                   </div>
-                  <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => save('objeto', 'Whimm guardado')}>
+                  <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveObjeto} disabled={saving}>
                     Guardar Whimm
                   </button>
                 </>
@@ -154,19 +335,38 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                 <>
                   <SheetHeader title="Nuevo Vitall" onBack={() => setStep('picker')} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input className="fld" placeholder="Nombre del servicio" />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="fld" style={{ flex: 1 }} placeholder="Costo" inputMode="decimal" />
-                      <input className="fld" style={{ flex: 1 }} placeholder="Frecuencia" />
+                    <input
+                      className="fld"
+                      placeholder="Nombre del servicio"
+                      value={servicioForm.nombre}
+                      onChange={(e) => setServicioForm((f) => ({ ...f, nombre: e.target.value }))}
+                    />
+                    <input
+                      className="fld"
+                      placeholder="Costo"
+                      inputMode="decimal"
+                      value={servicioForm.costo}
+                      onChange={(e) => setServicioForm((f) => ({ ...f, costo: e.target.value }))}
+                    />
+                    <div className="chiprow">
+                      {FREQS.map((f) => (
+                        <span
+                          key={f}
+                          onClick={() => setServicioFreq(f)}
+                          className="pill"
+                          style={{ background: servicioFreq === f ? 'var(--wine)' : '#fff', color: servicioFreq === f ? '#fff' : 'var(--muted)', border: `1px solid ${servicioFreq === f ? 'var(--wine)' : 'var(--beige3)'}` }}
+                        >
+                          {f}
+                        </span>
+                      ))}
                     </div>
-                    <ToggleRow label="Activo" defaultOn />
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                       Notificaciones
                     </div>
-                    <ToggleRow label="Recordatorio formal" hint="2 días antes" defaultOn />
-                    <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" defaultOn />
+                    <ToggleRow label="Recordatorio formal" hint="2 días antes" on={notifFormal} onClick={() => setNotifFormal((v) => !v)} />
+                    <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" on={notifMini} onClick={() => setNotifMini((v) => !v)} />
                   </div>
-                  <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => save('servicio', 'Vitall guardado')}>
+                  <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveServicio} disabled={saving}>
                     Guardar Vitall
                   </button>
                 </>
@@ -176,10 +376,33 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                 <>
                   <SheetHeader title="Nuevo pago fijo" onBack={() => setStep('picker')} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input className="fld" placeholder="Nombre (ej. Netflix)" />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="fld" style={{ flex: 1 }} placeholder="Monto" inputMode="decimal" />
-                      <input className="fld" style={{ flex: 1 }} placeholder="Tipo" />
+                    <input
+                      className="fld"
+                      placeholder="Nombre (ej. Netflix)"
+                      value={pagoForm.nombre}
+                      onChange={(e) => setPagoForm((f) => ({ ...f, nombre: e.target.value }))}
+                    />
+                    <input
+                      className="fld"
+                      placeholder="Monto"
+                      inputMode="decimal"
+                      value={pagoForm.monto}
+                      onChange={(e) => setPagoForm((f) => ({ ...f, monto: e.target.value }))}
+                    />
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Tipo
+                    </div>
+                    <div className="chiprow">
+                      {TIPOS_PAGO.map((t) => (
+                        <span
+                          key={t}
+                          onClick={() => setPagoTipo(t)}
+                          className="pill"
+                          style={{ background: pagoTipo === t ? 'var(--wine)' : '#fff', color: pagoTipo === t ? '#fff' : 'var(--muted)', border: `1px solid ${pagoTipo === t ? 'var(--wine)' : 'var(--beige3)'}` }}
+                        >
+                          {t}
+                        </span>
+                      ))}
                     </div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
                       Frecuencia
@@ -188,16 +411,16 @@ export default function AddSheet({ onToast, cats, onAddCat }) {
                       {FREQS.map((f) => (
                         <span
                           key={f}
-                          onClick={() => setFreq(f)}
+                          onClick={() => setPagoFreq(f)}
                           className="pill"
-                          style={{ background: freq === f ? 'var(--wine)' : '#fff', color: freq === f ? '#fff' : 'var(--muted)', border: `1px solid ${freq === f ? 'var(--wine)' : 'var(--beige3)'}` }}
+                          style={{ background: pagoFreq === f ? 'var(--wine)' : '#fff', color: pagoFreq === f ? '#fff' : 'var(--muted)', border: `1px solid ${pagoFreq === f ? 'var(--wine)' : 'var(--beige3)'}` }}
                         >
                           {f}
                         </span>
                       ))}
                     </div>
                   </div>
-                  <button className="btn-primary" style={{ marginTop: 14 }} onClick={() => save('pago', 'Pago fijo guardado')}>
+                  <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePago} disabled={saving}>
                     Guardar pago fijo
                   </button>
                 </>
@@ -221,18 +444,16 @@ function SheetHeader({ title, onBack }) {
   )
 }
 
-function ToggleRow({ label, hint, defaultOn = false }) {
-  const [on, setOn] = useState(defaultOn)
+function ToggleRow({ label, hint, on, onClick }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--beige2)', borderRadius: 10, padding: '11px 12px' }}>
       <div>
-        <div style={{ fontSize: hint ? 12 : 12, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
         {hint && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>}
       </div>
-      <Toggle on={on} onClick={() => setOn((v) => !v)} ariaLabel={label} />
+      <Toggle on={on} onClick={onClick} ariaLabel={label} />
     </div>
   )
 }
 
-// Botón para cerrar el picker desde fuera, si algún día hace falta.
 export { IconClose }
