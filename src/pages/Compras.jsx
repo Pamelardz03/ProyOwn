@@ -7,7 +7,9 @@ import { IconProduct, IconBell, IconClose, IconEdit, IconTrash } from '../compon
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate, daysUntil } from '../lib/date'
+import { formatShortDate, daysUntil, isThisMonth } from '../lib/date'
+import { computeWhimmScore } from '../lib/score'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms } from '../lib/budget'
 
 const ESTADO_LABEL = {
   espera: 'En espera',
@@ -25,10 +27,28 @@ export default function Compras() {
 
   const { data: whimms, loading: loadingWhimms, error: errorWhimms } = useUserCollection('whimms')
   const { data: pagosFijos, loading: loadingPagos, error: errorPagos } = useUserCollection('pagosFijos')
+  const { data: sueldosFijos } = useUserCollection('sueldosFijos')
+  const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const servicios = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
   const cats = [...new Set(whimms.map((w) => w.categoria).filter(Boolean))]
-  const detail = whimms.find((w) => w.id === detailId)
+
+  // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
+  // ver src/lib/score.js), con una fecha estimada de compra en cascada —
+  // el #1 acumula el presupuesto diario neto, y el resto sigue detrás de
+  // él, asumiendo que no hay más gastos (predicción "favorable").
+  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
+  const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+  const activos = whimms
+    .filter((w) => w.estado !== 'comprado')
+    .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+    .sort((a, b) => b._score - a._score)
+  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto)
+  const comprados = whimms.filter((w) => w.estado === 'comprado')
+  const whimmsOrdenados = [...activosConFecha, ...comprados]
+
+  const detail = whimmsOrdenados.find((w) => w.id === detailId)
+  const detailLinks = detail ? (detail.links && detail.links.length ? detail.links : detail.link ? [detail.link] : []) : []
 
   async function toggleServicio(id, activo) {
     try {
@@ -64,13 +84,23 @@ export default function Compras() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {errorWhimms && <div style={{ fontSize: 11, color: 'var(--red)' }}>{errorWhimms}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {whimms.map((w, i) => (
+              {whimmsOrdenados.map((w, i) => (
                 <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                  {w.imagenUrl && (
+                    <img
+                      src={w.imagenUrl}
+                      alt={w.name}
+                      style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 14, marginBottom: 12, display: 'block' }}
+                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                    />
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16 }}>
-                        <IconProduct size={30} />
-                      </div>
+                      {!w.imagenUrl && (
+                        <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16 }}>
+                          <IconProduct size={30} />
+                        </div>
+                      )}
                       <div>
                         <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                         <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
@@ -83,10 +113,15 @@ export default function Compras() {
                     <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precio)}</div>
                   </div>
 
-                  <div style={{ marginTop: 14 }}>
+                  <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
                       {ESTADO_LABEL[w.estado] || 'En espera'}
                     </span>
+                    {w.fechaProyectada && w.estado !== 'comprado' && (
+                      <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
+                        Estimado {formatShortDate(w.fechaProyectada)}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -161,11 +196,19 @@ export default function Compras() {
           <div className="sheet-backdrop" style={{ zIndex: 40 }} onClick={() => setDetailId(null)} />
           <div className="card-solid" style={{ position: 'absolute', left: 16, right: 16, top: 40, bottom: 40, borderRadius: 20, boxShadow: '0 12px 32px rgba(0,0,0,.28)', zIndex: 41, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              {detail.imagenUrl && (
+                <img
+                  src={detail.imagenUrl}
+                  alt={detail.name}
+                  style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 16, marginBottom: 16, display: 'block' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div className="icon-tile" style={{ width: 60, height: 60, borderRadius: 14 }}><IconProduct size={26} /></div>
+                  {!detail.imagenUrl && <div className="icon-tile" style={{ width: 60, height: 60, borderRadius: 14 }}><IconProduct size={26} /></div>}
                   <div>
-                    <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--wine4)' }}>#{whimms.findIndex((w) => w.id === detail.id) + 1}</div>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--wine4)' }}>#{whimmsOrdenados.findIndex((w) => w.id === detail.id) + 1}</div>
                     <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{detail.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{detail.categoria}{detail.lugar ? ` · ${detail.lugar}` : ''}</div>
                   </div>
@@ -190,25 +233,48 @@ export default function Compras() {
                 </div>
               </div>
 
-              {detail.link && (
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Necesidad</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.necesidad ?? '—'}/5</div>
+                </div>
+                <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Deseo</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.deseo ?? '—'}/5</div>
+                </div>
+              </div>
+
+              {detail.fechaProyectada && detail.estado !== 'comprado' && (
+                <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Fecha estimada de compra</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{formatShortDate(detail.fechaProyectada)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Predicción favorable: asume que no hay más gastos en el camino.</div>
+                </div>
+              )}
+
+              {detailLinks.length > 0 && (
                 <>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Dónde lo encontré</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {!dismissed[detail.id] && (
-                      <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{detail.lugar || 'Link guardado'}</div>
+                    {detailLinks.map((lk, idx) => {
+                      const key = `${detail.id}-${idx}`
+                      if (dismissed[key]) return null
+                      return (
+                        <div key={key} style={{ background: 'var(--beige2)', borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail.lugar || `Link ${idx + 1}`}</div>
+                          </div>
+                          <a href={lk} target="_blank" rel="noreferrer" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Ver</a>
+                          <button
+                            aria-label="Quitar esta fuente"
+                            onClick={() => setDismissed((prev) => ({ ...prev, [key]: true }))}
+                            style={{ width: 26, height: 26, borderRadius: 13, background: 'var(--card)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                          >
+                            <IconClose size={12} color="var(--muted)" />
+                          </button>
                         </div>
-                        <a href={detail.link} target="_blank" rel="noreferrer" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Ver</a>
-                        <button
-                          aria-label="Quitar esta fuente"
-                          onClick={() => setDismissed((prev) => ({ ...prev, [detail.id]: true }))}
-                          style={{ width: 26, height: 26, borderRadius: 13, background: 'var(--card)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                        >
-                          <IconClose size={12} color="var(--muted)" />
-                        </button>
-                      </div>
-                    )}
+                      )
+                    })}
                   </div>
                 </>
               )}

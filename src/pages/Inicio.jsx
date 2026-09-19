@@ -7,20 +7,10 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, isThisMonth } from '../lib/date'
+import { ingresosFijosDelMes, monthlyEqPagoFijo } from '../lib/budget'
+import { computeWhimmScore } from '../lib/score'
 
 const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
-
-function monthlyEqSueldo(s) {
-  const monto = Number(s.monto) || 0
-  if (s.frecuencia === 'Semanal') return monto * 4.33
-  if (s.frecuencia === 'Quincenal') return monto * 2.166
-  return monto
-}
-
-function monthlyEqPago(p) {
-  const monto = Number(p.monto) || 0
-  return p.frecuencia === 'Semanal' ? monto * 4.33 : monto
-}
 
 // Convierte el timestamp de Firestore (serverTimestamp resuelto) a milisegundos
 // para poder ordenar por fecha real; mientras está pendiente de confirmar con
@@ -30,6 +20,14 @@ function toMillis(ts) {
   if (typeof ts.toMillis === 'function') return ts.toMillis()
   if (typeof ts.seconds === 'number') return ts.seconds * 1000
   return 0
+}
+
+// Días transcurridos desde un timestamp de Firestore — usado como
+// aproximación de "cuánto lleva acumulando" el Whimm top (no tenemos todavía
+// un campo que marque cuándo pasó a estado "apartando" específicamente).
+function daysSinceMillis(ms) {
+  if (!ms) return null
+  return Math.max(0, Math.floor((Date.now() - ms) / 86400000))
 }
 
 function DonutChart({ items }) {
@@ -79,13 +77,17 @@ export default function Inicio() {
   const gastosMes = gastos.filter((g) => isThisMonth(g.fecha))
   const gastoMensual = gastosMes.reduce((s, g) => s + (Number(g.monto) || 0), 0)
 
-  const sueldosFijosMensual = sueldosFijos.reduce((s, f) => s + monthlyEqSueldo(f), 0)
+  // Ingresos reales del mes: solo cuenta pagos de sueldos fijos que ya
+  // ocurrieron desde que cada uno se registró (fechaInicio) — antes se
+  // mensualizaba a ciegas y sobrestimaba el saldo apenas se agregaba un
+  // sueldo nuevo a mitad de mes.
+  const sueldosFijosMensual = ingresosFijosDelMes(sueldosFijos)
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
   const ingresoMensual = sueldosFijosMensual + sueldosRapidosMes
 
   const pagosActivos = pagosFijos.filter((p) => p.activo !== false)
-  const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + monthlyEqPago(p), 0)
-  const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + monthlyEqPago(p), 0)
+  const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
+  const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
 
   const saldoMes = ingresoMensual - gastoMensual - vitallMensual - otrosFijosMensual
 
@@ -102,7 +104,13 @@ export default function Inicio() {
   ].filter((d) => d.monto > 0)
   const totalDistribucion = distribucion.reduce((s, d) => s + d.monto, 0)
 
-  const whimmsTop = whimms.filter((w) => w.estado !== 'comprado').slice(0, 5)
+  // Cola de Whimms ordenada por score (necesidad/deseo/precio) — el #1 es
+  // el que está acumulando fondos activamente.
+  const whimmsTop = whimms
+    .filter((w) => w.estado !== 'comprado')
+    .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+    .sort((a, b) => b._score - a._score)
+    .slice(0, 5)
 
   const historial = [
     ...gastosMes.map((g) => ({ id: `g-${g.id}`, label: g.concepto, monto: -(Number(g.monto) || 0), color: 'var(--wine)', color2: 'var(--text)', ts: toMillis(g.creadoEn) })),
@@ -169,19 +177,25 @@ export default function Inicio() {
           </div>
           {whimmsTop.length > 0 ? (
             <div className="row-list">
-              {whimmsTop.map((w, i) => (
-                <Link key={w.id} to="/compras" className="row-list-item">
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)', width: 16 }}>{i + 1}</div>
-                  <div className="icon-tile" style={{ width: 36, height: 36 }}>
-                    <IconProduct size={16} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{ESTADO_LABEL[w.estado] || 'En espera'}</div>
-                  </div>
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(w.precio)}</div>
-                </Link>
-              ))}
+              {whimmsTop.map((w, i) => {
+                const diasAcumulando = i === 0 && w.estado === 'apartando' ? daysSinceMillis(toMillis(w.creadoEn)) : null
+                return (
+                  <Link key={w.id} to="/compras" className="row-list-item">
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)', width: 16 }}>{i + 1}</div>
+                    <div className="icon-tile" style={{ width: 36, height: 36 }}>
+                      <IconProduct size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>
+                        {ESTADO_LABEL[w.estado] || 'En espera'}
+                        {diasAcumulando != null ? ` · ${diasAcumulando} día${diasAcumulando === 1 ? '' : 's'} acumulando` : ''}
+                      </div>
+                    </div>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(w.precio)}</div>
+                  </Link>
+                )
+              })}
             </div>
           ) : (
             <div className="empty-state">Sin Whimms todavía</div>

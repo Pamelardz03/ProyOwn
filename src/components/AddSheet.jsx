@@ -4,16 +4,18 @@ import Toggle from './Toggle'
 import { useAuth } from '../lib/AuthContext'
 import { addUserDoc } from '../lib/firestoreCollections'
 import { todayISO } from '../lib/date'
+import { computeWhimmScore } from '../lib/score'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const TIPOS_PAGO = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
+const GASTO_TIPOS = ['Necesario', 'Shopping', 'Whimm']
 
 function errMsg(err) {
   return `${err?.code ? `(${err.code}) ` : ''}${err?.message || 'Error desconocido'}`
 }
 
 const emptyGasto = { concepto: '', monto: '', lugar: '' }
-const emptyObjeto = { nombre: '', precio: '', lugar: '', link: '' }
+const emptyObjeto = { nombre: '', precio: '', lugar: '', imagenUrl: '' }
 const emptyServicio = { nombre: '', costo: '' }
 const emptyPago = { nombre: '', monto: '' }
 
@@ -27,8 +29,11 @@ export default function AddSheet({ onToast, cats }) {
   const [step, setStep] = useState('closed') // closed | picker | gasto | objeto | servicio | pago
   const [saving, setSaving] = useState(false)
 
+  const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
+
   const [gastoForm, setGastoForm] = useState(emptyGasto)
-  const [necesarioSel, setNecesarioSel] = useState(true)
+  const [gastoTipo, setGastoTipo] = useState('Necesario')
+  const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
   const [recurrente, setRecurrente] = useState(false)
 
   const [objetoForm, setObjetoForm] = useState(emptyObjeto)
@@ -36,6 +41,9 @@ export default function AddSheet({ onToast, cats }) {
   const [newCatOpen, setNewCatOpen] = useState(false)
   const [newCatValue, setNewCatValue] = useState('')
   const [estadoSel, setEstadoSel] = useState('espera')
+  const [linksList, setLinksList] = useState([''])
+  const [necesidadSel, setNecesidadSel] = useState(3)
+  const [deseoSel, setDeseoSel] = useState(3)
 
   const [servicioForm, setServicioForm] = useState(emptyServicio)
   const [servicioFreq, setServicioFreq] = useState('Mensual')
@@ -45,27 +53,39 @@ export default function AddSheet({ onToast, cats }) {
   const [pagoForm, setPagoForm] = useState(emptyPago)
   const [pagoTipo, setPagoTipo] = useState('Vitall')
   const [pagoFreq, setPagoFreq] = useState('Mensual')
+  const [pagoFinito, setPagoFinito] = useState(false)
+  const [pagoNumPagos, setPagoNumPagos] = useState('')
 
   const close = () => setStep('closed')
   const open = () => setStep(step === 'closed' ? 'picker' : 'closed')
 
-  const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
+  function updateLink(idx, value) {
+    setLinksList((prev) => prev.map((l, i) => (i === idx ? value : l)))
+  }
+  function addLinkRow() {
+    setLinksList((prev) => [...prev, ''])
+  }
+  function removeLinkRow(idx) {
+    setLinksList((prev) => prev.filter((_, i) => i !== idx))
+  }
 
   async function saveGasto() {
     const monto = Number(gastoForm.monto)
     if (!gastoForm.concepto.trim() || !monto) return
+    if (gastoTipo === 'Whimm' && !gastoCatSel) return
     setSaving(true)
     try {
       await addUserDoc(user.uid, 'gastos', {
         concepto: gastoForm.concepto.trim(),
         monto,
         lugar: gastoForm.lugar.trim(),
-        categoria: necesarioSel ? 'Necesario' : 'Shopping',
+        categoria: gastoTipo,
+        categoriaWhimm: gastoTipo === 'Whimm' ? gastoCatSel : '',
         recurrente,
         fecha: todayISO(),
       })
       setGastoForm(emptyGasto)
-      setNecesarioSel(true)
+      setGastoTipo('Necesario')
       setRecurrente(false)
       setStep('closed')
       onToast?.('Gasto guardado')
@@ -82,16 +102,26 @@ export default function AddSheet({ onToast, cats }) {
     if (!objetoForm.nombre.trim() || !precio) return
     setSaving(true)
     try {
+      const links = linksList.map((l) => l.trim()).filter(Boolean)
+      const score = computeWhimmScore({ necesidad: necesidadSel, deseo: deseoSel, precio })
       await addUserDoc(user.uid, 'whimms', {
         name: objetoForm.nombre.trim(),
         categoria: catSel,
         precio,
         lugar: objetoForm.lugar.trim(),
-        link: objetoForm.link.trim(),
+        imagenUrl: objetoForm.imagenUrl.trim(),
+        links,
+        link: links[0] || '',
+        necesidad: necesidadSel,
+        deseo: deseoSel,
+        score,
         estado: estadoSel,
       })
       setObjetoForm(emptyObjeto)
       setEstadoSel('espera')
+      setLinksList([''])
+      setNecesidadSel(3)
+      setDeseoSel(3)
       setStep('closed')
       onToast?.('Whimm guardado')
     } catch (err) {
@@ -114,6 +144,8 @@ export default function AddSheet({ onToast, cats }) {
         tipo: 'Vitall',
         activo: true,
         fecha: '',
+        finito: false,
+        numPagos: null,
         notifFormal,
         notifMini,
       })
@@ -141,10 +173,14 @@ export default function AddSheet({ onToast, cats }) {
         tipo: pagoTipo,
         activo: true,
         fecha: '',
+        finito: pagoFinito,
+        numPagos: pagoFinito ? Number(pagoNumPagos) || null : null,
       })
       setPagoForm(emptyPago)
       setPagoTipo('Vitall')
       setPagoFreq('Mensual')
+      setPagoFinito(false)
+      setPagoNumPagos('')
       setStep('closed')
       onToast?.('Pago fijo guardado')
     } catch (err) {
@@ -217,21 +253,36 @@ export default function AddSheet({ onToast, cats }) {
                       />
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        className="pill"
-                        style={{ flex: 1, background: necesarioSel ? 'var(--wine)' : 'var(--card)', color: necesarioSel ? '#fff' : 'var(--muted)', border: necesarioSel ? 'none' : '1px solid var(--beige3)' }}
-                        onClick={() => setNecesarioSel(true)}
-                      >
-                        Necesario
-                      </button>
-                      <button
-                        className="pill"
-                        style={{ flex: 1, background: !necesarioSel ? 'var(--wine)' : 'var(--card)', color: !necesarioSel ? '#fff' : 'var(--muted)', border: !necesarioSel ? 'none' : '1px solid var(--beige3)' }}
-                        onClick={() => setNecesarioSel(false)}
-                      >
-                        Shopping
-                      </button>
+                      {GASTO_TIPOS.map((t) => (
+                        <button
+                          key={t}
+                          className="pill"
+                          style={{ flex: 1, background: gastoTipo === t ? 'var(--wine)' : 'var(--card)', color: gastoTipo === t ? '#fff' : 'var(--muted)', border: gastoTipo === t ? 'none' : '1px solid var(--beige3)' }}
+                          onClick={() => setGastoTipo(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
                     </div>
+                    {gastoTipo === 'Whimm' && (
+                      <>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+                          Categoría (no estaba en tu lista de espera — Vitall no se agrega aquí)
+                        </div>
+                        <div className="chiprow">
+                          {categorias.map((c) => (
+                            <span
+                              key={c}
+                              onClick={() => setGastoCatSel(c)}
+                              className="pill"
+                              style={{ background: gastoCatSel === c ? 'var(--wine)' : '#fff', color: gastoCatSel === c ? '#fff' : 'var(--muted)', border: `1px solid ${gastoCatSel === c ? 'var(--wine)' : 'var(--beige3)'}` }}
+                            >
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     <ToggleRow label="Recurrente" on={recurrente} onClick={() => setRecurrente((v) => !v)} />
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveGasto} disabled={saving}>
@@ -304,11 +355,41 @@ export default function AddSheet({ onToast, cats }) {
                     />
                     <input
                       className="fld"
-                      placeholder="Link de dónde lo encontré"
-                      value={objetoForm.link}
-                      onChange={(e) => setObjetoForm((f) => ({ ...f, link: e.target.value }))}
+                      placeholder="URL de imagen (pégala desde Google Imágenes u otro sitio)"
+                      value={objetoForm.imagenUrl}
+                      onChange={(e) => setObjetoForm((f) => ({ ...f, imagenUrl: e.target.value }))}
                     />
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Links donde lo encontré
+                    </div>
+                    {linksList.map((l, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 6 }}>
+                        <input
+                          className="fld"
+                          style={{ flex: 1 }}
+                          placeholder="Link de dónde lo encontré"
+                          value={l}
+                          onChange={(e) => updateLink(idx, e.target.value)}
+                        />
+                        {linksList.length > 1 && (
+                          <button aria-label="Quitar link" onClick={() => removeLinkRow(idx)} style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <IconClose size={12} color="var(--muted)" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={addLinkRow} style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>
+                      + Agregar otro link
+                    </button>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Necesidad
+                    </div>
+                    <ScalePicker value={necesidadSel} onChange={setNecesidadSel} />
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Deseo
+                    </div>
+                    <ScalePicker value={deseoSel} onChange={setDeseoSel} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                       <span
                         onClick={() => setEstadoSel('espera')}
                         className="pill"
@@ -359,6 +440,9 @@ export default function AddSheet({ onToast, cats }) {
                           {f}
                         </span>
                       ))}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                      Un Vitall no tiene fecha de fin (servicio continuo) — si esta compra sí termina en algún momento, agrégala como "Pago fijo".
                     </div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                       Notificaciones
@@ -419,6 +503,16 @@ export default function AddSheet({ onToast, cats }) {
                         </span>
                       ))}
                     </div>
+                    <ToggleRow label="¿Tiene fin?" hint="ej. compra a meses sin intereses" on={pagoFinito} onClick={() => setPagoFinito((v) => !v)} />
+                    {pagoFinito && (
+                      <input
+                        className="fld"
+                        placeholder="Número de pagos (ej. 12)"
+                        inputMode="numeric"
+                        value={pagoNumPagos}
+                        onChange={(e) => setPagoNumPagos(e.target.value)}
+                      />
+                    )}
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePago} disabled={saving}>
                     Guardar pago fijo
@@ -452,6 +546,22 @@ function ToggleRow({ label, hint, on, onClick }) {
         {hint && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>}
       </div>
       <Toggle on={on} onClick={onClick} ariaLabel={label} />
+    </div>
+  )
+}
+
+function ScalePicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          onClick={() => onChange(n)}
+          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
+        >
+          {n}
+        </button>
+      ))}
     </div>
   )
 }

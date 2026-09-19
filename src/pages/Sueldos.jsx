@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, addUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
-import { daysUntil, formatShortDate, todayISO } from '../lib/date'
+import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, compareISOAsc } from '../lib/date'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 
@@ -30,9 +30,11 @@ export default function Sueldos() {
   const { data: rapidos, loading: loadingRapidos, error: errorRapidos } = useUserCollection('sueldosRapidos')
 
   const [addFijoOpen, setAddFijoOpen] = useState(false)
+  const [fijoStep, setFijoStep] = useState('form') // form | validar
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
   const [formFreq, setFormFreq] = useState('Quincenal')
   const [fijoForm, setFijoForm] = useState(emptyFijo)
+  const [fechasPreview, setFechasPreview] = useState([])
   const [rapidoForm, setRapidoForm] = useState(emptyRapido)
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
@@ -60,20 +62,48 @@ export default function Sueldos() {
   const total = fijosTotal + rapidosTotal
   const fijosPct = total > 0 ? Math.round((fijosTotal / total) * 100) : 0
 
+  function resetFijoFlow() {
+    setFijoForm(emptyFijo)
+    setFormFreq('Quincenal')
+    setFechasPreview([])
+    setFijoStep('form')
+    setAddFijoOpen(false)
+  }
+
+  // Paso 1 → 2: calcula las fechas de pago a partir de la fecha ancla para
+  // que Pame las revise (y corrija domingos/feriados) antes de guardar.
+  function goValidarFechas() {
+    const monto = Number(fijoForm.monto)
+    if (!fijoForm.name.trim() || !monto || !fijoForm.fecha) return
+    setFechasPreview(generarFechasPago(formFreq, fijoForm.fecha))
+    setFijoStep('validar')
+  }
+
+  function editFecha(idx, value) {
+    setFechasPreview((prev) => {
+      const next = [...prev]
+      next[idx] = value
+      return [...next].sort(compareISOAsc)
+    })
+  }
+
   async function saveFijo() {
     const monto = Number(fijoForm.monto)
-    if (!fijoForm.name.trim() || !monto) return
+    if (!fijoForm.name.trim() || !monto || fechasPreview.length === 0) return
     setSaving(true)
     try {
+      const hoy = todayISO()
+      const fechasOrdenadas = [...fechasPreview].sort(compareISOAsc)
+      const proximaFecha = fechasOrdenadas.find((f) => f >= hoy) || fechasOrdenadas[fechasOrdenadas.length - 1]
       await addUserDoc(user.uid, 'sueldosFijos', {
         name: fijoForm.name.trim(),
         monto,
         frecuencia: formFreq,
-        fecha: fijoForm.fecha || '',
+        fecha: proximaFecha,
+        fechaInicio: hoy,
+        fechasPago: fechasOrdenadas,
       })
-      setFijoForm(emptyFijo)
-      setFormFreq('Quincenal')
-      setAddFijoOpen(false)
+      resetFijoFlow()
       show('Sueldo fijo guardado')
     } catch (err) {
       console.error(err)
@@ -152,13 +182,13 @@ export default function Sueldos() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Sueldos fijos</div>
-            <button onClick={() => setAddFijoOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+            <button onClick={() => (addFijoOpen ? resetFijoFlow() : setAddFijoOpen(true))} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
               <IconPlus size={14} color="var(--wine)" />
               Agregar
             </button>
           </div>
 
-          {addFijoOpen && (
+          {addFijoOpen && fijoStep === 'form' && (
             <div className="card" style={{ padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input
                 className="fld"
@@ -173,6 +203,7 @@ export default function Sueldos() {
                 value={fijoForm.monto}
                 onChange={(e) => setFijoForm((f) => ({ ...f, monto: e.target.value }))}
               />
+              <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Último día de pago (o el próximo que esperas)</div>
               <input
                 className="fld"
                 type="date"
@@ -190,9 +221,46 @@ export default function Sueldos() {
                   </span>
                 ))}
               </div>
-              <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveFijo} disabled={saving}>
-                Guardar sueldo fijo
+              <button className="btn-primary" style={{ marginTop: 4 }} onClick={goValidarFechas}>
+                Validar fechas
               </button>
+            </div>
+          )}
+
+          {addFijoOpen && fijoStep === 'validar' && (
+            <div className="card" style={{ padding: 14, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>Revisa las fechas calculadas</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                Corrige a mano las que caigan domingo o feriado — se marcan en rojo.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                {fechasPreview.map((f, idx) => {
+                  const domingo = isSunday(f)
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="mono" style={{ fontSize: 10, color: 'var(--muted)', width: 20 }}>{idx + 1}</span>
+                      <input
+                        className="fld"
+                        type="date"
+                        style={{ flex: 1, borderColor: domingo ? 'var(--red)' : undefined }}
+                        value={f}
+                        onChange={(e) => editFecha(idx, e.target.value)}
+                      />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: domingo ? 'var(--red)' : 'var(--muted)', width: 34 }}>
+                        {weekdayShort(f)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button className="btn-primary" style={{ flex: 1, background: 'var(--beige2)', color: 'var(--text)' }} onClick={() => setFijoStep('form')}>
+                  Volver
+                </button>
+                <button className="btn-primary" style={{ flex: 1, opacity: saving ? 0.7 : 1 }} onClick={saveFijo} disabled={saving}>
+                  Confirmar y guardar
+                </button>
+              </div>
             </div>
           )}
 
@@ -212,6 +280,9 @@ export default function Sueldos() {
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                       {s.frecuencia} · Próximo {formatShortDate(s.fecha)}{dias != null ? ` · en ${dias} días` : ''}
                     </div>
+                    {s.fechaInicio && (
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>Desde {formatShortDate(s.fechaInicio)}</div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>

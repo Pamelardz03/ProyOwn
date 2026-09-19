@@ -112,7 +112,10 @@ export default function PreciosFijos() {
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
                     <span style={{ fontSize: 9, fontWeight: 600, color: colors.color, background: colors.bg, padding: '2px 7px', borderRadius: 6 }}>{p.tipo}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>{p.frecuencia} · Próximo {formatShortDate(p.fecha)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                    {p.frecuencia} · Próximo {formatShortDate(p.fecha)}
+                    {p.finito && p.numPagos ? ` · ${p.numPagos} pagos` : ''}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{fmt(p.monto)}</div>

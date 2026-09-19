@@ -60,6 +60,9 @@ export default function Gastos() {
   const [periodo, setPeriodo] = useState('mes')
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
   const { data: gastos, loading, error } = useUserCollection('gastos')
+  const { data: whimms } = useUserCollection('whimms')
+
+  const cats = [...new Set(whimms.map((w) => w.categoria).filter(Boolean))]
 
   const filterFn = PERIODO_FILTER[periodo]
   const items = gastos
@@ -68,14 +71,16 @@ export default function Gastos() {
     .map((g) => ({
       id: g.id,
       name: g.concepto,
-      cat: g.categoria,
+      tipoRaw: g.categoria,
+      cat: g.categoria === 'Whimm' ? `Whimm · ${g.categoriaWhimm || 'sin categoría'}` : g.categoria,
       date: formatShortDate(g.fecha),
       amount: Number(g.monto) || 0,
       shopping: g.categoria === 'Shopping',
     }))
 
-  const necesario = items.filter((it) => !it.shopping).reduce((s, it) => s + it.amount, 0)
-  const shopping = items.filter((it) => it.shopping).reduce((s, it) => s + it.amount, 0)
+  const necesario = items.filter((it) => it.tipoRaw === 'Necesario').reduce((s, it) => s + it.amount, 0)
+  const shopping = items.filter((it) => it.tipoRaw === 'Shopping').reduce((s, it) => s + it.amount, 0)
+  const whimmGastado = items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0)
 
   async function deleteItem(id) {
     try {
@@ -108,17 +113,21 @@ export default function Gastos() {
 
         <div className="hero" style={{ padding: '16px 18px' }}>
           <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Gastado en {PERIODO_LABEL_TEXT[periodo]}</div>
-          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(necesario + shopping)}</div>
+          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(necesario + shopping + whimmGastado)}</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div className="card" style={{ flex: 1, padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Necesario</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(necesario)}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div className="card" style={{ flex: 1, padding: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Necesario</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4 }}>{fmt(necesario)}</div>
           </div>
-          <div className="card" style={{ flex: 1, padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Shopping</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(shopping)}</div>
+          <div className="card" style={{ flex: 1, padding: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Shopping</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(shopping)}</div>
+          </div>
+          <div className="card" style={{ flex: 1, padding: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimm</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(whimmGastado)}</div>
           </div>
         </div>
 
@@ -139,7 +148,7 @@ export default function Gastos() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} />
+      <AddSheet onToast={show} cats={cats} />
     </div>
   )
 }

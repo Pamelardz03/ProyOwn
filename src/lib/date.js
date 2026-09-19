@@ -82,3 +82,92 @@ export function isThisYear(iso) {
 export function compareISODesc(a, b) {
   return (b || '').localeCompare(a || '')
 }
+
+// --- Generación de fechas de pago (sueldos fijos) ---
+// Dado un frecuencia y una fecha "ancla" (el último día de pago que ya
+// recibió o el próximo que espera), genera la serie de fechas de pago
+// para poder validarlas/editarlas antes de guardar (feriados, domingos, etc.)
+
+export function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate()
+}
+
+function toISO(d) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+export function addDaysISO(iso, days) {
+  const date = parseISODate(iso)
+  if (!date) return iso
+  date.setDate(date.getDate() + days)
+  return toISO(date)
+}
+
+// Nombre corto del día de la semana, para marcar en la UI si una fecha
+// calculada cae domingo (o cualquier día) y así facilitar corregirla a mano.
+export function weekdayShort(iso) {
+  const date = parseISODate(iso)
+  if (!date) return ''
+  return ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][date.getDay()]
+}
+
+export function isSunday(iso) {
+  const date = parseISODate(iso)
+  return !!date && date.getDay() === 0
+}
+
+// Quincenal real (México): día 15 y último día de cada mes — no cada 15 días
+// exactos, porque los meses no tienen 30 días parejos.
+function fechasQuincenal(anclaDate, meses) {
+  const out = []
+  let y = anclaDate.getFullYear()
+  let m = anclaDate.getMonth()
+  for (let i = 0; i < meses; i++) {
+    const dia15 = new Date(y, m, 15)
+    const diaUltimo = new Date(y, m, daysInMonth(y, m))
+    out.push(toISO(dia15), toISO(diaUltimo))
+    m += 1
+    if (m > 11) { m = 0; y += 1 }
+  }
+  return out
+}
+
+function fechasSemanal(anclaDate, ocurrencias) {
+  const out = []
+  const d = new Date(anclaDate)
+  for (let i = 0; i < ocurrencias; i++) {
+    out.push(toISO(d))
+    d.setDate(d.getDate() + 7)
+  }
+  return out
+}
+
+function fechasMensual(anclaDate, ocurrencias) {
+  const out = []
+  const diaObjetivo = anclaDate.getDate()
+  let y = anclaDate.getFullYear()
+  let m = anclaDate.getMonth()
+  for (let i = 0; i < ocurrencias; i++) {
+    const dia = Math.min(diaObjetivo, daysInMonth(y, m))
+    out.push(toISO(new Date(y, m, dia)))
+    m += 1
+    if (m > 11) { m = 0; y += 1 }
+  }
+  return out
+}
+
+// Genera (y ordena) las fechas de pago a partir de una fecha ancla, para
+// mostrarlas en el paso "Validar fechas" antes de guardar el sueldo fijo.
+export function generarFechasPago(frecuencia, anclaISO) {
+  const ancla = parseISODate(anclaISO) || new Date()
+  let fechas
+  if (frecuencia === 'Semanal') fechas = fechasSemanal(ancla, 10)
+  else if (frecuencia === 'Mensual') fechas = fechasMensual(ancla, 4)
+  else fechas = fechasQuincenal(ancla, 4) // Quincenal (default)
+  return [...new Set(fechas)].sort(compareISOAsc)
+}
+
+export function compareISOAsc(a, b) {
+  return (a || '').localeCompare(b || '')
+}
