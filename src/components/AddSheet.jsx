@@ -31,14 +31,14 @@ export default function AddSheet({ onToast, cats }) {
 
   const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
 
-  const allCats = [...categorias, ...extraCats.filter((c) => !categorias.includes(c))]
-
   const [gastoForm, setGastoForm] = useState(emptyGasto)
   const [gastoTipo, setGastoTipo] = useState('Necesario')
   const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
   const [extraCats, setExtraCats] = useState([])
   const [gastoNewCatOpen, setGastoNewCatOpen] = useState(false)
   const [gastoNewCatValue, setGastoNewCatValue] = useState('')
+
+  const allCats = [...categorias, ...extraCats.filter((c) => !categorias.includes(c))]
 
   const [objetoForm, setObjetoForm] = useState(emptyObjeto)
   const [catSel, setCatSel] = useState(cats?.[0] ?? 'Accesorios')
