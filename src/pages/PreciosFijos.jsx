@@ -139,7 +139,11 @@ export default function PreciosFijos() {
   const [saving, setSaving] = useState(false)
 
   const totalMonthly = items.reduce((sum, p) => sum + monthlyEq(p), 0)
-  const filtered = items.filter((p) => tipo === 'todos' || (p.tipo || '').toLowerCase() === tipo)
+  // Categorías reales que existen en los pagos fijos de Pame (no solo las
+  // 4 clásicas) — así el filtro siempre puede mostrar cualquier categoría
+  // que ella haya creado desde "Pago fijo" (categoría abierta, quinta tanda).
+  const tiposReales = [...new Set(items.map((p) => p.tipo).filter(Boolean))].sort()
+  const filtered = items.filter((p) => tipo === 'todos' || p.tipo === tipo)
 
   async function setFecha(id, fecha) {
     try {
@@ -239,8 +243,8 @@ export default function PreciosFijos() {
         </div>
         <div className="chiprow">
           <span onClick={() => setTipo('todos')} className="pill" style={{ background: tipo === 'todos' ? 'var(--wine)' : 'transparent', color: tipo === 'todos' ? '#fff' : 'var(--muted)' }}>Todos</span>
-          {TIPOS.map((t) => (
-            <span key={t} onClick={() => setTipo(t.toLowerCase())} className="pill" style={{ background: tipo === t.toLowerCase() ? 'var(--wine)' : 'transparent', color: tipo === t.toLowerCase() ? '#fff' : 'var(--muted)' }}>{t}</span>
+          {tiposReales.map((t) => (
+            <span key={t} onClick={() => setTipo(t)} className="pill" style={{ background: tipo === t ? 'var(--wine)' : 'transparent', color: tipo === t ? '#fff' : 'var(--muted)' }}>{t}</span>
           ))}
         </div>
         {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
