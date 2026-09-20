@@ -57,6 +57,7 @@ export default function Compras() {
   const [editDeseo, setEditDeseo] = useState(3)
   const [editEstado, setEditEstado] = useState('espera')
   const [editMontoApartado, setEditMontoApartado] = useState('')
+  const [editPrecioComprado, setEditPrecioComprado] = useState('')
   const [editLinks, setEditLinks] = useState([''])
   const [editNotifFormal, setEditNotifFormal] = useState(true)
   const [editNotifMini, setEditNotifMini] = useState(true)
@@ -203,6 +204,7 @@ export default function Compras() {
     setEditDeseo(w.deseo ?? 3)
     setEditEstado(w.estado || 'espera')
     setEditMontoApartado(String(w.montoApartado ?? ''))
+    setEditPrecioComprado(String(w.precioComprado ?? w.precio ?? ''))
     setEditLinks(w.links && w.links.length ? w.links : w.link ? [w.link] : [''])
     setEditNotifFormal(w.notifFormal !== false)
     setEditNotifMini(w.notifMini !== false)
@@ -245,6 +247,7 @@ export default function Compras() {
         score,
         estado: editEstado,
         montoApartado: editEstado === 'apartando' ? Number(editMontoApartado) || 0 : 0,
+        precioComprado: editEstado === 'comprado' ? (Number(editPrecioComprado) || precio) : null,
         notifFormal: editNotifFormal,
         notifMini: editNotifMini,
       })
@@ -326,7 +329,9 @@ export default function Compras() {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-                    <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precio)}</div>
+                    <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>
+                      {fmt(w.estado === 'comprado' ? (w.precioComprado ?? w.precio) : w.precio)}
+                    </div>
                     <button
                       aria-label="Notificaciones"
                       onClick={(e) => { e.stopPropagation(); openNotif(w, 'whimms') }}
@@ -487,8 +492,15 @@ export default function Compras() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 500, flex: 1 }}>{fmt(detail.precio)}</div>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 500, flex: 1 }}>
+                  {fmt(detail.estado === 'comprado' ? (detail.precioComprado ?? detail.precio) : detail.precio)}
+                </div>
               </div>
+              {detail.estado === 'comprado' && detail.precioComprado != null && detail.precioComprado !== detail.precio && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -12, marginBottom: 16 }}>
+                  Estimado original: {fmt(detail.precio)}
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
@@ -721,6 +733,20 @@ export default function Compras() {
                     value={editMontoApartado}
                     onChange={(e) => setEditMontoApartado(e.target.value)}
                   />
+                )}
+                {editEstado === 'comprado' && (
+                  <>
+                    <input
+                      className="fld"
+                      placeholder="¿Al final en cuánto lo compraste?"
+                      inputMode="decimal"
+                      value={editPrecioComprado}
+                      onChange={(e) => setEditPrecioComprado(e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
+                      Los precios varían del estimado — esto es lo que de verdad se resta de tu saldo y de lo que queda para el resto de la fila.
+                    </div>
+                  </>
                 )}
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                   Notificaciones

@@ -147,9 +147,19 @@ export function totalIngresosHasta(sueldosFijos, sueldosRapidos, hoyISO) {
   return fijos + rapidos
 }
 
+// Excluye los Gastos de categoría "Vitall": ese pago ya se cuenta en
+// totalVencimientosHasta (por calendario, cuando vence de verdad), así que
+// sumarlo también aquí lo restaba DOS VECES del saldo real (bug encontrado
+// y corregido 20 sep, onceava tanda). El calendario de vencimientos es la
+// fuente única y autoritativa para Vitall/pagos fijos — registrar un Gasto
+// de Vitall queda solo como recordatorio/historial visual, no resta de
+// nuevo.
 export function totalGastosHasta(gastos, hoyISO) {
   const hoy = hoyISO || todayISO()
-  return (gastos || []).reduce((sum, g) => (g.fecha && g.fecha <= hoy ? sum + (Number(g.monto) || 0) : sum), 0)
+  return (gastos || []).reduce((sum, g) => {
+    if (g.categoria === 'Vitall' && g.vitallId) return sum
+    return g.fecha && g.fecha <= hoy ? sum + (Number(g.monto) || 0) : sum
+  }, 0)
 }
 
 export function totalVencimientosHasta(pagosFijos, hoyISO) {
@@ -159,8 +169,15 @@ export function totalVencimientosHasta(pagosFijos, hoyISO) {
     .reduce((sum, p) => sum + fechasVencimientoVivas(p).filter((f) => f <= hoy).length * (Number(p.monto) || 0), 0)
 }
 
+// Usa el precio REAL de compra (`precioComprado`) cuando existe, en vez del
+// precio estimado/listado (`precio`) — los precios varían al momento de
+// comprar, y lo que debe restar del saldo (y afectar lo que queda para los
+// demás Whimms) es lo que de verdad se pagó, no el estimado original
+// (pedido por Pame, onceava tanda).
 export function totalWhimmsCompradosHasta(whimms) {
-  return (whimms || []).filter((w) => w.estado === 'comprado').reduce((sum, w) => sum + (Number(w.precio) || 0), 0)
+  return (whimms || [])
+    .filter((w) => w.estado === 'comprado')
+    .reduce((sum, w) => sum + (Number(w.precioComprado ?? w.precio) || 0), 0)
 }
 
 export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO }) {
