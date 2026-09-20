@@ -54,10 +54,12 @@ export default function AddSheet({ onToast, cats }) {
 
   const [servicioForm, setServicioForm] = useState(emptyServicio)
   const [servicioFreq, setServicioFreq] = useState('Mensual')
+  const [servicioFecha, setServicioFecha] = useState(todayISO())
   const [notifFormal, setNotifFormal] = useState(true)
   const [notifMini, setNotifMini] = useState(true)
 
   const [pagoForm, setPagoForm] = useState(emptyPago)
+  const [pagoFecha, setPagoFecha] = useState(todayISO())
   const [pagoTipo, setPagoTipo] = useState('Vitall')
   const [pagoFreq, setPagoFreq] = useState('Mensual')
   const [pagoFinito, setPagoFinito] = useState(false)
@@ -154,7 +156,7 @@ export default function AddSheet({ onToast, cats }) {
         frecuencia: servicioFreq,
         tipo: 'Vitall',
         activo: true,
-        fecha: '',
+        fecha: servicioFecha,
         finito: false,
         numPagos: null,
         notifFormal,
@@ -162,6 +164,7 @@ export default function AddSheet({ onToast, cats }) {
       })
       setServicioForm(emptyServicio)
       setServicioFreq('Mensual')
+      setServicioFecha(todayISO())
       setStep('closed')
       onToast?.('Vitall guardado')
     } catch (err) {
@@ -183,11 +186,12 @@ export default function AddSheet({ onToast, cats }) {
         frecuencia: pagoFreq,
         tipo: pagoTipo,
         activo: true,
-        fecha: '',
+        fecha: pagoFecha,
         finito: pagoFinito,
         numPagos: pagoFinito ? Number(pagoNumPagos) || null : null,
       })
       setPagoForm(emptyPago)
+      setPagoFecha(todayISO())
       setPagoTipo('Vitall')
       setPagoFreq('Mensual')
       setPagoFinito(false)
@@ -504,6 +508,15 @@ export default function AddSheet({ onToast, cats }) {
                         </span>
                       ))}
                     </div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Próximo vencimiento
+                    </div>
+                    <input
+                      className="fld"
+                      type="date"
+                      value={servicioFecha}
+                      onChange={(e) => setServicioFecha(e.target.value)}
+                    />
                     <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
                       Un Vitall no tiene fecha de fin (servicio continuo) — si esta compra sí termina en algún momento, agrégala como "Pago fijo".
                     </div>
@@ -566,6 +579,15 @@ export default function AddSheet({ onToast, cats }) {
                         </span>
                       ))}
                     </div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                      Próximo vencimiento
+                    </div>
+                    <input
+                      className="fld"
+                      type="date"
+                      value={pagoFecha}
+                      onChange={(e) => setPagoFecha(e.target.value)}
+                    />
                     <ToggleRow label="¿Tiene fin?" hint="ej. compra a meses sin intereses" on={pagoFinito} onClick={() => setPagoFinito((v) => !v)} />
                     {pagoFinito && (
                       <input

@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, isThisMonth } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo } from '../lib/budget'
 
 const ESTADO_LABEL = {
   espera: 'En espera',
@@ -203,14 +203,15 @@ export default function Compras() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {servicios.map((s) => {
-                const dias = daysUntil(s.fecha)
+                const proximo = proximoVencimientoPagoFijo(s)
+                const dias = daysUntil(proximo)
                 return (
                   <div key={s.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12, opacity: s.activo ? 1 : 0.65 }}>
                     <div className="icon-tile" style={{ width: 38, height: 38 }}><IconProduct size={17} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                        {s.frecuencia} · Próximo {formatShortDate(s.fecha)}{dias != null ? ` · ${dias} día${dias === 1 ? '' : 's'}` : ''}
+                        {s.frecuencia} · Próximo {proximo ? formatShortDate(proximo) : 'sin fecha'}{dias != null ? ` · ${dias} día${dias === 1 ? '' : 's'}` : ''}
                       </div>
                     </div>
                     <button aria-label="Notificaciones" onClick={() => openNotif(s, 'pagosFijos')} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

@@ -7,7 +7,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth } from '../lib/date'
-import { estimatePresupuestoDiarioNeto, proximaFechaSueldo } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proximaFechaSueldo, proximoVencimientoPagoFijo } from '../lib/budget'
 
 const LINKS = [
   { to: '/perfil/historial', Icon: IconClock, title: 'Historial completo', hint: 'Todo el desglose, filtrable' },
@@ -44,7 +44,7 @@ export default function Perfil() {
   // bruto (una versión simple de la futura alertaDeficit).
   const pagosActivos = pagosFijos.filter((p) => p.activo !== false)
   const proximosAVencer = pagosActivos.filter((p) => {
-    const d = daysUntil(p.fecha)
+    const d = daysUntil(proximoVencimientoPagoFijo(p))
     return d != null && d >= 0 && d <= 8
   })
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)

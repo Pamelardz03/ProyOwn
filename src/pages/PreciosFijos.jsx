@@ -7,7 +7,8 @@ import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate } from '../lib/date'
+import { formatShortDate, daysUntil, todayISO } from '../lib/date'
+import { proximoVencimientoPagoFijo } from '../lib/budget'
 
 const TIPOS = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
 
@@ -34,6 +35,15 @@ export default function PreciosFijos() {
 
   const totalMonthly = items.reduce((sum, p) => sum + monthlyEq(p), 0)
   const filtered = items.filter((p) => tipo === 'todos' || (p.tipo || '').toLowerCase() === tipo)
+
+  async function setFecha(id, fecha) {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', id, { fecha })
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
 
   async function toggleActivo(id, activo) {
     try {
@@ -102,30 +112,44 @@ export default function PreciosFijos() {
           {filtered.map((p) => {
             const colors = TIPO_COLORS[p.tipo] || TIPO_COLORS.Vitall
             const armed = armedId === p.id
+            const proximo = proximoVencimientoPagoFijo(p)
+            const dias = daysUntil(proximo)
             return (
-              <div key={p.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="icon-tile" style={{ width: 38, height: 38 }}>
-                  <IconCard size={17} color="var(--wine4)" />
+              <div key={p.id} className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div className="icon-tile" style={{ width: 38, height: 38 }}>
+                    <IconCard size={17} color="var(--wine4)" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: colors.color, background: colors.bg, padding: '2px 7px', borderRadius: 6 }}>{p.tipo}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                      {p.frecuencia} · Próximo {proximo ? formatShortDate(proximo) : 'sin fecha'}{dias != null ? ` · en ${dias} día${dias === 1 ? '' : 's'}` : ''}
+                      {p.finito && p.numPagos ? ` · ${p.numPagos} pagos` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{fmt(p.monto)}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'} onClick={() => askDelete(p.id)} style={{ padding: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {armed && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
+                        <IconTrash size={13} color={armed ? 'var(--red)' : 'var(--muted)'} />
+                      </button>
+                      <Toggle on={p.activo} onClick={() => toggleActivo(p.id, p.activo)} ariaLabel={`Activar ${p.name}`} />
+                    </div>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: colors.color, background: colors.bg, padding: '2px 7px', borderRadius: 6 }}>{p.tipo}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
-                    {p.frecuencia} · Próximo {formatShortDate(p.fecha)}
-                    {p.finito && p.numPagos ? ` · ${p.numPagos} pagos` : ''}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{fmt(p.monto)}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'} onClick={() => askDelete(p.id)} style={{ padding: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {armed && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
-                      <IconTrash size={13} color={armed ? 'var(--red)' : 'var(--muted)'} />
-                    </button>
-                    <Toggle on={p.activo} onClick={() => toggleActivo(p.id, p.activo)} ariaLabel={`Activar ${p.name}`} />
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted)', flexShrink: 0 }}>Vencimiento:</span>
+                  <input
+                    className="fld"
+                    style={{ flex: 1, padding: '7px 10px' }}
+                    type="date"
+                    value={p.fecha || todayISO()}
+                    onChange={(e) => setFecha(p.id, e.target.value)}
+                  />
                 </div>
               </div>
             )

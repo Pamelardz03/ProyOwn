@@ -6,7 +6,7 @@ import { fmt } from '../lib/format'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, fechasPagoVivas } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
 
 const TODAY_STYLE = { background: '#3a0f1f', color: '#fff', fontWeight: 700 }
 const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
@@ -80,7 +80,10 @@ export default function Calendario() {
       fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f' }))
     })
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
-      out.push({ id: `pf-${p.id}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: p.fecha, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
+      const fechas = fechasVencimientoVivas(p, horizonte)
+      fechas.forEach((f) => {
+        out.push({ id: `pf-${p.id}-${f}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: f, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
+      })
     })
     colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {
       out.push({ id: `w-${w.id}`, cat: 'compra', title: `${w.name} — estimado disponible`, dateISO: w.fechaProyectada, amount: fmt(w.precio), amountColor: '#1a1208', dotColor: '#b8783f' })
