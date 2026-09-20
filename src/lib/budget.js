@@ -1,4 +1,4 @@
-import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc } from './date'
+import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil } from './date'
 
 // Un sueldo fijo no tiene fecha de fin por default — 2 años hacia adelante
 // es más que suficiente para cualquier vista/paginación real de la app.
@@ -66,19 +66,143 @@ export function monthlyEqPagoFijo(p) {
   return p.frecuencia === 'Semanal' ? monto * 4.33 : monto
 }
 
-const DIAS_CICLO = { Semanal: 7, Quincenal: 15, Mensual: 30 }
-
-// Presupuesto diario neto "favorable" — ingreso mensual real ÷ 30, menos lo
-// que hay que reservar cada día para servicios/pagos fijos activos. Es
-// optimista: no resta gasto futuro (asume que no hay más gastos), tal como
-// se pidió para proyectar la cola de Whimms.
-export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
-  const ingresoMensual = ingresosFijosDelMes(sueldosFijos) + (sueldosRapidosMes || 0)
-  const presupuestoDiario = ingresoMensual / 30
-  const reservaServiciosDiaria = (pagosFijos || [])
+// --- Reserva real por vencimiento próximo (20 sep, novena tanda) ---
+// Reemplaza el promedio fijo por ciclo (monto/30 días sin importar cuándo
+// vence de verdad) que había antes: ahora cada pago fijo/Vitall activo
+// exige juntar monto/díasRestantes cada día hasta su PRÓXIMO vencimiento
+// real, en vez de una reserva constante. Así un pago grande que se acerca
+// "pesa" más en el presupuesto diario mientras más cerca está — si debo
+// $900 y faltan 4 días, son $225/día esos 4 días, no un promedio parejo
+// todo el mes.
+export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return (pagosFijos || [])
     .filter((p) => p.activo !== false)
-    .reduce((sum, p) => sum + (Number(p.monto) || 0) / (DIAS_CICLO[p.frecuencia] || 30), 0)
-  return Math.max(presupuestoDiario - reservaServiciosDiaria, 0)
+    .map((p) => {
+      const vencimiento = proximoVencimientoPagoFijo(p, hoy)
+      if (!vencimiento) return null
+      const dias = Math.max(daysUntil(vencimiento), 1)
+      const monto = Number(p.monto) || 0
+      return { pago: p, vencimiento, dias, monto, reservaDiaria: monto / dias }
+    })
+    .filter(Boolean)
+}
+
+export function presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes }) {
+  const ingresoMensual = ingresosFijosDelMes(sueldosFijos) + (sueldosRapidosMes || 0)
+  return ingresoMensual / 30
+}
+
+// Presupuesto diario neto "favorable" — bruto menos la reserva diaria REAL
+// de cada pago fijo activo (ver reservasDiariasPagosFijos arriba, novena
+// tanda) en vez del promedio por ciclo que usaba antes esta misma función.
+// Es optimista: no resta gasto futuro (asume que no hay más gastos), tal
+// como se pidió para proyectar la cola de Whimms.
+export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
+  const bruto = presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes })
+  const reservaTotal = reservasDiariasPagosFijos(pagosFijos).reduce((s, r) => s + r.reservaDiaria, 0)
+  return Math.max(bruto - reservaTotal, 0)
+}
+
+// Riesgos reales de flujo (novena tanda): ¿el presupuesto diario bruto
+// alcanza para juntar a tiempo TODAS las reservas diarias activas? Se
+// ordenan por fecha más próxima primero (el más urgente reserva primero
+// del presupuesto disponible); si en algún punto la reserva acumulada ya
+// supera el bruto, ese pago (y los que sigan en la fila) quedan en riesgo
+// real de no juntarse a tiempo al ritmo actual — no un aviso genérico de
+// "hay pagos pronto", sino cuánto exactamente falta por día.
+export function detectarRiesgosPagosFijos({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
+  const bruto = presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes })
+  const ordenados = [...reservasDiariasPagosFijos(pagosFijos)].sort((a, b) => a.dias - b.dias)
+  let acumReserva = 0
+  const riesgos = []
+  ordenados.forEach((r) => {
+    acumReserva += r.reservaDiaria
+    if (acumReserva > bruto) {
+      riesgos.push({
+        nombre: r.pago.name,
+        monto: r.monto,
+        vencimiento: r.vencimiento,
+        dias: r.dias,
+        reservaDiaria: r.reservaDiaria,
+        faltante: Math.round((acumReserva - bruto) * r.dias),
+      })
+    }
+  })
+  return riesgos
+}
+
+// --- Saldo libre acumulado real (novena tanda) ---
+// A diferencia de "Saldo del mes" (que se reinicia cada mes), este es
+// histórico: todo lo que se ha recibido (sueldos fijos + rápidos) menos
+// todo lo que se ha gastado (Gastos), pagado (vencimientos de pagos
+// fijos/Vitall ya ocurridos) y comprado (Whimms marcados "comprado") desde
+// que hay datos en la cuenta. Sube los días que no se gasta todo el
+// presupuesto, baja los que sí — es la fuente real detrás de las barras de
+// progreso de los Whimms.
+export function totalIngresosHasta(sueldosFijos, sueldosRapidos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const fijos = (sueldosFijos || []).reduce((sum, s) => sum + fechasPagoVivas(s).filter((f) => f <= hoy).length * (Number(s.monto) || 0), 0)
+  const rapidos = (sueldosRapidos || []).reduce((sum, r) => (r.fecha && r.fecha <= hoy ? sum + (Number(r.monto) || 0) : sum), 0)
+  return fijos + rapidos
+}
+
+export function totalGastosHasta(gastos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return (gastos || []).reduce((sum, g) => (g.fecha && g.fecha <= hoy ? sum + (Number(g.monto) || 0) : sum), 0)
+}
+
+export function totalVencimientosHasta(pagosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return (pagosFijos || [])
+    .filter((p) => p.activo !== false)
+    .reduce((sum, p) => sum + fechasVencimientoVivas(p).filter((f) => f <= hoy).length * (Number(p.monto) || 0), 0)
+}
+
+export function totalWhimmsCompradosHasta(whimms) {
+  return (whimms || []).filter((w) => w.estado === 'comprado').reduce((sum, w) => sum + (Number(w.precio) || 0), 0)
+}
+
+export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO }) {
+  const hoy = hoyISO || todayISO()
+  return (
+    totalIngresosHasta(sueldosFijos, sueldosRapidos, hoy) -
+    totalGastosHasta(gastos, hoy) -
+    totalVencimientosHasta(pagosFijos, hoy) -
+    totalWhimmsCompradosHasta(whimms)
+  )
+}
+
+// Del saldo acumulado real, cuánto NO se le puede prestar a los Whimms
+// porque ya está comprometido con el próximo vencimiento de cada pago fijo
+// activo (se reserva el monto COMPLETO del siguiente ciclo de cada uno,
+// no solo la fracción diaria) — así un pago grande que ya está "cerca" no
+// se lo come la wishlist antes de que llegue su fecha.
+export function reservaInmediataPagosFijos(pagosFijos, hoyISO) {
+  return reservasDiariasPagosFijos(pagosFijos, hoyISO).reduce((sum, r) => sum + r.monto, 0)
+}
+
+export function disponibleParaWhimms(params) {
+  const saldo = saldoLibreAcumuladoReal(params)
+  const reserva = reservaInmediataPagosFijos(params.pagosFijos, params.hoyISO)
+  return Math.max(saldo - reserva, 0)
+}
+
+// Reparte el saldo disponible entre los primeros `n` Whimms activos (ya
+// ordenados por prioridad/score), proporcional al score de cada uno — a
+// pedido de Pame, para que varios avancen a la vez en vez de que todo el
+// excedente vaya solo al #1 hasta completarlo. Cuando el #1 se completa (o
+// se marca comprado), su lugar lo toma el siguiente de la fila la próxima
+// vez que se calcule esto — no hace falta ningún ajuste manual.
+export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible, n) {
+  const top = (whimmsActivosOrdenados || []).slice(0, Math.max(Number(n) || 1, 1))
+  const disponible = Math.max(Number(saldoDisponible) || 0, 0)
+  const scoreTotal = top.reduce((s, w) => s + Math.max(w.score ?? w._score ?? 0, 0.01), 0)
+  return top.map((w) => {
+    const score = Math.max(w.score ?? w._score ?? 0, 0.01)
+    const acumuladoAutomatico = scoreTotal > 0 ? (disponible * score) / scoreTotal : 0
+    return { ...w, acumuladoAutomatico }
+  })
 }
 
 // Cascada de fechas proyectadas: el Whimm top de la cola acumula el

@@ -6,10 +6,10 @@ import { useToast } from '../hooks/useToast'
 import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconChevronLeft } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, isThisMonth } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, asignarSaldoWhimms } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const ESTADO_LABEL = {
@@ -47,9 +47,15 @@ export default function Compras() {
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: gastos } = useUserCollection('gastos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
   const servicios = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
   const cats = deriveWhimmCats(whimms, gastos)
+
+  // Cuántos Whimms se financian a la vez con el saldo libre acumulado real
+  // (novena tanda, a pedido de Pame) — configurable, default 3. Antes todo
+  // el excedente iba solo al #1 hasta completarlo.
+  const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
   // ver src/lib/score.js), con una fecha estimada de compra en cascada —
@@ -57,11 +63,24 @@ export default function Compras() {
   // él, asumiendo que no hay más gastos (predicción "favorable").
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
   const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+
+  // Saldo libre acumulado real (histórico, no se reinicia cada mes — ver
+  // src/lib/budget.js) y cuánto de eso puede financiar Whimms sin tocar lo
+  // reservado para el próximo vencimiento de cada pago fijo/Vitall activo.
+  // Se reparte entre los primeros `whimmsSimultaneos` Whimms de la fila,
+  // proporcional a su score — así varios avanzan a la vez.
+  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms }
+  const disponibleWhimms = disponibleParaWhimms(budgetParams)
   const activos = whimms
     .filter((w) => w.estado !== 'comprado')
     .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
-  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto)
+  const asignados = asignarSaldoWhimms(activos, disponibleWhimms, whimmsSimultaneos)
+  const acumuladoAutomaticoById = Object.fromEntries(asignados.map((w) => [w.id, w.acumuladoAutomatico]))
+  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto).map((w) => ({
+    ...w,
+    acumuladoAutomatico: acumuladoAutomaticoById[w.id] || 0,
+  }))
   const comprados = whimms.filter((w) => w.estado === 'comprado')
   const whimmsOrdenados = [...activosConFecha, ...comprados]
 
@@ -133,6 +152,18 @@ export default function Compras() {
     } catch (err) {
       console.error(err)
       show(`No se pudo eliminar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  // Cuántos Whimms activos se financian a la vez con el saldo libre
+  // acumulado real (stepper en la pestaña Whimm) — persistido en
+  // /users/{uid}/config/presupuesto.
+  async function setWhimmsSimultaneos(n) {
+    try {
+      await setUserDoc(user.uid, 'config', 'presupuesto', { whimmsSimultaneos: Math.max(1, Math.min(10, n)) })
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
     }
   }
 
@@ -218,6 +249,33 @@ export default function Compras() {
         {tab === 'deseos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {errorWhimms && <div style={{ fontSize: 11, color: 'var(--red)' }}>{errorWhimms}</div>}
+
+            <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Financiar a la vez</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                  {fmt(disponibleWhimms)} libres se reparten entre los primeros {whimmsSimultaneos}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <button
+                  aria-label="Menos Whimms a la vez"
+                  onClick={() => setWhimmsSimultaneos(whimmsSimultaneos - 1)}
+                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                >
+                  −
+                </button>
+                <span className="mono" style={{ fontSize: 16, fontWeight: 700, width: 18, textAlign: 'center' }}>{whimmsSimultaneos}</span>
+                <button
+                  aria-label="Más Whimms a la vez"
+                  onClick={() => setWhimmsSimultaneos(whimmsSimultaneos + 1)}
+                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {whimmsOrdenados.map((w, i) => (
                 <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
@@ -265,6 +323,8 @@ export default function Compras() {
                       </span>
                     )}
                   </div>
+
+                  {w.estado !== 'comprado' && <WhimmProgressBar whimm={w} style={{ marginTop: 10 }} />}
                 </div>
               ))}
               {!loadingWhimms && !errorWhimms && whimms.length === 0 && <div className="empty-state">Sin Whimms todavía</div>}
@@ -405,13 +465,18 @@ export default function Compras() {
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Estado</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{ESTADO_LABEL[detail.estado] || 'En espera'}</div>
-                  {detail.estado === 'apartando' && (
-                    <div style={{ fontSize: 10, color: 'var(--wine4)', marginTop: 3 }}>
-                      {fmt(detail.montoApartado || 0)} de {fmt(detail.precio)} apartado
-                    </div>
-                  )}
                 </div>
               </div>
+
+              {detail.estado !== 'comprado' && (
+                <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>¿Cuándo puedo comprarlo?</div>
+                  <WhimmProgressBar whimm={detail} height={10} />
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
+                    {fmt(detail.montoApartado || 0)} apartado por tu cuenta + {fmt(Math.round(detail.acumuladoAutomatico || 0))} del presupuesto diario
+                  </div>
+                </div>
+              )}
 
               {detail.estado !== 'comprado' && (
                 <button
@@ -668,6 +733,27 @@ function ScalePicker({ value, onChange }) {
           {n}
         </button>
       ))}
+    </div>
+  )
+}
+
+// Barra de progreso real de un Whimm: monto ya apartado a mano (fuera de
+// la app) + lo que ya acumuló del presupuesto diario real (novena tanda,
+// ver src/lib/budget.js) contra su precio — el bloque que pedía el diseño
+// original desde el principio y nunca se había construido de verdad.
+function WhimmProgressBar({ whimm, height = 6, style }) {
+  const precio = Number(whimm.precio) || 0
+  const progreso = (Number(whimm.montoApartado) || 0) + (Number(whimm.acumuladoAutomatico) || 0)
+  const pct = precio > 0 ? Math.min(100, Math.round((progreso / precio) * 100)) : 0
+  return (
+    <div style={style}>
+      <div style={{ height, background: 'var(--beige2)', borderRadius: height / 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: height / 2, transition: 'width .3s ease' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fmt(progreso)} de {fmt(precio)}</span>
+        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct}%</span>
+      </div>
     </div>
   )
 }

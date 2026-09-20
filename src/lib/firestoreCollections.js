@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { db, firebaseReady } from './firebase'
 import { useAuth } from './AuthContext'
 
@@ -49,4 +49,43 @@ export function updateUserDoc(uid, name, id, data) {
 
 export function deleteUserDoc(uid, name, id) {
   return deleteDoc(doc(db, 'users', uid, name, id))
+}
+
+// Lee en vivo un documento único (no una colección con lista) del usuario,
+// p.ej. /users/{uid}/config/presupuesto — para configuración simple que no
+// necesita ser una lista con `creadoEn`/orderBy. `data` es `null` mientras
+// no exista todavía (antes de la primera vez que se guarda algo ahí).
+export function useUserDoc(name, docId) {
+  const { user } = useAuth()
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!firebaseReady || !user) {
+      setData(null)
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const ref = doc(db, 'users', user.uid, name, docId)
+    const unsubscribe = onSnapshot(
+      ref,
+      (snap) => {
+        setData(snap.exists() ? snap.data() : null)
+        setLoading(false)
+      },
+      (err) => {
+        console.error(`Error leyendo ${name}/${docId}:`, err)
+        setLoading(false)
+      }
+    )
+    return unsubscribe
+  }, [user, name, docId])
+
+  return { data, loading }
+}
+
+// Crea o actualiza (merge) ese mismo documento único.
+export function setUserDoc(uid, name, docId, data) {
+  return setDoc(doc(db, 'users', uid, name, docId), data, { merge: true })
 }

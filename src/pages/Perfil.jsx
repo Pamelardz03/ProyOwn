@@ -7,7 +7,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { estimatePresupuestoDiarioNeto, proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas } from '../lib/budget'
+import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -61,21 +61,47 @@ export default function Perfil() {
     return d != null && d >= 0 && d <= 8
   })
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
-  const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+
+  // Riesgo real de flujo (novena tanda): compara el presupuesto diario
+  // bruto contra lo que hay que reservar CADA día para llegar completo a
+  // cada vencimiento — no un aviso genérico, sino cuánto exactamente
+  // faltaría por día si nada cambia. Reemplaza el aviso genérico de "ya no
+  // deja presupuesto diario libre" por uno con el pago, la fecha y el
+  // monto exactos.
+  const riesgosFlujo = detectarRiesgosPagosFijos({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+
+  // Saldo libre acumulado real y cuánto de eso está de verdad disponible
+  // para financiar Whimms sin tocar lo reservado para pagos fijos próximos
+  // — mismo cálculo que usa Compras.jsx para las barras de progreso.
+  const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms })
+  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms })
 
   const riesgos = []
   if (proximosAVencer.length > 0) {
     const total = proximosAVencer.reduce((s, p) => s + (Number(p.monto) || 0), 0)
     riesgos.push(`${proximosAVencer.length} pago${proximosAVencer.length === 1 ? '' : 's'} fijo${proximosAVencer.length === 1 ? '' : 's'} vence${proximosAVencer.length === 1 ? '' : 'n'} en los próximos 8 días (${fmt(total)} en total)`)
   }
-  if (presupuestoDiarioNeto <= 0 && pagosActivos.length > 0) {
-    riesgos.push('Tus pagos fijos activos ya no dejan presupuesto diario libre este mes — revisa Precios fijos')
-  }
+  riesgosFlujo.forEach((r) => {
+    riesgos.push(`${r.nombre}: necesitas juntar ${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'} para los ${fmt(r.monto)} de ${formatShortDate(r.vencimiento)} — a tu ritmo actual te faltarían ~${fmt(r.faltante)}.`)
+  })
 
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         <h1>Perfil</h1>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div className="card" style={{ flex: 1, padding: 14 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Ahorro acumulado real</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(saldoAcumuladoReal)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Histórico, no se reinicia cada mes</div>
+          </div>
+          <div className="card" style={{ flex: 1, padding: 14 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Ya sin lo reservado a pagos fijos</div>
+          </div>
+        </div>
 
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
