@@ -6,8 +6,8 @@ import { IconWarning, IconClock, IconCard, IconSalary, IconBars, IconChevronRigh
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
-import { daysUntil, formatShortDate, isThisMonth } from '../lib/date'
-import { estimatePresupuestoDiarioNeto, proximaFechaSueldo, proximoVencimientoPagoFijo } from '../lib/budget'
+import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
+import { estimatePresupuestoDiarioNeto, proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -34,10 +34,18 @@ export default function Perfil() {
 
   // Próximo pago real de cada sueldo fijo, calculado en vivo — los
   // sueldos fijos no tienen fecha de fin, así que se extiende la serie
-  // hacia adelante en vez de depender solo de lo que ya se generó.
+  // hacia adelante en vez de depender solo de lo que ya se generó. Nunca
+  // debe mostrar "en 0 días": si la fecha más próxima es justo hoy (ya es
+  // el día de pago), se muestra la siguiente ocurrencia en su lugar —
+  // mismo criterio que el "Próximo pago" de Inicio.jsx.
+  const hoy = todayISO()
+  const proximaFechaSueldoNoHoy = (s) => {
+    const fecha = proximaFechaSueldo(s, hoy)
+    return fecha === hoy ? (fechasPagoVivas(s).find((f) => f > hoy) || null) : fecha
+  }
   const proximosSueldos = sueldosFijos
     .map((s) => {
-      const proxima = proximaFechaSueldo(s)
+      const proxima = proximaFechaSueldoNoHoy(s)
       return proxima ? { id: s.id, name: s.name, fecha: proxima, monto: s.monto } : null
     })
     .filter(Boolean)

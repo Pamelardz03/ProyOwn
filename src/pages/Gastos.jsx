@@ -41,7 +41,7 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
         </button>
       </div>
       <div
-        className="card"
+        className="card card-solid"
         {...handlers}
         style={{ position: 'relative', padding: 13, display: 'flex', alignItems: 'center', gap: 12, transform: `translateX(${x}px)`, transition: dragging ? 'none' : 'transform .12s ease', touchAction: 'pan-y' }}
       >

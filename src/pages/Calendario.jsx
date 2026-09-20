@@ -87,7 +87,7 @@ export default function Calendario() {
     const horizonte = addDaysISO(todayISO(), 365)
     sueldosFijos.forEach((s) => {
       const fechas = fechasPagoVivas(s, horizonte)
-      fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f' }))
+      fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f', notifFormal: !!s.notifFormal }))
     })
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
       const fechas = fechasVencimientoVivas(p, horizonte)
@@ -96,7 +96,7 @@ export default function Calendario() {
       })
     })
     colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {
-      out.push({ id: `w-${w.id}`, cat: 'compra', title: `${w.name} — estimado disponible`, dateISO: w.fechaProyectada, amount: fmt(w.precio), amountColor: '#1a1208', dotColor: '#b8783f' })
+      out.push({ id: `w-${w.id}`, cat: 'compra', title: `${w.name} — estimado disponible`, dateISO: w.fechaProyectada, amount: fmt(w.precio), amountColor: '#1a1208', dotColor: '#b8783f', notifFormal: !!w.notifFormal })
     })
     return out.sort((a, b) => compareISOAsc(a.dateISO, b.dateISO))
   }, [sueldosFijos, pagosFijos, colaWhimm])
@@ -118,7 +118,7 @@ export default function Calendario() {
       specialByDay[d] = specialByDay[d] || []
       specialByDay[d].push(e.cat)
     }
-    if (e.cat === 'servicio' && e.notifFormal) {
+    if (e.notifFormal) {
       const noti = addDaysISO(e.dateISO, -2)
       const [ny, nm, nd] = noti.split('-').map(Number)
       if (ny === meta.year && nm - 1 === meta.month) notisByDay[nd] = true

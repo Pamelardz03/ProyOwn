@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useSwipeX } from '../hooks/useSwipe'
 import { Link } from 'react-router-dom'
 import { IconChevronLeft, IconPlus, IconTrash, IconEdit } from '../components/Icons'
+import Toggle from '../components/Toggle'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
@@ -64,7 +65,81 @@ function errMsg(err) {
 function emptyFijo() {
   return { name: '', monto: '', fecha: todayISO() }
 }
-const emptyRapido = { desc: '', monto: '' }
+function emptyRapido() {
+  return { desc: '', monto: '', fecha: todayISO() }
+}
+
+function ToggleRow({ label, hint, on, onClick }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>
+      </div>
+      <Toggle on={on} onClick={onClick} ariaLabel={label} />
+    </div>
+  )
+}
+
+// Fila de un sueldo rápido: tocar el cuerpo no hace nada especial (no hay
+// detalle), el lápiz abre el formulario de edición, y la única forma de
+// eliminar es swipe a la izquierda — igual patrón que FijoRow/ExpenseRow.
+function RapidoRow({ r, isSwipeOpen, onSwipeChange, onEdit, onDelete }) {
+  const { x, dragging, handlers } = useSwipeX({
+    isOpen: isSwipeOpen,
+    onChange: onSwipeChange,
+  })
+  return (
+    <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          opacity: x < -4 ? 1 : 0,
+          pointerEvents: isSwipeOpen ? 'auto' : 'none',
+          transition: dragging ? 'none' : 'opacity .12s ease',
+        }}
+      >
+        <button
+          aria-label="Eliminar sueldo rápido"
+          onClick={onDelete}
+          style={{ width: 72, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <IconTrash color="#fff" />
+        </button>
+      </div>
+      <div
+        className="card card-solid"
+        onPointerDown={(e) => { if (!e.target.closest('button')) handlers.onPointerDown(e) }}
+        onPointerMove={handlers.onPointerMove}
+        onPointerUp={(e) => { if (!e.target.closest('button')) handlers.onPointerUp(e) }}
+        onPointerCancel={handlers.onPointerCancel}
+        style={{
+          position: 'relative',
+          padding: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          transform: `translateX(${x}px)`,
+          transition: dragging ? 'none' : 'transform .12s ease',
+          touchAction: 'pan-y',
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 13, minWidth: 0 }}>{r.desc}</span>
+        <div style={{ textAlign: 'right' }}>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
+        </div>
+        <button aria-label="Editar sueldo rápido" onClick={onEdit} style={{ padding: 2 }}>
+          <IconEdit size={14} color="var(--muted)" />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // Fila de un sueldo fijo: tocar el cuerpo abre el detalle-calendario,
 // el lápiz abre el formulario de edición, y la única forma de eliminar
@@ -100,7 +175,7 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
         </button>
       </div>
       <div
-        className="card"
+        className="card card-solid"
         onPointerDown={(e) => { if (!e.target.closest('button')) handlers.onPointerDown(e) }}
         onPointerMove={handlers.onPointerMove}
         onPointerUp={(e) => { if (!e.target.closest('button')) handlers.onPointerUp(e) }}
@@ -154,13 +229,17 @@ export default function Sueldos() {
   const [addRapidoOpen, setAddRapidoOpen] = useState(false)
   const [formFreq, setFormFreq] = useState('Quincenal')
   const [fijoForm, setFijoForm] = useState(emptyFijo())
+  const [sueldoNotifFormal, setSueldoNotifFormal] = useState(true)
+  const [sueldoNotifMini, setSueldoNotifMini] = useState(true)
   const [fechasPreview, setFechasPreview] = useState([])
   const [validarMonthOffset, setValidarMonthOffset] = useState(0)
   const [selectedFecha, setSelectedFecha] = useState(null)
   const [swipeOpen, setSwipeOpen] = useState(false)
   const [confirmDeleteFechaOpen, setConfirmDeleteFechaOpen] = useState(false)
   const detailSwipe = useSwipeX({ isOpen: swipeOpen, onChange: setSwipeOpen, onTap: () => {} })
-  const [rapidoForm, setRapidoForm] = useState(emptyRapido)
+  const [rapidoForm, setRapidoForm] = useState(emptyRapido())
+  const [editingRapidoId, setEditingRapidoId] = useState(null)
+  const [swipeOpenRapidoId, setSwipeOpenRapidoId] = useState(null)
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
 
@@ -174,26 +253,6 @@ export default function Sueldos() {
   const [detailFijo, setDetailFijo] = useState(null)
   const [detailMonthOffset, setDetailMonthOffset] = useState(0)
 
-  // Confirmación de borrado sin window.confirm (algunos navegadores de PWA
-  // instaladas no muestran el diálogo nativo): toca el bote de basura una
-  // vez para armarlo, otra vez para confirmar. Se desarma solo a los 3s.
-  // (Ya solo se usa para "Sueldos rápidos" — los fijos se eliminan con
-  // swipe a la izquierda.)
-  const [confirmDelete, setConfirmDelete] = useState(null) // { type: 'rapido', id }
-  const confirmTimeout = useRef(null)
-
-  function armOrDelete(type, id, doDelete) {
-    if (confirmDelete && confirmDelete.type === type && confirmDelete.id === id) {
-      clearTimeout(confirmTimeout.current)
-      setConfirmDelete(null)
-      doDelete()
-      return
-    }
-    clearTimeout(confirmTimeout.current)
-    setConfirmDelete({ type, id })
-    confirmTimeout.current = setTimeout(() => setConfirmDelete(null), 3000)
-  }
-
   const fijosTotal = fijos.reduce((sum, s) => sum + ingresoDelMesSueldo(s), 0)
   const rapidosTotal = rapidos.reduce((sum, r) => sum + (Number(r.monto) || 0), 0)
   const total = fijosTotal + rapidosTotal
@@ -202,6 +261,8 @@ export default function Sueldos() {
   function resetFijoFlow() {
     setFijoForm(emptyFijo())
     setFormFreq('Quincenal')
+    setSueldoNotifFormal(true)
+    setSueldoNotifMini(true)
     setFechasPreview([])
     setSelectedFecha(null)
     setSwipeOpen(false)
@@ -273,6 +334,8 @@ export default function Sueldos() {
   function openFijoEdit(s) {
     setFijoForm({ name: s.name, monto: String(s.monto), fecha: s.fecha || todayISO() })
     setFormFreq(s.frecuencia)
+    setSueldoNotifFormal(s.notifFormal !== false)
+    setSueldoNotifMini(s.notifMini !== false)
     setEditingFijoId(s.id)
     setFechasPreview(Array.isArray(s.fechasPago) && s.fechasPago.length ? [...s.fechasPago] : s.fecha ? [s.fecha] : [])
     setValidarMonthOffset(monthOffsetFromISO(proximaFechaSueldo(s) || s.fecha))
@@ -306,6 +369,8 @@ export default function Sueldos() {
         frecuencia: formFreq,
         fecha: proximaFecha,
         fechasPago: fechasOrdenadas,
+        notifFormal: sueldoNotifFormal,
+        notifMini: sueldoNotifMini,
       }
       if (editingFijoId) {
         await updateUserDoc(user.uid, 'sueldosFijos', editingFijoId, payload)
@@ -323,19 +388,37 @@ export default function Sueldos() {
     }
   }
 
+  function closeRapidoForm() {
+    setRapidoForm(emptyRapido())
+    setEditingRapidoId(null)
+    setAddRapidoOpen(false)
+  }
+
+  function openRapidoEdit(r) {
+    setRapidoForm({ desc: r.desc, monto: String(r.monto), fecha: r.fecha || todayISO() })
+    setEditingRapidoId(r.id)
+    setSwipeOpenRapidoId(null)
+    setAddRapidoOpen(true)
+  }
+
   async function saveRapido() {
     const monto = Number(rapidoForm.monto)
     if (!rapidoForm.desc.trim() || !monto) return
     setSaving(true)
     try {
-      await addUserDoc(user.uid, 'sueldosRapidos', {
+      const payload = {
         desc: rapidoForm.desc.trim(),
         monto,
-        fecha: todayISO(),
-      })
-      setRapidoForm(emptyRapido)
-      setAddRapidoOpen(false)
-      show('Sueldo rápido guardado')
+        fecha: rapidoForm.fecha || todayISO(),
+      }
+      if (editingRapidoId) {
+        await updateUserDoc(user.uid, 'sueldosRapidos', editingRapidoId, payload)
+        show('Sueldo rápido actualizado')
+      } else {
+        await addUserDoc(user.uid, 'sueldosRapidos', payload)
+        show('Sueldo rápido guardado')
+      }
+      closeRapidoForm()
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${errMsg(err)}`)
@@ -370,6 +453,7 @@ export default function Sueldos() {
   async function removeRapido(id) {
     try {
       await deleteUserDoc(user.uid, 'sueldosRapidos', id)
+      setSwipeOpenRapidoId(null)
       show('Sueldo rápido eliminado')
     } catch (err) {
       console.error(err)
@@ -454,6 +538,8 @@ export default function Sueldos() {
                   </span>
                 ))}
               </div>
+              <ToggleRow label="Recordatorio formal" hint="2 días antes" on={sueldoNotifFormal} onClick={() => setSueldoNotifFormal((v) => !v)} />
+              <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" on={sueldoNotifMini} onClick={() => setSueldoNotifMini((v) => !v)} />
               <button className="btn-primary" style={{ marginTop: 4 }} onClick={goValidarFechas}>
                 Validar fechas
               </button>
@@ -482,7 +568,7 @@ export default function Sueldos() {
           <div className="eyebrow" style={{ marginBottom: 2 }}>Ingresos únicos</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>Sueldos rápidos</div>
-            <button onClick={() => setAddRapidoOpen((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+            <button onClick={() => (addRapidoOpen ? closeRapidoForm() : setAddRapidoOpen(true))} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
               <IconPlus size={14} color="var(--wine)" />
               Agregar
             </button>
@@ -490,6 +576,7 @@ export default function Sueldos() {
 
           {addRapidoOpen && (
             <div className="card" style={{ padding: 14, marginTop: 10, marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {editingRapidoId && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>Editando sueldo rápido</div>}
               <input
                 className="fld"
                 placeholder="Descripción (ej. Lavado de ropa)"
@@ -503,36 +590,31 @@ export default function Sueldos() {
                 value={rapidoForm.monto}
                 onChange={(e) => setRapidoForm((f) => ({ ...f, monto: e.target.value }))}
               />
+              <input
+                className="fld"
+                type="date"
+                value={rapidoForm.fecha}
+                onChange={(e) => setRapidoForm((f) => ({ ...f, fecha: e.target.value }))}
+              />
               <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveRapido} disabled={saving}>
-                Guardar sueldo rápido
+                {editingRapidoId ? 'Guardar cambios' : 'Guardar sueldo rápido'}
               </button>
             </div>
           )}
 
           {errorRapidos && <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 10 }}>{errorRapidos}</div>}
 
-          <div className="row-list" style={{ marginTop: 10 }}>
-            {rapidos.map((r) => {
-              const armed = confirmDelete?.type === 'rapido' && confirmDelete?.id === r.id
-              return (
-                <div key={r.id} className="row-list-item">
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 13 }}>{r.desc}</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
-                  </div>
-                  <button
-                    aria-label={armed ? 'Confirmar eliminación' : 'Eliminar'}
-                    style={{ padding: 2, marginLeft: 6, display: 'flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => armOrDelete('rapido', r.id, () => removeRapido(r.id))}
-                  >
-                    {armed && <span style={{ fontSize: 9, color: 'var(--red)', fontWeight: 600 }}>¿Seguro?</span>}
-                    <IconTrash size={13} color={armed ? 'var(--red)' : 'var(--muted)'} />
-                  </button>
-                </div>
-              )
-            })}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+            {rapidos.map((r) => (
+              <RapidoRow
+                key={r.id}
+                r={r}
+                isSwipeOpen={swipeOpenRapidoId === r.id}
+                onSwipeChange={(open) => setSwipeOpenRapidoId(open ? r.id : null)}
+                onEdit={() => openRapidoEdit(r)}
+                onDelete={() => removeRapido(r.id)}
+              />
+            ))}
             {!loadingRapidos && !errorRapidos && rapidos.length === 0 && <div className="empty-state">Sin sueldos rápidos todavía</div>}
           </div>
         </div>
