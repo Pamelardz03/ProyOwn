@@ -7,7 +7,7 @@ import { formatShortDate } from '../lib/date'
 const FILTERS = [
   { key: 'todos', label: 'Todos' },
   { key: 'gasto', label: 'Gastos' },
-  { key: 'nomina', label: 'Nómina' },
+  { key: 'nomina', label: 'Sueldos' },
   { key: 'cambio', label: 'Cambios' },
 ]
 
@@ -33,6 +33,7 @@ function isoFromTimestamp(ts) {
 
 export default function HistorialCompleto() {
   const [cat, setCat] = useState('todos')
+  const [subcat, setSubcat] = useState('todos')
   const [sort, setSort] = useState('fecha')
 
   const { data: gastos } = useUserCollection('gastos')
@@ -50,6 +51,7 @@ export default function HistorialCompleto() {
       out.push({
         id: `gasto-${g.id}`,
         cat: 'gasto',
+        subcat: g.categoria === 'Whimm' ? (g.categoriaWhimm || '') : '',
         badge: g.categoria || 'Gasto',
         title: g.concepto || 'Gasto',
         amount: -(Number(g.monto) || 0),
@@ -78,7 +80,7 @@ export default function HistorialCompleto() {
           out.push({
             id: `fijo-${s.id}-${f}`,
             cat: 'nomina',
-            badge: 'Nómina',
+            badge: 'Sueldos',
             title: `${s.name || 'Sueldo fijo'} depositado`,
             amount: Number(s.monto) || 0,
             dotColor: '#3a0f1f',
@@ -91,6 +93,7 @@ export default function HistorialCompleto() {
       out.push({
         id: `pagofijo-${p.id}`,
         cat: 'cambio',
+        subcat: p.tipo || '',
         badge: 'Registro',
         title: `Agregaste "${p.name || 'pago'}" como ${p.tipo === 'Vitall' ? 'Vitall' : 'pago fijo'}`,
         amount: null,
@@ -103,6 +106,7 @@ export default function HistorialCompleto() {
       out.push({
         id: `whimm-${w.id}`,
         cat: 'cambio',
+        subcat: w.categoria || '',
         badge: 'Creación',
         title: `Agregaste "${w.name || 'un Whimm'}" a la lista`,
         amount: null,
@@ -114,7 +118,9 @@ export default function HistorialCompleto() {
     return out.filter((e) => e.dateISO)
   }, [gastos, sueldosRapidos, sueldosFijos, pagosFijos, whimms, hoy])
 
-  let list = events.filter((e) => cat === 'todos' || e.cat === cat)
+  const listByCat = events.filter((e) => cat === 'todos' || e.cat === cat)
+  const availableSubcats = [...new Set(listByCat.map((e) => e.subcat).filter(Boolean))]
+  let list = listByCat.filter((e) => subcat === 'todos' || e.subcat === subcat)
   list = sort === 'fecha'
     ? [...list].sort((a, b) => (b.dateISO < a.dateISO ? -1 : b.dateISO > a.dateISO ? 1 : 0))
     : [...list].sort((a, b) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0))
@@ -140,7 +146,7 @@ export default function HistorialCompleto() {
           {FILTERS.map((f) => (
             <span
               key={f.key}
-              onClick={() => setCat(f.key)}
+              onClick={() => { setCat(f.key); setSubcat('todos') }}
               className="pill"
               style={{ background: cat === f.key ? 'var(--wine)' : 'transparent', color: cat === f.key ? '#fff' : 'var(--muted)' }}
             >
@@ -148,6 +154,21 @@ export default function HistorialCompleto() {
             </span>
           ))}
         </div>
+
+        {availableSubcats.length > 0 && (
+          <div className="chiprow">
+            {['todos', ...availableSubcats].map((c) => (
+              <span
+                key={c}
+                onClick={() => setSubcat(c)}
+                className="pill"
+                style={{ background: subcat === c ? 'var(--wine4)' : 'transparent', color: subcat === c ? '#fff' : 'var(--muted)', border: '1px solid var(--beige3)' }}
+              >
+                {c === 'todos' ? 'Todas las categorías' : c}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Ordenar por</span>

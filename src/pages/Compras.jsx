@@ -24,6 +24,8 @@ export default function Compras() {
   const [detailId, setDetailId] = useState(null)
   const [notifFor, setNotifFor] = useState(null) // { id, collection, name, notifFormal, notifMini }
   const [dismissed, setDismissed] = useState({})
+  const [apartarFor, setApartarFor] = useState(null) // { id, name }
+  const [apartarValue, setApartarValue] = useState('')
 
   const { data: whimms, loading: loadingWhimms, error: errorWhimms } = useUserCollection('whimms')
   const { data: pagosFijos, loading: loadingPagos, error: errorPagos } = useUserCollection('pagosFijos')
@@ -80,6 +82,27 @@ export default function Compras() {
       })
       setNotifFor(null)
       show('Notificaciones guardadas')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  function openApartar(w) {
+    setApartarFor({ id: w.id, name: w.name })
+    setApartarValue(String(w.montoApartado ?? ''))
+  }
+
+  async function saveApartar() {
+    if (!apartarFor) return
+    try {
+      await updateUserDoc(user.uid, 'whimms', apartarFor.id, {
+        estado: 'apartando',
+        montoApartado: Number(apartarValue) || 0,
+      })
+      setApartarFor(null)
+      setApartarValue('')
+      show('Fondos actualizados')
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
@@ -235,6 +258,31 @@ export default function Compras() {
         </>
       )}
 
+      {apartarFor && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setApartarFor(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 10px' }}>Apartar fondos — {apartarFor.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                ¿Cuánto ya llevas juntado? Este dinero es aparte (efectivo u otra cuenta) — no se toma de tu sueldo ni sueldo rápido.
+              </div>
+              <input
+                className="fld"
+                placeholder="Monto ya juntado"
+                inputMode="decimal"
+                value={apartarValue}
+                onChange={(e) => setApartarValue(e.target.value)}
+              />
+              <button className="btn-primary" style={{ marginTop: 14 }} onClick={saveApartar}>
+                Guardar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {detail && (
         <>
           <div className="sheet-backdrop" style={{ zIndex: 40 }} onClick={() => setDetailId(null)} />
@@ -274,8 +322,22 @@ export default function Compras() {
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Estado</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{ESTADO_LABEL[detail.estado] || 'En espera'}</div>
+                  {detail.estado === 'apartando' && (
+                    <div style={{ fontSize: 10, color: 'var(--wine4)', marginTop: 3 }}>
+                      {fmt(detail.montoApartado || 0)} de {fmt(detail.precio)} apartado
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {detail.estado !== 'comprado' && (
+                <button
+                  onClick={() => openApartar(detail)}
+                  style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 16 }}
+                >
+                  {detail.estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos'}
+                </button>
+              )}
 
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>

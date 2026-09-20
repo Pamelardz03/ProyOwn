@@ -14,9 +14,11 @@ const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
 
 const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
+const TIPOS_PAGO_FILTRO = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
+
 const FILTERS = [
   { key: 'todos', label: 'Todos' },
-  { key: 'servicio', label: 'Vitall' },
+  { key: 'servicio', label: 'Pagos fijos' },
   { key: 'compra', label: 'Whimm' },
   { key: 'nomina', label: 'Sueldos' },
 ]
@@ -49,6 +51,7 @@ export default function Calendario() {
   const [monthOffset, setMonthOffset] = useState(0)
   const [eventFilter, setEventFilter] = useState('todos')
   const [proximosVisible, setProximosVisible] = useState(10)
+  const [servicioTipoFiltro, setServicioTipoFiltro] = useState('todos')
   const { message, show } = useToast()
 
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
@@ -77,7 +80,7 @@ export default function Calendario() {
       fechas.forEach((f) => out.push({ id: `sf-${s.id}-${f}`, cat: 'nomina', title: `${s.name} depositado`, dateISO: f, amount: `+${fmt(s.monto)}`, amountColor: '#3f6b45', dotColor: '#3a0f1f' }))
     })
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
-      out.push({ id: `pf-${p.id}`, cat: 'servicio', title: `Vencimiento — ${p.name}`, dateISO: p.fecha, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
+      out.push({ id: `pf-${p.id}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: p.fecha, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
     })
     colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {
       out.push({ id: `w-${w.id}`, cat: 'compra', title: `${w.name} — estimado disponible`, dateISO: w.fechaProyectada, amount: fmt(w.precio), amountColor: '#1a1208', dotColor: '#b8783f' })
@@ -86,7 +89,11 @@ export default function Calendario() {
   }, [sueldosFijos, pagosFijos, colaWhimm])
 
   const hoy = todayISO()
-  const proximosFiltrados = allEvents.filter((e) => e.dateISO >= hoy && (eventFilter === 'todos' || e.cat === eventFilter))
+  const proximosFiltrados = allEvents.filter((e) =>
+    e.dateISO > hoy &&
+    (eventFilter === 'todos' || e.cat === eventFilter) &&
+    (eventFilter !== 'servicio' || servicioTipoFiltro === 'todos' || e.tipo === servicioTipoFiltro)
+  )
   const proximos = proximosFiltrados.slice(0, proximosVisible)
 
   const meta = monthMeta(monthOffset)
@@ -157,7 +164,7 @@ export default function Calendario() {
             {FILTERS.map((f) => (
               <span
                 key={f.key}
-                onClick={() => { setEventFilter(f.key); setProximosVisible(10) }}
+                onClick={() => { setEventFilter(f.key); setProximosVisible(10); setServicioTipoFiltro('todos') }}
                 className="pill"
                 style={{ background: eventFilter === f.key ? 'var(--wine)' : 'transparent', color: eventFilter === f.key ? '#fff' : 'var(--muted)' }}
               >
@@ -165,6 +172,20 @@ export default function Calendario() {
               </span>
             ))}
           </div>
+          {eventFilter === 'servicio' && (
+            <div className="chiprow" style={{ marginBottom: 12 }}>
+              {['todos', ...TIPOS_PAGO_FILTRO].map((t) => (
+                <span
+                  key={t}
+                  onClick={() => setServicioTipoFiltro(t)}
+                  className="pill"
+                  style={{ background: servicioTipoFiltro === t ? 'var(--wine4)' : 'transparent', color: servicioTipoFiltro === t ? '#fff' : 'var(--muted)', border: '1px solid var(--beige3)' }}
+                >
+                  {t === 'todos' ? 'Todos' : t}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="row-list">
             {proximos.map((ev) => (
               <div key={ev.id} className="row-list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
