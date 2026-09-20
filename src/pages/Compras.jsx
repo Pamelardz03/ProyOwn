@@ -3,7 +3,7 @@ import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
 import Toggle from '../components/Toggle'
 import { useToast } from '../hooks/useToast'
-import { IconProduct, IconBell, IconClose, IconEdit, IconTrash } from '../components/Icons'
+import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconChevronLeft } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
@@ -27,6 +27,20 @@ export default function Compras() {
   const [dismissed, setDismissed] = useState({})
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
+
+  const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
+  const [editForm, setEditForm] = useState({ nombre: '', categoria: '', lugar: '', precio: '', imagenUrl: '' })
+  const [editNecesidad, setEditNecesidad] = useState(3)
+  const [editDeseo, setEditDeseo] = useState(3)
+  const [editEstado, setEditEstado] = useState('espera')
+  const [editMontoApartado, setEditMontoApartado] = useState('')
+  const [editLinks, setEditLinks] = useState([''])
+  const [editNotifFormal, setEditNotifFormal] = useState(true)
+  const [editNotifMini, setEditNotifMini] = useState(true)
+  const [editNewCatOpen, setEditNewCatOpen] = useState(false)
+  const [editNewCatValue, setEditNewCatValue] = useState('')
+  const [editExtraCats, setEditExtraCats] = useState([])
+  const [editSaving, setEditSaving] = useState(false)
 
   const { data: whimms, loading: loadingWhimms, error: errorWhimms } = useUserCollection('whimms')
   const { data: pagosFijos, loading: loadingPagos, error: errorPagos } = useUserCollection('pagosFijos')
@@ -119,6 +133,75 @@ export default function Compras() {
     } catch (err) {
       console.error(err)
       show(`No se pudo eliminar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  function openEditWhimm(w) {
+    setEditingWhimm(w)
+    setEditForm({
+      nombre: w.name || '',
+      categoria: w.categoria || '',
+      lugar: w.lugar || '',
+      precio: String(w.precio ?? ''),
+      imagenUrl: w.imagenUrl || '',
+    })
+    setEditNecesidad(w.necesidad ?? 3)
+    setEditDeseo(w.deseo ?? 3)
+    setEditEstado(w.estado || 'espera')
+    setEditMontoApartado(String(w.montoApartado ?? ''))
+    setEditLinks(w.links && w.links.length ? w.links : w.link ? [w.link] : [''])
+    setEditNotifFormal(w.notifFormal !== false)
+    setEditNotifMini(w.notifMini !== false)
+    setEditNewCatOpen(false)
+    setEditNewCatValue('')
+  }
+
+  function closeEditWhimm() {
+    setEditingWhimm(null)
+  }
+
+  function updateEditLink(idx, value) {
+    setEditLinks((prev) => prev.map((l, i) => (i === idx ? value : l)))
+  }
+  function addEditLinkRow() {
+    setEditLinks((prev) => [...prev, ''])
+  }
+  function removeEditLinkRow(idx) {
+    setEditLinks((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  async function saveEditWhimm() {
+    if (!editingWhimm) return
+    const precio = Number(editForm.precio)
+    if (!editForm.nombre.trim() || !precio) return
+    setEditSaving(true)
+    try {
+      const links = editLinks.map((l) => l.trim()).filter(Boolean)
+      const score = computeWhimmScore({ necesidad: editNecesidad, deseo: editDeseo, precio })
+      await updateUserDoc(user.uid, 'whimms', editingWhimm.id, {
+        name: editForm.nombre.trim(),
+        categoria: editForm.categoria,
+        precio,
+        lugar: editForm.lugar.trim(),
+        imagenUrl: editForm.imagenUrl.trim(),
+        links,
+        link: links[0] || '',
+        necesidad: editNecesidad,
+        deseo: editDeseo,
+        score,
+        estado: editEstado,
+        montoApartado: editEstado === 'apartando' ? Number(editMontoApartado) || 0 : 0,
+        notifFormal: editNotifFormal,
+        notifMini: editNotifMini,
+      })
+      setEditingWhimm(null)
+      if (detailId === editingWhimm.id) setDetailId(null)
+      show('Whimm actualizado')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -387,11 +470,168 @@ export default function Compras() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--beige3)' }}>
-              <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+              <button onClick={() => openEditWhimm(detail)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
                 <IconEdit color="var(--wine)" /> Editar
               </button>
               <button onClick={deleteDetail} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--red-bg)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
                 <IconTrash size={13} color="var(--red)" /> Eliminar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {editingWhimm && (
+        <>
+          <div className="sheet-backdrop" style={{ zIndex: 50 }} onClick={closeEditWhimm} />
+          <div className="card-solid" style={{ position: 'absolute', left: 16, right: 16, top: 40, bottom: 40, borderRadius: 20, boxShadow: '0 12px 32px rgba(0,0,0,.28)', zIndex: 51, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <button aria-label="Atrás" onClick={closeEditWhimm}>
+                  <IconChevronLeft />
+                </button>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Editar Whimm</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  className="fld"
+                  placeholder="Nombre del producto"
+                  value={editForm.nombre}
+                  onChange={(e) => setEditForm((f) => ({ ...f, nombre: e.target.value }))}
+                />
+                <div>
+                  <div className="chiprow">
+                    {[...cats, ...editExtraCats.filter((c) => !cats.includes(c))].map((c) => (
+                      <span
+                        key={c}
+                        onClick={() => setEditForm((f) => ({ ...f, categoria: c }))}
+                        className="pill"
+                        style={{ background: editForm.categoria === c ? 'var(--wine)' : '#fff', color: editForm.categoria === c ? '#fff' : 'var(--muted)', border: `1px solid ${editForm.categoria === c ? 'var(--wine)' : 'var(--beige3)'}` }}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                    <button aria-label="Nueva categoría" onClick={() => setEditNewCatOpen((v) => !v)} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <IconPlus size={13} color="var(--wine)" />
+                    </button>
+                  </div>
+                  {editNewCatOpen && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <input
+                        className="fld"
+                        style={{ flex: 1 }}
+                        placeholder="Nombre de la categoría"
+                        value={editNewCatValue}
+                        onChange={(e) => setEditNewCatValue(e.target.value)}
+                      />
+                      <button
+                        style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 600 }}
+                        onClick={() => {
+                          const name = editNewCatValue.trim()
+                          if (name) {
+                            setEditExtraCats((prev) => [...new Set([...prev, name])])
+                            setEditForm((f) => ({ ...f, categoria: name }))
+                          }
+                          setEditNewCatValue('')
+                          setEditNewCatOpen(false)
+                        }}
+                      >
+                        Crear
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <input
+                  className="fld"
+                  placeholder="Precio"
+                  inputMode="decimal"
+                  value={editForm.precio}
+                  onChange={(e) => setEditForm((f) => ({ ...f, precio: e.target.value }))}
+                />
+                <input
+                  className="fld"
+                  placeholder="Lugar de compra"
+                  value={editForm.lugar}
+                  onChange={(e) => setEditForm((f) => ({ ...f, lugar: e.target.value }))}
+                />
+                <input
+                  className="fld"
+                  placeholder="URL de imagen (pégala desde Google Imágenes u otro sitio)"
+                  value={editForm.imagenUrl}
+                  onChange={(e) => setEditForm((f) => ({ ...f, imagenUrl: e.target.value }))}
+                />
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                  Links donde lo encontré
+                </div>
+                {editLinks.map((l, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      className="fld"
+                      style={{ flex: 1 }}
+                      placeholder="Link de dónde lo encontré"
+                      value={l}
+                      onChange={(e) => updateEditLink(idx, e.target.value)}
+                    />
+                    {editLinks.length > 1 && (
+                      <button aria-label="Quitar link" onClick={() => removeEditLinkRow(idx)} style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <IconClose size={12} color="var(--muted)" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={addEditLinkRow} style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>
+                  + Agregar otro link
+                </button>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                  Necesidad
+                </div>
+                <ScalePicker value={editNecesidad} onChange={setEditNecesidad} />
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
+                  Deseo
+                </div>
+                <ScalePicker value={editDeseo} onChange={setEditDeseo} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                  <span
+                    onClick={() => setEditEstado('espera')}
+                    className="pill"
+                    style={{ flex: 1, textAlign: 'center', background: editEstado === 'espera' ? 'var(--wine)' : 'var(--card)', color: editEstado === 'espera' ? '#fff' : 'var(--muted)', border: editEstado === 'espera' ? 'none' : '1px solid var(--beige3)' }}
+                  >
+                    En espera
+                  </span>
+                  <span
+                    onClick={() => setEditEstado('apartando')}
+                    className="pill"
+                    style={{ flex: 1, textAlign: 'center', background: editEstado === 'apartando' ? 'var(--wine)' : 'var(--card)', color: editEstado === 'apartando' ? '#fff' : 'var(--muted)', border: editEstado === 'apartando' ? 'none' : '1px solid var(--beige3)' }}
+                  >
+                    Apartando fondos
+                  </span>
+                  <span
+                    onClick={() => setEditEstado('comprado')}
+                    className="pill"
+                    style={{ flex: 1, textAlign: 'center', background: editEstado === 'comprado' ? 'var(--wine)' : 'var(--card)', color: editEstado === 'comprado' ? '#fff' : 'var(--muted)', border: editEstado === 'comprado' ? 'none' : '1px solid var(--beige3)' }}
+                  >
+                    Comprado
+                  </span>
+                </div>
+                {editEstado === 'apartando' && (
+                  <input
+                    className="fld"
+                    placeholder="¿Cuánto ya llevas juntado?"
+                    inputMode="decimal"
+                    value={editMontoApartado}
+                    onChange={(e) => setEditMontoApartado(e.target.value)}
+                  />
+                )}
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
+                  Notificaciones
+                </div>
+                <NotifRow label="Recordatorio formal" hint="2 días antes" on={editNotifFormal} onClick={() => setEditNotifFormal((v) => !v)} />
+                <NotifRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día estimado" on={editNotifMini} onClick={() => setEditNotifMini((v) => !v)} />
+              </div>
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--beige3)' }}>
+              <button className="btn-primary" style={{ opacity: editSaving ? 0.7 : 1 }} onClick={saveEditWhimm} disabled={editSaving}>
+                Guardar cambios
               </button>
             </div>
           </div>
@@ -412,6 +652,22 @@ function NotifRow({ label, hint, on, onClick }) {
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>
       </div>
       <Toggle on={on} onClick={onClick} ariaLabel={label} />
+    </div>
+  )
+}
+
+function ScalePicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          onClick={() => onChange(n)}
+          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
+        >
+          {n}
+        </button>
+      ))}
     </div>
   )
 }
