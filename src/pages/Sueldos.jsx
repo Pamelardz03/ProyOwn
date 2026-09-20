@@ -128,6 +128,9 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
           {s.fechaInicio && (
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>Desde {formatShortDate(s.fechaInicio)}</div>
           )}
+          {s.fechaFin && (
+            <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 1 }}>Detenido desde {formatShortDate(s.fechaFin)}</div>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
@@ -164,6 +167,7 @@ export default function Sueldos() {
   // Fila de sueldo fijo con swipe abierto (revela el bote de basura) —
   // solo una a la vez, igual que swipeOpenKey en Gastos.jsx.
   const [swipeOpenFijoId, setSwipeOpenFijoId] = useState(null)
+  const [deleteScopeFor, setDeleteScopeFor] = useState(null) // sueldo fijo pendiente de elegir alcance de borrado
 
   // Detalle de calendario (solo lectura) de un sueldo fijo ya guardado,
   // abierto al tocar su fila.
@@ -340,6 +344,18 @@ export default function Sueldos() {
     }
   }
 
+  async function stopFijoFromToday(id) {
+    try {
+      await updateUserDoc(user.uid, 'sueldosFijos', id, { fechaFin: todayISO() })
+      setDeleteScopeFor(null)
+      setSwipeOpenFijoId(null)
+      show('Sueldo detenido — su historial se conserva')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
   async function removeFijo(id) {
     try {
       await deleteUserDoc(user.uid, 'sueldosFijos', id)
@@ -455,7 +471,7 @@ export default function Sueldos() {
                 onSwipeChange={(open) => setSwipeOpenFijoId(open ? s.id : null)}
                 onOpenDetail={() => openFijoDetail(s)}
                 onEdit={() => openFijoEdit(s)}
-                onDelete={() => removeFijo(s.id)}
+                onDelete={() => setDeleteScopeFor(s)}
               />
             ))}
             {!loadingFijos && !errorFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
@@ -597,6 +613,10 @@ export default function Sueldos() {
                     <span style={{ fontSize: 10, color: 'var(--muted)' }}>Domingo o feriado</span>
                   </span>
                 </div>
+              </div>
+
+              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
+                Esta vista solo muestra los primeros meses para que revises los días — al guardar, el sueldo sigue pagándose solo, sin fecha de fin, hasta que lo detengas o elimines.
               </div>
 
               {selectedFecha && (
@@ -769,10 +789,52 @@ export default function Sueldos() {
                 </div>
               </div>
 
-              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>Sueldo fijo indefinido — sigue pagándose hasta que lo elimines</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>
+                {detailFijo.fechaFin
+                  ? `Detenido desde ${formatShortDate(detailFijo.fechaFin)} — su historial pasado sigue disponible`
+                  : 'Sueldo fijo indefinido — sigue pagándose hasta que lo detengas o elimines'}
+              </div>
 
               <button className="btn-primary" style={{ background: 'var(--beige2)', color: 'var(--text)' }} onClick={() => setDetailFijo(null)}>
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {deleteScopeFor && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setDeleteScopeFor(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Eliminar &quot;{deleteScopeFor.name}&quot;</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                Como no se guarda un registro diario de tus ingresos, elige uno de estos dos alcances:
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--beige2)', color: 'var(--text)', textAlign: 'left', padding: 12 }}
+                onClick={() => stopFijoFromToday(deleteScopeFor.id)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Detener a partir de hoy</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Deja de generar pagos futuros, pero conserva su nombre e historial pasado en Historial completo.
+                </div>
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--red)', textAlign: 'left', padding: 12 }}
+                onClick={() => { const id = deleteScopeFor.id; setDeleteScopeFor(null); removeFijo(id) }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Eliminar todo</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.85)', marginTop: 2 }}>
+                  Borra el sueldo, su nombre, monto e historial por completo. No se puede deshacer.
+                </div>
+              </button>
+              <button style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }} onClick={() => setDeleteScopeFor(null)}>
+                Cancelar
               </button>
             </div>
           </div>
