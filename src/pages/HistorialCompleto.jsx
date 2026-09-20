@@ -11,7 +11,7 @@ const FILTERS = [
   { key: 'cambio', label: 'Cambios' },
 ]
 
-const GASTO_DOT = { Necesario: '#5c2536', Shopping: '#7a3a52', Whimm: '#8c5a6e' }
+const GASTO_DOT = { Whimm: '#8c5a6e', Vitall: '#5c2536' }
 
 // Convierte un timestamp de Firestore (serverTimestamp resuelto) a una
 // fecha ISO "YYYY-MM-DD" para poder ordenarlo junto con las fechas de
@@ -51,11 +51,15 @@ export default function HistorialCompleto() {
       out.push({
         id: `gasto-${g.id}`,
         cat: 'gasto',
-        subcat: g.categoria === 'Whimm' ? (g.categoriaWhimm || '') : '',
+        subcat: g.categoria === 'Whimm'
+          ? (g.categoriaWhimm || '')
+          : g.categoria === 'Vitall'
+            ? (g.vitallNombre || '')
+            : '',
         badge: g.categoria || 'Gasto',
         title: g.concepto || 'Gasto',
         amount: -(Number(g.monto) || 0),
-        dotColor: GASTO_DOT[g.categoria] || GASTO_DOT.Necesario,
+        dotColor: GASTO_DOT[g.categoria] || GASTO_DOT.Whimm,
         dateISO: g.fecha || '',
       })
     })

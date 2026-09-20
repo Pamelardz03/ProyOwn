@@ -266,9 +266,6 @@ export default function Compras() {
             <div className="sheet-grabber"><span /></div>
             <div className="sheet-body">
               <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 10px' }}>Apartar fondos — {apartarFor.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-                ¿Cuánto ya llevas juntado? Este dinero es aparte (efectivo u otra cuenta) — no se toma de tu sueldo ni sueldo rápido.
-              </div>
               <input
                 className="fld"
                 placeholder="Monto ya juntado"
@@ -400,7 +397,7 @@ export default function Compras() {
       )}
 
       <Toast message={message} />
-      <AddSheet onToast={show} cats={cats} />
+      <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>
   )
 }

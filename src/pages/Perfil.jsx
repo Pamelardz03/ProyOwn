@@ -132,7 +132,7 @@ export default function Perfil() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} />
+      <AddSheet onToast={show} pagosFijos={pagosFijos} />
     </div>
   )
 }

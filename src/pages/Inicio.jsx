@@ -7,7 +7,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo } from '../lib/budget'
+import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo, fechasPagoVivas, fechasVencimientoVivas, proximoVencimientoPagoFijo } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 
 const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
@@ -91,13 +91,24 @@ export default function Inicio() {
 
   const saldoMes = ingresoMensual - gastoMensual - vitallMensual - otrosFijosMensual
 
-  // El próximo pago de un sueldo fijo se calcula en vivo (no lee el campo
-  // `fecha` guardado, que se fija una sola vez al dar de alta el sueldo y
-  // se queda obsoleto — los sueldos fijos no tienen fecha de fin).
+  // El próximo pago de un sueldo fijo/pago fijo se calcula en vivo (no lee
+  // el campo `fecha` guardado, que se fija una sola vez al darlo de alta y
+  // se queda obsoleto). Nunca debe mostrar "0 días": si la fecha más
+  // próxima es justo hoy (ya es el día de pago), se muestra la siguiente
+  // ocurrencia en su lugar en vez de "0".
+  const hoy = todayISO()
+  const proximaFechaSueldoNoHoy = (s) => {
+    const fecha = proximaFechaSueldo(s, hoy)
+    return fecha === hoy ? (fechasPagoVivas(s).find((f) => f > hoy) || null) : fecha
+  }
+  const proximoVencimientoPagoFijoNoHoy = (p) => {
+    const fecha = proximoVencimientoPagoFijo(p, hoy)
+    return fecha === hoy ? (fechasVencimientoVivas(p).find((f) => f > hoy) || null) : fecha
+  }
   const proximosDias = [
-    ...sueldosFijos.map((s) => daysUntil(proximaFechaSueldo(s))),
-    ...pagosActivos.map((p) => daysUntil(p.fecha)),
-  ].filter((d) => d != null && d >= 0)
+    ...sueldosFijos.map((s) => daysUntil(proximaFechaSueldoNoHoy(s))),
+    ...pagosActivos.map((p) => daysUntil(proximoVencimientoPagoFijoNoHoy(p))),
+  ].filter((d) => d != null && d > 0)
   const proximoPagoDias = proximosDias.length ? Math.min(...proximosDias) : null
 
   const distribucion = [
@@ -230,7 +241,7 @@ export default function Inicio() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} />
+      <AddSheet onToast={show} pagosFijos={pagosFijos} />
     </div>
   )
 }

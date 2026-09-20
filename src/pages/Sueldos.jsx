@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useSwipeX } from '../hooks/useSwipe'
 import { Link } from 'react-router-dom'
 import { IconChevronLeft, IconPlus, IconTrash, IconEdit } from '../components/Icons'
 import Toast from '../components/Toast'
@@ -70,7 +71,11 @@ const emptyRapido = { desc: '', monto: '' }
 // es swipe a la izquierda (revela el bote de basura), igual patrón que
 // ExpenseRow en Gastos.jsx.
 function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete }) {
-  const startX = useRef(0)
+  const { x, dragging, handlers } = useSwipeX({
+    isOpen: isSwipeOpen,
+    onChange: onSwipeChange,
+    onTap: () => { if (isSwipeOpen) onSwipeChange(false); else onOpenDetail() },
+  })
   const proxima = proximaFechaSueldo(s)
   const dias = daysUntil(proxima)
   return (
@@ -81,9 +86,9 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
           inset: 0,
           display: 'flex',
           justifyContent: 'flex-end',
-          opacity: isSwipeOpen ? 1 : 0,
+          opacity: x < -4 ? 1 : 0,
           pointerEvents: isSwipeOpen ? 'auto' : 'none',
-          transition: 'opacity .18s ease',
+          transition: dragging ? 'none' : 'opacity .12s ease',
         }}
       >
         <button
@@ -96,23 +101,18 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
       </div>
       <div
         className="card"
-        onPointerDown={(e) => { startX.current = e.clientX }}
-        onPointerUp={(e) => {
-          if (e.target.closest('button')) return
-          const delta = e.clientX - startX.current
-          if (delta < -40) { onSwipeChange(true); return }
-          if (delta > 40) { onSwipeChange(false); return }
-          if (isSwipeOpen) { onSwipeChange(false); return }
-          onOpenDetail()
-        }}
+        onPointerDown={(e) => { if (!e.target.closest('button')) handlers.onPointerDown(e) }}
+        onPointerMove={handlers.onPointerMove}
+        onPointerUp={(e) => { if (!e.target.closest('button')) handlers.onPointerUp(e) }}
+        onPointerCancel={handlers.onPointerCancel}
         style={{
           position: 'relative',
           padding: 14,
           display: 'flex',
           alignItems: 'center',
           gap: 12,
-          transform: `translateX(${isSwipeOpen ? -72 : 0}px)`,
-          transition: 'transform .18s ease',
+          transform: `translateX(${x}px)`,
+          transition: dragging ? 'none' : 'transform .12s ease',
           touchAction: 'pan-y',
           cursor: 'pointer',
         }}
@@ -159,7 +159,7 @@ export default function Sueldos() {
   const [selectedFecha, setSelectedFecha] = useState(null)
   const [swipeOpen, setSwipeOpen] = useState(false)
   const [confirmDeleteFechaOpen, setConfirmDeleteFechaOpen] = useState(false)
-  const detailStartX = useRef(0)
+  const detailSwipe = useSwipeX({ isOpen: swipeOpen, onChange: setSwipeOpen, onTap: () => {} })
   const [rapidoForm, setRapidoForm] = useState(emptyRapido)
   const [saving, setSaving] = useState(false)
   const { message, show } = useToast()
@@ -627,9 +627,9 @@ export default function Sueldos() {
                       inset: 0,
                       display: 'flex',
                       justifyContent: 'flex-end',
-                      opacity: swipeOpen ? 1 : 0,
+                      opacity: detailSwipe.x < -4 ? 1 : 0,
                       pointerEvents: swipeOpen ? 'auto' : 'none',
-                      transition: 'opacity .18s ease',
+                      transition: detailSwipe.dragging ? 'none' : 'opacity .12s ease',
                     }}
                   >
                     <button
@@ -648,17 +648,12 @@ export default function Sueldos() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 10,
-                      transform: `translateX(${swipeOpen ? -72 : 0}px)`,
-                      transition: 'transform .18s ease',
+                      transform: `translateX(${detailSwipe.x}px)`,
+                      transition: detailSwipe.dragging ? 'none' : 'transform .12s ease',
                     }}
                   >
                     <div
-                      onPointerDown={(e) => { detailStartX.current = e.clientX }}
-                      onPointerUp={(e) => {
-                        const delta = e.clientX - detailStartX.current
-                        if (delta < -40) setSwipeOpen(true)
-                        else if (delta > 40) setSwipeOpen(false)
-                      }}
+                      {...detailSwipe.handlers}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', touchAction: 'pan-y' }}
                     >
                       <div style={{ fontSize: 13, fontWeight: 600 }}>

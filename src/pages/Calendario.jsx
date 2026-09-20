@@ -14,8 +14,6 @@ const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
 
 const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
-const TIPOS_PAGO_FILTRO = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
-
 const FILTERS = [
   { key: 'todos', label: 'Todos' },
   { key: 'servicio', label: 'Pagos fijos' },
@@ -58,6 +56,10 @@ export default function Calendario() {
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
+
+  // Categorías de pago fijo en uso (ya no es una lista fija de 4 — "Pago
+  // fijo" ahora deja elegir cualquier categoría abierta, ver AddSheet.jsx).
+  const tiposPagoFiltro = [...new Set(pagosFijos.map((p) => p.tipo).filter(Boolean))].sort()
 
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
   const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
@@ -177,7 +179,7 @@ export default function Calendario() {
           </div>
           {eventFilter === 'servicio' && (
             <div className="chiprow" style={{ marginBottom: 12 }}>
-              {['todos', ...TIPOS_PAGO_FILTRO].map((t) => (
+              {['todos', ...tiposPagoFiltro].map((t) => (
                 <span
                   key={t}
                   onClick={() => setServicioTipoFiltro(t)}
@@ -236,7 +238,7 @@ export default function Calendario() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} />
+      <AddSheet onToast={show} pagosFijos={pagosFijos} />
     </div>
   )
 }

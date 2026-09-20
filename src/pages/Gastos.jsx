@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import AddSheet from '../components/AddSheet'
+import { useSwipeX } from '../hooks/useSwipe'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { IconProduct, IconTrash, IconEdit, IconClose } from '../components/Icons'
@@ -21,24 +22,18 @@ const PERIODO_LABEL_TEXT = {
 }
 
 function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
-  const startX = useRef(0)
+  const { x, dragging, handlers } = useSwipeX({ isOpen, onChange: onSwipe })
   return (
     <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'flex-end', opacity: isOpen ? 1 : 0, pointerEvents: isOpen ? 'auto' : 'none', transition: 'opacity .18s ease' }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'flex-end', opacity: x < -4 ? 1 : 0, pointerEvents: isOpen ? 'auto' : 'none', transition: dragging ? 'none' : 'opacity .12s ease' }}>
         <button aria-label="Eliminar gasto" onClick={onDelete} style={{ width: 72, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <IconTrash />
         </button>
       </div>
       <div
         className="card"
-        onPointerDown={(e) => { startX.current = e.clientX }}
-        onPointerUp={(e) => {
-          const delta = e.clientX - startX.current
-          if (delta < -40) onSwipe(true)
-          else if (delta > 40) onSwipe(false)
-          else onSwipe(!isOpen)
-        }}
-        style={{ position: 'relative', padding: 13, display: 'flex', alignItems: 'center', gap: 12, transform: `translateX(${isOpen ? -72 : 0}px)`, transition: 'transform .18s ease', touchAction: 'pan-y' }}
+        {...handlers}
+        style={{ position: 'relative', padding: 13, display: 'flex', alignItems: 'center', gap: 12, transform: `translateX(${x}px)`, transition: dragging ? 'none' : 'transform .12s ease', touchAction: 'pan-y' }}
       >
         <div className="icon-tile" style={{ width: 38, height: 38 }}>
           <IconProduct size={17} />
@@ -47,7 +42,7 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
           <div style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.date}</div>
         </div>
-        <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: item.shopping ? 'var(--wine3)' : 'var(--text)' }}>-{fmt(item.amount)}</div>
+        <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>-{fmt(item.amount)}</div>
         <button
           aria-label="Editar"
           onPointerDown={(e) => e.stopPropagation()}
@@ -71,8 +66,10 @@ export default function Gastos() {
   const [savingEdit, setSavingEdit] = useState(false)
   const { data: gastos, loading, error } = useUserCollection('gastos')
   const { data: whimms } = useUserCollection('whimms')
+  const { data: pagosFijos } = useUserCollection('pagosFijos')
 
   const cats = [...new Set(whimms.map((w) => w.categoria).filter(Boolean))]
+  const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
   const filterFn = PERIODO_FILTER[periodo]
   const items = gastos
@@ -82,14 +79,16 @@ export default function Gastos() {
       id: g.id,
       name: g.concepto,
       tipoRaw: g.categoria,
-      cat: g.categoria === 'Whimm' ? `Whimm · ${g.categoriaWhimm || 'sin categoría'}` : g.categoria,
+      cat: g.categoria === 'Whimm'
+        ? `Whimm · ${g.categoriaWhimm || 'sin categoría'}`
+        : g.categoria === 'Vitall'
+          ? `Vitall · ${g.vitallNombre || 'sin vincular'}`
+          : g.categoria,
       date: formatShortDate(g.fecha),
       amount: Number(g.monto) || 0,
-      shopping: g.categoria === 'Shopping',
     }))
 
-  const necesario = items.filter((it) => it.tipoRaw === 'Necesario').reduce((s, it) => s + it.amount, 0)
-  const shopping = items.filter((it) => it.tipoRaw === 'Shopping').reduce((s, it) => s + it.amount, 0)
+  const vitallGastado = items.filter((it) => it.tipoRaw === 'Vitall').reduce((s, it) => s + it.amount, 0)
   const whimmGastado = items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0)
 
   function openEdit(id) {
@@ -99,8 +98,9 @@ export default function Gastos() {
       concepto: g.concepto || '',
       monto: String(g.monto ?? ''),
       lugar: g.lugar || '',
-      categoria: g.categoria || 'Necesario',
+      categoria: g.categoria || 'Whimm',
       categoriaWhimm: g.categoriaWhimm || (cats[0] || ''),
+      vitallId: g.vitallId || '',
     })
     setEditingId(id)
     setSwipeOpenKey(null)
@@ -110,12 +110,15 @@ export default function Gastos() {
     if (!editForm.concepto.trim() || !Number(editForm.monto)) return
     setSavingEdit(true)
     try {
+      const vitallDoc = editForm.categoria === 'Vitall' ? vitalls.find((v) => v.id === editForm.vitallId) : null
       await updateUserDoc(user.uid, 'gastos', editingId, {
         concepto: editForm.concepto.trim(),
         monto: Number(editForm.monto),
         lugar: editForm.lugar.trim(),
         categoria: editForm.categoria,
         categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
+        vitallId: editForm.categoria === 'Vitall' ? editForm.vitallId : '',
+        vitallNombre: vitallDoc ? vitallDoc.name : '',
       })
       setEditingId(null)
       setEditForm(null)
@@ -159,17 +162,13 @@ export default function Gastos() {
 
         <div className="hero" style={{ padding: '16px 18px' }}>
           <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Gastado en {PERIODO_LABEL_TEXT[periodo]}</div>
-          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(necesario + shopping + whimmGastado)}</div>
+          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(vitallGastado + whimmGastado)}</div>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Necesario</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4 }}>{fmt(necesario)}</div>
-          </div>
-          <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Shopping</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(shopping)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Vitall</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(vitallGastado)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 12 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimm</div>
@@ -229,7 +228,7 @@ export default function Gastos() {
                   />
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {['Necesario', 'Shopping', 'Whimm'].map((t) => (
+                  {['Whimm', 'Vitall'].map((t) => (
                     <button
                       key={t}
                       className="pill"
@@ -254,6 +253,24 @@ export default function Gastos() {
                     ))}
                   </div>
                 )}
+                {editForm.categoria === 'Vitall' && (
+                  vitalls.length > 0 ? (
+                    <div className="chiprow">
+                      {vitalls.map((v) => (
+                        <span
+                          key={v.id}
+                          onClick={() => setEditForm((f) => ({ ...f, vitallId: v.id }))}
+                          className="pill"
+                          style={{ background: editForm.vitallId === v.id ? 'var(--wine)' : '#fff', color: editForm.vitallId === v.id ? '#fff' : 'var(--muted)', border: `1px solid ${editForm.vitallId === v.id ? 'var(--wine)' : 'var(--beige3)'}` }}
+                        >
+                          {v.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>Todavía no tienes ningún Vitall — crea uno primero desde "Nuevo Vitall".</div>
+                  )
+                )}
               </div>
               <button className="btn-primary" style={{ marginTop: 14, opacity: savingEdit ? 0.7 : 1 }} onClick={saveEdit} disabled={savingEdit}>
                 Guardar cambios
@@ -264,7 +281,7 @@ export default function Gastos() {
       )}
 
       <Toast message={message} />
-      <AddSheet onToast={show} cats={cats} />
+      <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>
   )
 }

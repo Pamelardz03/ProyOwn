@@ -7,8 +7,7 @@ import { todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
-const TIPOS_PAGO = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
-const GASTO_TIPOS = ['Necesario', 'Shopping', 'Whimm']
+const GASTO_TIPOS = ['Whimm', 'Vitall']
 
 function errMsg(err) {
   return `${err?.code ? `(${err.code}) ` : ''}${err?.message || 'Error desconocido'}`
@@ -24,16 +23,24 @@ const emptyPago = { nombre: '', monto: '' }
 // Guarda de verdad en Firestore: /users/{uid}/gastos, /whimms y /pagosFijos
 // (Vitall y Pago fijo son el mismo tipo de dato — pagosFijos — con distinto
 // punto de entrada; Vitall preselecciona tipo="Vitall").
-export default function AddSheet({ onToast, cats }) {
+export default function AddSheet({ onToast, cats, pagosFijos }) {
   const { user } = useAuth()
   const [step, setStep] = useState('closed') // closed | picker | gasto | objeto | servicio | pago
   const [saving, setSaving] = useState(false)
 
   const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
 
+  // Vitalls ya existentes (pagosFijos con tipo === 'Vitall') — un Gasto tipo
+  // Vitall no crea una categoría libre, se vincula a uno de estos.
+  const vitalls = (pagosFijos || []).filter((p) => p.tipo === 'Vitall' && p.activo !== false)
+  // Categorías de Pago fijo (general) ya usadas en documentos reales — igual
+  // idea que las categorías de Whimm, pero para el flujo de "Pago fijo".
+  const pagoCatsExistentes = [...new Set((pagosFijos || []).filter((p) => p.tipo !== 'Vitall').map((p) => p.tipo).filter(Boolean))]
+
   const [gastoForm, setGastoForm] = useState(emptyGasto)
-  const [gastoTipo, setGastoTipo] = useState('Necesario')
+  const [gastoTipo, setGastoTipo] = useState('Whimm')
   const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
+  const [gastoVitallId, setGastoVitallId] = useState('')
   const [extraCats, setExtraCats] = useState([])
   const [gastoNewCatOpen, setGastoNewCatOpen] = useState(false)
   const [gastoNewCatValue, setGastoNewCatValue] = useState('')
@@ -60,10 +67,15 @@ export default function AddSheet({ onToast, cats }) {
 
   const [pagoForm, setPagoForm] = useState(emptyPago)
   const [pagoFecha, setPagoFecha] = useState(todayISO())
-  const [pagoTipo, setPagoTipo] = useState('Vitall')
+  const [pagoCatSel, setPagoCatSel] = useState('') // '' = ninguna categoría (se ve como un "+" solo)
+  const [extraPagoCats, setExtraPagoCats] = useState([])
+  const [pagoNewCatOpen, setPagoNewCatOpen] = useState(false)
+  const [pagoNewCatValue, setPagoNewCatValue] = useState('')
   const [pagoFreq, setPagoFreq] = useState('Mensual')
   const [pagoFinito, setPagoFinito] = useState(false)
   const [pagoNumPagos, setPagoNumPagos] = useState('')
+
+  const allPagoCats = [...pagoCatsExistentes, ...extraPagoCats.filter((c) => !pagoCatsExistentes.includes(c))]
 
   const close = () => setStep('closed')
   const open = () => setStep(step === 'closed' ? 'picker' : 'closed')
@@ -82,18 +94,23 @@ export default function AddSheet({ onToast, cats }) {
     const monto = Number(gastoForm.monto)
     if (!gastoForm.concepto.trim() || !monto) return
     if (gastoTipo === 'Whimm' && !gastoCatSel) return
+    if (gastoTipo === 'Vitall' && !gastoVitallId) return
     setSaving(true)
     try {
+      const vitallDoc = gastoTipo === 'Vitall' ? vitalls.find((v) => v.id === gastoVitallId) : null
       await addUserDoc(user.uid, 'gastos', {
         concepto: gastoForm.concepto.trim(),
         monto,
         lugar: gastoForm.lugar.trim(),
         categoria: gastoTipo,
         categoriaWhimm: gastoTipo === 'Whimm' ? gastoCatSel : '',
+        vitallId: gastoTipo === 'Vitall' ? gastoVitallId : '',
+        vitallNombre: vitallDoc ? vitallDoc.name : '',
         fecha: todayISO(),
       })
       setGastoForm(emptyGasto)
-      setGastoTipo('Necesario')
+      setGastoTipo('Whimm')
+      setGastoVitallId('')
       setStep('closed')
       onToast?.('Gasto guardado')
     } catch (err) {
@@ -184,7 +201,7 @@ export default function AddSheet({ onToast, cats }) {
         name: pagoForm.nombre.trim(),
         monto,
         frecuencia: pagoFreq,
-        tipo: pagoTipo,
+        tipo: pagoCatSel,
         activo: true,
         fecha: pagoFecha,
         finito: pagoFinito,
@@ -192,7 +209,7 @@ export default function AddSheet({ onToast, cats }) {
       })
       setPagoForm(emptyPago)
       setPagoFecha(todayISO())
-      setPagoTipo('Vitall')
+      setPagoCatSel('')
       setPagoFreq('Mensual')
       setPagoFinito(false)
       setPagoNumPagos('')
@@ -326,6 +343,29 @@ export default function AddSheet({ onToast, cats }) {
                         )}
                       </>
                     )}
+                    {gastoTipo === 'Vitall' && (
+                      <>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+                          Vitall
+                        </div>
+                        {vitalls.length > 0 ? (
+                          <div className="chiprow">
+                            {vitalls.map((v) => (
+                              <span
+                                key={v.id}
+                                onClick={() => setGastoVitallId(v.id)}
+                                className="pill"
+                                style={{ background: gastoVitallId === v.id ? 'var(--wine)' : '#fff', color: gastoVitallId === v.id ? '#fff' : 'var(--muted)', border: `1px solid ${gastoVitallId === v.id ? 'var(--wine)' : 'var(--beige3)'}` }}
+                              >
+                                {v.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>Todavía no tienes ningún Vitall — crea uno primero desde "Nuevo Vitall".</div>
+                        )}
+                      </>
+                    )}
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveGasto} disabled={saving}>
                     Guardar gasto
@@ -426,9 +466,6 @@ export default function AddSheet({ onToast, cats }) {
                     <button onClick={addLinkRow} style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>
                       + Agregar otro link
                     </button>
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, lineHeight: 1.4 }}>
-                      Solo nombre y precio son obligatorios. El resto ayuda al análisis: si no ajustas necesidad y deseo, se toman como 3 por default.
-                    </div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
                       Necesidad
                     </div>
@@ -454,18 +491,13 @@ export default function AddSheet({ onToast, cats }) {
                       </span>
                     </div>
                     {estadoSel === 'apartando' && (
-                      <>
-                        <input
-                          className="fld"
-                          placeholder="¿Cuánto ya llevas juntado?"
-                          inputMode="decimal"
-                          value={montoApartado}
-                          onChange={(e) => setMontoApartado(e.target.value)}
-                        />
-                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: -4 }}>
-                          Este monto es dinero que ya tienes aparte (efectivo u otra cuenta) — no se toma de tu sueldo ni sueldo rápido.
-                        </div>
-                      </>
+                      <input
+                        className="fld"
+                        placeholder="¿Cuánto ya llevas juntado?"
+                        inputMode="decimal"
+                        value={montoApartado}
+                        onChange={(e) => setMontoApartado(e.target.value)}
+                      />
                     )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                       Notificaciones
@@ -517,9 +549,6 @@ export default function AddSheet({ onToast, cats }) {
                       value={servicioFecha}
                       onChange={(e) => setServicioFecha(e.target.value)}
                     />
-                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                      Un Vitall no tiene fecha de fin (servicio continuo) — si esta compra sí termina en algún momento, agrégala como "Pago fijo".
-                    </div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                       Notificaciones
                     </div>
@@ -550,20 +579,48 @@ export default function AddSheet({ onToast, cats }) {
                       onChange={(e) => setPagoForm((f) => ({ ...f, monto: e.target.value }))}
                     />
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
-                      Tipo
+                      Categoría
                     </div>
                     <div className="chiprow">
-                      {TIPOS_PAGO.map((t) => (
+                      {allPagoCats.map((c) => (
                         <span
-                          key={t}
-                          onClick={() => setPagoTipo(t)}
+                          key={c}
+                          onClick={() => setPagoCatSel((v) => (v === c ? '' : c))}
                           className="pill"
-                          style={{ background: pagoTipo === t ? 'var(--wine)' : '#fff', color: pagoTipo === t ? '#fff' : 'var(--muted)', border: `1px solid ${pagoTipo === t ? 'var(--wine)' : 'var(--beige3)'}` }}
+                          style={{ background: pagoCatSel === c ? 'var(--wine)' : '#fff', color: pagoCatSel === c ? '#fff' : 'var(--muted)', border: `1px solid ${pagoCatSel === c ? 'var(--wine)' : 'var(--beige3)'}` }}
                         >
-                          {t}
+                          {c}
                         </span>
                       ))}
+                      <button aria-label="Nueva categoría" onClick={() => setPagoNewCatOpen((v) => !v)} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <IconPlus size={13} color="var(--wine)" />
+                      </button>
                     </div>
+                    {pagoNewCatOpen && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <input
+                          className="fld"
+                          style={{ flex: 1 }}
+                          placeholder="Nombre de la categoría"
+                          value={pagoNewCatValue}
+                          onChange={(e) => setPagoNewCatValue(e.target.value)}
+                        />
+                        <button
+                          style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 600 }}
+                          onClick={() => {
+                            const name = pagoNewCatValue.trim()
+                            if (name) {
+                              setExtraPagoCats((prev) => [...new Set([...prev, name])])
+                              setPagoCatSel(name)
+                            }
+                            setPagoNewCatValue('')
+                            setPagoNewCatOpen(false)
+                          }}
+                        >
+                          Crear
+                        </button>
+                      </div>
+                    )}
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
                       Frecuencia
                     </div>
