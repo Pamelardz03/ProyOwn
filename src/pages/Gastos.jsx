@@ -2,10 +2,10 @@ import { useRef, useState } from 'react'
 import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
-import { IconProduct, IconTrash, IconEdit } from '../components/Icons'
+import { IconProduct, IconTrash, IconEdit, IconClose } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, deleteUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc } from '../lib/date'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
@@ -20,7 +20,7 @@ const PERIODO_LABEL_TEXT = {
   anio: String(new Date().getFullYear()),
 }
 
-function ExpenseRow({ item, isOpen, onSwipe, onDelete }) {
+function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
   const startX = useRef(0)
   return (
     <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
@@ -48,7 +48,14 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.date}</div>
         </div>
         <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: item.shopping ? 'var(--wine3)' : 'var(--text)' }}>-{fmt(item.amount)}</div>
-        <button aria-label="Editar"><IconEdit /></button>
+        <button
+          aria-label="Editar"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onEdit(item.id) }}
+        >
+          <IconEdit />
+        </button>
       </div>
     </div>
   )
@@ -59,6 +66,9 @@ export default function Gastos() {
   const { message, show } = useToast()
   const [periodo, setPeriodo] = useState('mes')
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   const { data: gastos, loading, error } = useUserCollection('gastos')
   const { data: whimms } = useUserCollection('whimms')
 
@@ -81,6 +91,42 @@ export default function Gastos() {
   const necesario = items.filter((it) => it.tipoRaw === 'Necesario').reduce((s, it) => s + it.amount, 0)
   const shopping = items.filter((it) => it.tipoRaw === 'Shopping').reduce((s, it) => s + it.amount, 0)
   const whimmGastado = items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0)
+
+  function openEdit(id) {
+    const g = gastos.find((x) => x.id === id)
+    if (!g) return
+    setEditForm({
+      concepto: g.concepto || '',
+      monto: String(g.monto ?? ''),
+      lugar: g.lugar || '',
+      categoria: g.categoria || 'Necesario',
+      categoriaWhimm: g.categoriaWhimm || (cats[0] || ''),
+    })
+    setEditingId(id)
+    setSwipeOpenKey(null)
+  }
+
+  async function saveEdit() {
+    if (!editForm.concepto.trim() || !Number(editForm.monto)) return
+    setSavingEdit(true)
+    try {
+      await updateUserDoc(user.uid, 'gastos', editingId, {
+        concepto: editForm.concepto.trim(),
+        monto: Number(editForm.monto),
+        lugar: editForm.lugar.trim(),
+        categoria: editForm.categoria,
+        categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
+      })
+      setEditingId(null)
+      setEditForm(null)
+      show('Gasto actualizado')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   async function deleteItem(id) {
     try {
@@ -141,11 +187,81 @@ export default function Gastos() {
               isOpen={swipeOpenKey === it.id}
               onSwipe={(open) => setSwipeOpenKey(open ? it.id : null)}
               onDelete={() => deleteItem(it.id)}
+              onEdit={openEdit}
             />
           ))}
           {!loading && !error && items.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
         </div>
       </div>
+
+      {editingId && editForm && (
+        <>
+          <div className="sheet-backdrop" onClick={() => { setEditingId(null); setEditForm(null) }} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
+                <button aria-label="Cerrar" onClick={() => { setEditingId(null); setEditForm(null) }}>
+                  <IconClose />
+                </button>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Editar gasto</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  className="fld"
+                  placeholder="Concepto"
+                  value={editForm.concepto}
+                  onChange={(e) => setEditForm((f) => ({ ...f, concepto: e.target.value }))}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="fld"
+                    placeholder="Monto"
+                    inputMode="decimal"
+                    value={editForm.monto}
+                    onChange={(e) => setEditForm((f) => ({ ...f, monto: e.target.value }))}
+                  />
+                  <input
+                    className="fld"
+                    placeholder="Lugar (opcional)"
+                    value={editForm.lugar}
+                    onChange={(e) => setEditForm((f) => ({ ...f, lugar: e.target.value }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['Necesario', 'Shopping', 'Whimm'].map((t) => (
+                    <button
+                      key={t}
+                      className="pill"
+                      style={{ flex: 1, background: editForm.categoria === t ? 'var(--wine)' : 'var(--card)', color: editForm.categoria === t ? '#fff' : 'var(--muted)', border: editForm.categoria === t ? 'none' : '1px solid var(--beige3)' }}
+                      onClick={() => setEditForm((f) => ({ ...f, categoria: t }))}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                {editForm.categoria === 'Whimm' && cats.length > 0 && (
+                  <div className="chiprow">
+                    {cats.map((c) => (
+                      <span
+                        key={c}
+                        onClick={() => setEditForm((f) => ({ ...f, categoriaWhimm: c }))}
+                        className="pill"
+                        style={{ background: editForm.categoriaWhimm === c ? 'var(--wine)' : '#fff', color: editForm.categoriaWhimm === c ? '#fff' : 'var(--muted)', border: `1px solid ${editForm.categoriaWhimm === c ? 'var(--wine)' : 'var(--beige3)'}` }}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className="btn-primary" style={{ marginTop: 14, opacity: savingEdit ? 0.7 : 1 }} onClick={saveEdit} disabled={savingEdit}>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       <Toast message={message} />
       <AddSheet onToast={show} cats={cats} />

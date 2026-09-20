@@ -31,10 +31,14 @@ export default function AddSheet({ onToast, cats }) {
 
   const categorias = cats && cats.length ? cats : ['Accesorios', 'Skin care', 'Maquillaje']
 
+  const allCats = [...categorias, ...extraCats.filter((c) => !categorias.includes(c))]
+
   const [gastoForm, setGastoForm] = useState(emptyGasto)
   const [gastoTipo, setGastoTipo] = useState('Necesario')
   const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
-  const [recurrente, setRecurrente] = useState(false)
+  const [extraCats, setExtraCats] = useState([])
+  const [gastoNewCatOpen, setGastoNewCatOpen] = useState(false)
+  const [gastoNewCatValue, setGastoNewCatValue] = useState('')
 
   const [objetoForm, setObjetoForm] = useState(emptyObjeto)
   const [catSel, setCatSel] = useState(cats?.[0] ?? 'Accesorios')
@@ -44,6 +48,7 @@ export default function AddSheet({ onToast, cats }) {
   const [linksList, setLinksList] = useState([''])
   const [necesidadSel, setNecesidadSel] = useState(3)
   const [deseoSel, setDeseoSel] = useState(3)
+  const [montoApartado, setMontoApartado] = useState('')
   const [objNotifFormal, setObjNotifFormal] = useState(true)
   const [objNotifMini, setObjNotifMini] = useState(true)
 
@@ -83,12 +88,10 @@ export default function AddSheet({ onToast, cats }) {
         lugar: gastoForm.lugar.trim(),
         categoria: gastoTipo,
         categoriaWhimm: gastoTipo === 'Whimm' ? gastoCatSel : '',
-        recurrente,
         fecha: todayISO(),
       })
       setGastoForm(emptyGasto)
       setGastoTipo('Necesario')
-      setRecurrente(false)
       setStep('closed')
       onToast?.('Gasto guardado')
     } catch (err) {
@@ -118,6 +121,7 @@ export default function AddSheet({ onToast, cats }) {
         deseo: deseoSel,
         score,
         estado: estadoSel,
+        montoApartado: estadoSel === 'apartando' ? (Number(montoApartado) || 0) : 0,
         notifFormal: objNotifFormal,
         notifMini: objNotifMini,
       })
@@ -126,6 +130,7 @@ export default function AddSheet({ onToast, cats }) {
       setLinksList([''])
       setNecesidadSel(3)
       setDeseoSel(3)
+      setMontoApartado('')
       setObjNotifFormal(true)
       setObjNotifMini(true)
       setStep('closed')
@@ -214,7 +219,7 @@ export default function AddSheet({ onToast, cats }) {
                   <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 14px' }}>¿Qué quieres agregar?</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button className="pick-option" onClick={() => setStep('gasto')}>
-                      <span className="icon"><IconReceipt /></span>
+                      <span className="icon"><IconReceipt color="#fff" /></span>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>Gasto</span>
                     </button>
                     <button className="pick-option" onClick={() => setStep('objeto')}>
@@ -253,7 +258,7 @@ export default function AddSheet({ onToast, cats }) {
                       />
                       <input
                         className="fld"
-                        placeholder="Lugar"
+                        placeholder="Lugar (opcional)"
                         value={gastoForm.lugar}
                         onChange={(e) => setGastoForm((f) => ({ ...f, lugar: e.target.value }))}
                       />
@@ -273,10 +278,10 @@ export default function AddSheet({ onToast, cats }) {
                     {gastoTipo === 'Whimm' && (
                       <>
                         <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em' }}>
-                          Categoría (no estaba en tu lista de espera — Vitall no se agrega aquí)
+                          Categoría
                         </div>
                         <div className="chiprow">
-                          {categorias.map((c) => (
+                          {allCats.map((c) => (
                             <span
                               key={c}
                               onClick={() => setGastoCatSel(c)}
@@ -286,10 +291,37 @@ export default function AddSheet({ onToast, cats }) {
                               {c}
                             </span>
                           ))}
+                          <button aria-label="Nueva categoría" onClick={() => setGastoNewCatOpen((v) => !v)} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <IconPlus size={13} color="var(--wine)" />
+                          </button>
                         </div>
+                        {gastoNewCatOpen && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <input
+                              className="fld"
+                              style={{ flex: 1 }}
+                              placeholder="Nombre de la categoría"
+                              value={gastoNewCatValue}
+                              onChange={(e) => setGastoNewCatValue(e.target.value)}
+                            />
+                            <button
+                              style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 600 }}
+                              onClick={() => {
+                                const name = gastoNewCatValue.trim()
+                                if (name) {
+                                  setExtraCats((prev) => [...new Set([...prev, name])])
+                                  setGastoCatSel(name)
+                                }
+                                setGastoNewCatValue('')
+                                setGastoNewCatOpen(false)
+                              }}
+                            >
+                              Crear
+                            </button>
+                          </div>
+                        )}
                       </>
                     )}
-                    <ToggleRow label="Recurrente" on={recurrente} onClick={() => setRecurrente((v) => !v)} />
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={saveGasto} disabled={saving}>
                     Guardar gasto
@@ -309,7 +341,7 @@ export default function AddSheet({ onToast, cats }) {
                     />
                     <div>
                       <div className="chiprow">
-                        {categorias.map((c) => (
+                        {allCats.map((c) => (
                           <span
                             key={c}
                             onClick={() => setCatSel(c)}
@@ -336,7 +368,10 @@ export default function AddSheet({ onToast, cats }) {
                             style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 600 }}
                             onClick={() => {
                               const name = newCatValue.trim()
-                              if (name) setCatSel(name)
+                              if (name) {
+                                setExtraCats((prev) => [...new Set([...prev, name])])
+                                setCatSel(name)
+                              }
                               setNewCatValue('')
                               setNewCatOpen(false)
                             }}
@@ -387,6 +422,9 @@ export default function AddSheet({ onToast, cats }) {
                     <button onClick={addLinkRow} style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 600, color: 'var(--wine)' }}>
                       + Agregar otro link
                     </button>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, lineHeight: 1.4 }}>
+                      Solo nombre y precio son obligatorios. El resto ayuda al análisis: si no ajustas necesidad y deseo, se toman como 3 por default.
+                    </div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 2 }}>
                       Necesidad
                     </div>
@@ -411,6 +449,20 @@ export default function AddSheet({ onToast, cats }) {
                         Apartando fondos
                       </span>
                     </div>
+                    {estadoSel === 'apartando' && (
+                      <>
+                        <input
+                          className="fld"
+                          placeholder="¿Cuánto ya llevas juntado?"
+                          inputMode="decimal"
+                          value={montoApartado}
+                          onChange={(e) => setMontoApartado(e.target.value)}
+                        />
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: -4 }}>
+                          Este monto es dinero que ya tienes aparte (efectivo u otra cuenta) — no se toma de tu sueldo ni sueldo rápido.
+                        </div>
+                      </>
+                    )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
                       Notificaciones
                     </div>

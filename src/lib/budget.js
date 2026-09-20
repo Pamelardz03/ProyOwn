@@ -1,21 +1,26 @@
-import { isThisMonth, todayISO, addDaysISO, extenderFechasPago } from './date'
+import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc } from './date'
 
-// Un sueldo fijo no tiene fecha de fin — 2 años hacia adelante es más que
-// suficiente para cualquier vista/paginación real de la app.
+// Un sueldo fijo no tiene fecha de fin por default — 2 años hacia adelante
+// es más que suficiente para cualquier vista/paginación real de la app.
 const HORIZONTE_DIAS_SUELDO = 730
 
 // Serie de fechas de pago de un sueldo fijo, extendida hacia el futuro
 // indefinidamente a partir de lo que ya se calculó/guardó (`fechasPago`, o
 // `fecha` como respaldo para sueldos viejos que no tienen ese arreglo) —
 // para que el sueldo siga "vivo" aunque ya pasó la ventana que se generó
-// al darlo de alta o al validar sus fechas.
+// al darlo de alta o al validar sus fechas. Si el sueldo se "detuvo" (tiene
+// `fechaFin`, ver removeFijo en Sueldos.jsx), no se generan ni se muestran
+// fechas después de esa fecha — pero las anteriores siguen contando para
+// el historial/ingresos ya ocurridos.
 export function fechasPagoVivas(sueldo, hastaISO) {
   const base = Array.isArray(sueldo.fechasPago) && sueldo.fechasPago.length
     ? sueldo.fechasPago
     : sueldo.fecha ? [sueldo.fecha] : []
   if (base.length === 0) return []
-  const hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_SUELDO)
-  return extenderFechasPago(sueldo.frecuencia, base, hasta)
+  let hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_SUELDO)
+  if (sueldo.fechaFin && sueldo.fechaFin < hasta) hasta = sueldo.fechaFin
+  const fechas = extenderFechasPago(sueldo.frecuencia, base, hasta)
+  return sueldo.fechaFin ? fechas.filter((f) => f <= sueldo.fechaFin) : fechas
 }
 
 // La próxima fecha de pago real (hoy o después) de un sueldo fijo —
@@ -87,4 +92,31 @@ export function proyectarColaWhimms(whimmsOrdenados, presupuestoDiarioNeto) {
     diasAcum += dias || 0
     return { ...w, fechaProyectada: dias != null ? addDaysISO(todayISO(), diasAcum) : null }
   })
+}
+
+
+// --- Vencimientos de pagos fijos (Vitall/Vivienda/Transporte/Deuda) ---
+// Igual idea que fechasPagoVivas para sueldos: a partir de una fecha ancla
+// guardada (`fecha`) y la frecuencia, se extiende hacia el futuro de forma
+// indefinida (o hasta `numPagos` si el pago fijo es finito), en vez de
+// depender de un campo `fecha` estático que se queda obsoleto en cuanto
+// pasa esa fecha.
+const HORIZONTE_DIAS_PAGOFIJO = 365
+
+export function fechasVencimientoVivas(pagoFijo, hastaISO) {
+  if (!pagoFijo.fecha) return []
+  const hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_PAGOFIJO)
+  let fechas = extenderFechasPago(pagoFijo.frecuencia, [pagoFijo.fecha], hasta)
+  if (pagoFijo.finito && pagoFijo.numPagos) {
+    fechas = [...fechas].sort(compareISOAsc).slice(0, Number(pagoFijo.numPagos) || fechas.length)
+  }
+  return fechas
+}
+
+// El próximo vencimiento (hoy o después) de un pago fijo — reemplaza leer
+// el campo `fecha` estático, que nunca avanzaba de un ciclo al siguiente.
+export function proximoVencimientoPagoFijo(pagoFijo, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const fechas = fechasVencimientoVivas(pagoFijo)
+  return fechas.find((f) => f >= hoy) || null
 }
