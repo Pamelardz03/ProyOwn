@@ -7,11 +7,21 @@ import { IconProduct, IconTrash, IconEdit, IconClose } from '../components/Icons
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc } from '../lib/date'
+import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
+import { deriveWhimmCats } from '../lib/categorias'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
 const PERIODO_LABEL = { dia: 'Día', semana: 'Semana', mes: 'Mes', anio: 'Año' }
 const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+// Convierte el timestamp de Firestore (serverTimestamp resuelto) a
+// milisegundos para poder desempatar por fecha real de creación.
+function toMillis(ts) {
+  if (!ts) return 0
+  if (typeof ts.toMillis === 'function') return ts.toMillis()
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000
+  return 0
+}
 
 const PERIODO_FILTER = { dia: isToday, semana: isThisWeek, mes: isThisMonth, anio: isThisYear }
 const PERIODO_LABEL_TEXT = {
@@ -68,13 +78,17 @@ export default function Gastos() {
   const { data: whimms } = useUserCollection('whimms')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
 
-  const cats = [...new Set(whimms.map((w) => w.categoria).filter(Boolean))]
+  const cats = deriveWhimmCats(whimms, gastos)
   const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
+  // Al empatar en fecha (varios gastos el mismo día), el más recién creado
+  // va primero — antes desempataba con el orden natural de la colección
+  // (creadoEn ascendente), así que un gasto nuevo del mismo día se veía
+  // hasta abajo de su grupo en vez de arriba.
   const filterFn = PERIODO_FILTER[periodo]
   const items = gastos
     .filter((g) => filterFn(g.fecha))
-    .sort((a, b) => compareISODesc(a.fecha, b.fecha))
+    .sort((a, b) => compareISODesc(a.fecha, b.fecha) || toMillis(b.creadoEn) - toMillis(a.creadoEn))
     .map((g) => ({
       id: g.id,
       name: g.concepto,
@@ -98,6 +112,7 @@ export default function Gastos() {
       concepto: g.concepto || '',
       monto: String(g.monto ?? ''),
       lugar: g.lugar || '',
+      fecha: g.fecha || todayISO(),
       categoria: g.categoria || 'Whimm',
       categoriaWhimm: g.categoriaWhimm || (cats[0] || ''),
       vitallId: g.vitallId || '',
@@ -115,6 +130,7 @@ export default function Gastos() {
         concepto: editForm.concepto.trim(),
         monto: Number(editForm.monto),
         lugar: editForm.lugar.trim(),
+        fecha: editForm.fecha || todayISO(),
         categoria: editForm.categoria,
         categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
         vitallId: editForm.categoria === 'Vitall' ? editForm.vitallId : '',
@@ -227,6 +243,12 @@ export default function Gastos() {
                     onChange={(e) => setEditForm((f) => ({ ...f, lugar: e.target.value }))}
                   />
                 </div>
+                <input
+                  className="fld"
+                  type="date"
+                  value={editForm.fecha}
+                  onChange={(e) => setEditForm((f) => ({ ...f, fecha: e.target.value }))}
+                />
                 <div style={{ display: 'flex', gap: 8 }}>
                   {['Whimm', 'Vitall'].map((t) => (
                     <button

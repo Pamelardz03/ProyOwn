@@ -41,6 +41,7 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
   const [gastoTipo, setGastoTipo] = useState('Whimm')
   const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
   const [gastoVitallId, setGastoVitallId] = useState('')
+  const [gastoFecha, setGastoFecha] = useState(todayISO())
   const [extraCats, setExtraCats] = useState([])
   const [gastoNewCatOpen, setGastoNewCatOpen] = useState(false)
   const [gastoNewCatValue, setGastoNewCatValue] = useState('')
@@ -74,6 +75,8 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
   const [pagoFreq, setPagoFreq] = useState('Mensual')
   const [pagoFinito, setPagoFinito] = useState(false)
   const [pagoNumPagos, setPagoNumPagos] = useState('')
+  const [pagoNotifFormal, setPagoNotifFormal] = useState(true)
+  const [pagoNotifMini, setPagoNotifMini] = useState(true)
 
   const allPagoCats = [...pagoCatsExistentes, ...extraPagoCats.filter((c) => !pagoCatsExistentes.includes(c))]
 
@@ -106,11 +109,12 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
         categoriaWhimm: gastoTipo === 'Whimm' ? gastoCatSel : '',
         vitallId: gastoTipo === 'Vitall' ? gastoVitallId : '',
         vitallNombre: vitallDoc ? vitallDoc.name : '',
-        fecha: todayISO(),
+        fecha: gastoFecha || todayISO(),
       })
       setGastoForm(emptyGasto)
       setGastoTipo('Whimm')
       setGastoVitallId('')
+      setGastoFecha(todayISO())
       setStep('closed')
       onToast?.('Gasto guardado')
     } catch (err) {
@@ -206,6 +210,8 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
         fecha: pagoFecha,
         finito: pagoFinito,
         numPagos: pagoFinito ? Number(pagoNumPagos) || null : null,
+        notifFormal: pagoNotifFormal,
+        notifMini: pagoNotifMini,
       })
       setPagoForm(emptyPago)
       setPagoFecha(todayISO())
@@ -213,6 +219,8 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
       setPagoFreq('Mensual')
       setPagoFinito(false)
       setPagoNumPagos('')
+      setPagoNotifFormal(true)
+      setPagoNotifMini(true)
       setStep('closed')
       onToast?.('Pago fijo guardado')
     } catch (err) {
@@ -284,6 +292,12 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
                         onChange={(e) => setGastoForm((f) => ({ ...f, lugar: e.target.value }))}
                       />
                     </div>
+                    <input
+                      className="fld"
+                      type="date"
+                      value={gastoFecha}
+                      onChange={(e) => setGastoFecha(e.target.value)}
+                    />
                     <div style={{ display: 'flex', gap: 8 }}>
                       {GASTO_TIPOS.map((t) => (
                         <button
@@ -655,6 +669,11 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
                         onChange={(e) => setPagoNumPagos(e.target.value)}
                       />
                     )}
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.03em', marginTop: 6 }}>
+                      Notificaciones
+                    </div>
+                    <ToggleRow label="Recordatorio formal" hint="2 días antes" on={pagoNotifFormal} onClick={() => setPagoNotifFormal((v) => !v)} />
+                    <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" on={pagoNotifMini} onClick={() => setPagoNotifMini((v) => !v)} />
                   </div>
                   <button className="btn-primary" style={{ marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={savePago} disabled={saving}>
                     Guardar pago fijo

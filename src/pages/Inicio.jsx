@@ -9,6 +9,7 @@ import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
 import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo, fechasPagoVivas, fechasVencimientoVivas, proximoVencimientoPagoFijo } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
+import { deriveWhimmCats } from '../lib/categorias'
 
 const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
 
@@ -71,6 +72,8 @@ export default function Inicio() {
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
+
+  const cats = deriveWhimmCats(whimms, gastos)
 
   const primerNombre = user?.displayName?.split(' ')[0] || 'Pame'
 
@@ -241,7 +244,7 @@ export default function Inicio() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} pagosFijos={pagosFijos} />
+      <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>
   )
 }

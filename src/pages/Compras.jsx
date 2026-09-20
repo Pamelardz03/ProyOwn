@@ -10,6 +10,7 @@ import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestor
 import { formatShortDate, daysUntil, isThisMonth } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo } from '../lib/budget'
+import { deriveWhimmCats } from '../lib/categorias'
 
 const ESTADO_LABEL = {
   espera: 'En espera',
@@ -31,9 +32,10 @@ export default function Compras() {
   const { data: pagosFijos, loading: loadingPagos, error: errorPagos } = useUserCollection('pagosFijos')
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
+  const { data: gastos } = useUserCollection('gastos')
   const servicios = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
-  const cats = [...new Set(whimms.map((w) => w.categoria).filter(Boolean))]
+  const cats = deriveWhimmCats(whimms, gastos)
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
   // ver src/lib/score.js), con una fecha estimada de compra en cascada —

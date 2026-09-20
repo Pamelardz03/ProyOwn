@@ -7,10 +7,15 @@ import { useUserCollection } from '../lib/firestoreCollections'
 import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
+import { deriveWhimmCats } from '../lib/categorias'
 
-const TODAY_STYLE = { background: '#3a0f1f', color: '#fff', fontWeight: 700 }
+const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
 const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
 const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
+// Sombreado de recordatorio (2 días antes de un vencimiento con "Recordatorio
+// formal" activado) — opacidad baja del mismo tono de "servicio", para no
+// confundirse con el relleno sólido de "Hoy" ni con el borde de un evento real.
+const NOTI_BG = 'rgba(124,140,90,.18)'
 
 const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -36,9 +41,9 @@ function isoOf(year, month, day) {
   return `${year}-${pad(month + 1)}-${pad(day)}`
 }
 
-function styleForDay(cats, isToday) {
+function styleForDay(cats, isToday, hasNoti) {
   if (isToday) return TODAY_STYLE
-  if (cats.length === 0) return {}
+  if (cats.length === 0) return hasNoti ? { background: NOTI_BG, color: '#1a1208', fontWeight: 600 } : {}
   const main = cats[0]
   return cats.length > 1
     ? { border: `2px solid ${CAT_COLOR[main]}`, background: CAT_BG[main], color: '#1a1208', fontWeight: 600 }
@@ -56,6 +61,9 @@ export default function Calendario() {
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
+  const { data: gastos } = useUserCollection('gastos')
+
+  const cats = deriveWhimmCats(whimms, gastos)
 
   // Categorías de pago fijo en uso (ya no es una lista fija de 4 — "Pago
   // fijo" ahora deja elegir cualquier categoría abierta, ver AddSheet.jsx).
@@ -84,7 +92,7 @@ export default function Calendario() {
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
       const fechas = fechasVencimientoVivas(p, horizonte)
       fechas.forEach((f) => {
-        out.push({ id: `pf-${p.id}-${f}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: f, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a' })
+        out.push({ id: `pf-${p.id}-${f}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: f, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a', notifFormal: !!p.notifFormal })
       })
     })
     colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {
@@ -103,18 +111,24 @@ export default function Calendario() {
 
   const meta = monthMeta(monthOffset)
   const specialByDay = {}
+  const notisByDay = {}
   allEvents.forEach((e) => {
     const [y, m, d] = e.dateISO.split('-').map(Number)
     if (y === meta.year && m - 1 === meta.month) {
       specialByDay[d] = specialByDay[d] || []
       specialByDay[d].push(e.cat)
     }
+    if (e.cat === 'servicio' && e.notifFormal) {
+      const noti = addDaysISO(e.dateISO, -2)
+      const [ny, nm, nd] = noti.split('-').map(Number)
+      if (ny === meta.year && nm - 1 === meta.month) notisByDay[nd] = true
+    }
   })
   const days = []
   for (let i = 0; i < meta.leading; i++) days.push(null)
   for (let d = 1; d <= meta.total; d++) {
     const iso = isoOf(meta.year, meta.month, d)
-    days.push({ day: d, style: styleForDay(specialByDay[d] || [], iso === hoy) })
+    days.push({ day: d, style: styleForDay(specialByDay[d] || [], iso === hoy, notisByDay[d]) })
   }
   while (days.length % 7 !== 0) days.push(null)
 
@@ -156,10 +170,11 @@ export default function Calendario() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--beige2)' }}>
-            <LegendItem color="var(--wine)" solid label="Sueldos" />
-            <LegendItem color="var(--wine4)" label="Vitall" />
+            <LegendItem color="var(--red)" solid label="Hoy" />
+            <LegendItem color="var(--wine)" label="Sueldos" />
+            <LegendItem color="var(--wine4)" label="Pagos fijos" />
             <LegendItem color="var(--amber)" label="Whimm" />
-            <LegendItem color="#dde3c8" solid label="Recordatorio" />
+            <LegendItem color={NOTI_BG} solid label="Recordatorio" />
           </div>
         </div>
 
@@ -238,7 +253,7 @@ export default function Calendario() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} pagosFijos={pagosFijos} />
+      <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>
   )
 }

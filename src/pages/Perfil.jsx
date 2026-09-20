@@ -8,6 +8,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth } from '../lib/date'
 import { estimatePresupuestoDiarioNeto, proximaFechaSueldo, proximoVencimientoPagoFijo } from '../lib/budget'
+import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
   { to: '/perfil/historial', Icon: IconClock, title: 'Historial completo', hint: 'Todo el desglose, filtrable' },
@@ -23,6 +24,10 @@ export default function Perfil() {
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
+  const { data: whimms } = useUserCollection('whimms')
+  const { data: gastos } = useUserCollection('gastos')
+
+  const cats = deriveWhimmCats(whimms, gastos)
 
   const displayName = user?.displayName || 'Pame'
   const initial = displayName.charAt(0).toUpperCase()
@@ -132,7 +137,7 @@ export default function Perfil() {
       </div>
 
       <Toast message={message} />
-      <AddSheet onToast={show} pagosFijos={pagosFijos} />
+      <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>
   )
 }
