@@ -18,6 +18,29 @@ const ESTADO_LABEL = {
   apartando: 'Apartando fondos',
 }
 
+// Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
+// derivado de su dominio — antes todos los links de un Whimm mostraban el
+// mismo texto (el campo "lugar", que es uno solo por Whimm, no por link).
+const SITE_LABELS = [
+  [/amazon/, 'Amazon'],
+  [/mercadolibre|mercadolivre/, 'Mercado Libre'],
+  [/liverpool/, 'Liverpool'],
+  [/coppel/, 'Coppel'],
+  [/sephora/, 'Sephora'],
+  [/shein/, 'Shein'],
+  [/walmart/, 'Walmart'],
+  [/sears/, 'Sears'],
+]
+function siteLabelFromUrl(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    const match = SITE_LABELS.find(([re]) => re.test(host))
+    return match ? match[1] : host
+  } catch {
+    return null
+  }
+}
+
 export default function Compras() {
   const { user } = useAuth()
   const { message, show } = useToast()
@@ -406,11 +429,14 @@ export default function Compras() {
 
       {apartarFor && (
         <>
-          <div className="sheet-backdrop" onClick={() => setApartarFor(null)} />
-          <div className="sheet">
+          <div className="sheet-backdrop" style={{ zIndex: 45 }} onClick={() => setApartarFor(null)} />
+          <div className="sheet" style={{ zIndex: 46 }}>
             <div className="sheet-grabber"><span /></div>
             <div className="sheet-body">
-              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 10px' }}>Apartar fondos — {apartarFor.name}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 6px' }}>Apartar fondos — {apartarFor.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                Dinero que ya tienes guardado por tu cuenta (efectivo, otra cuenta) para este Whimm — no es parte del presupuesto diario, se suma a lo que ya se acumuló solo.
+              </div>
               <input
                 className="fld"
                 placeholder="Monto ya juntado"
@@ -432,12 +458,17 @@ export default function Compras() {
           <div className="card-solid" style={{ position: 'absolute', left: 16, right: 16, top: 40, bottom: 40, borderRadius: 20, boxShadow: '0 12px 32px rgba(0,0,0,.28)', zIndex: 41, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
               {detail.imagenUrl && (
-                <img
-                  src={detail.imagenUrl}
-                  alt={detail.name}
-                  style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 16, marginBottom: 16, display: 'block' }}
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
-                />
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 16, marginBottom: 16, overflow: 'hidden', background: 'var(--beige2)' }}>
+                  <img
+                    src={detail.imagenUrl}
+                    alt={detail.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                  <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ position: 'absolute', top: 10, right: 10, width: 32, height: 32, borderRadius: 16, background: 'rgba(250,247,240,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.18)' }}>
+                    <IconClose />
+                  </button>
+                </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -448,9 +479,11 @@ export default function Compras() {
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{detail.categoria}{detail.lugar ? ` · ${detail.lugar}` : ''}</div>
                   </div>
                 </div>
-                <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <IconClose />
-                </button>
+                {!detail.imagenUrl && (
+                  <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <IconClose />
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -472,19 +505,21 @@ export default function Compras() {
                 <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>¿Cuándo puedo comprarlo?</div>
                   <WhimmProgressBar whimm={detail} height={10} />
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
-                    {fmt(detail.montoApartado || 0)} apartado por tu cuenta + {fmt(Math.round(detail.acumuladoAutomatico || 0))} del presupuesto diario
-                  </div>
                 </div>
               )}
 
               {detail.estado !== 'comprado' && (
-                <button
-                  onClick={() => openApartar(detail)}
-                  style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 16 }}
-                >
-                  {detail.estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos'}
-                </button>
+                <>
+                  <button
+                    onClick={() => openApartar(detail)}
+                    style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}
+                  >
+                    {detail.estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos'}
+                  </button>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, marginBottom: 16 }}>
+                    Dinero que ya tienes guardado por tu cuenta (efectivo, otra cuenta) — aparte de lo que el presupuesto diario ya va acumulando solo para este Whimm.
+                  </div>
+                </>
               )}
 
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -516,7 +551,7 @@ export default function Compras() {
                       return (
                         <div key={key} style={{ background: 'var(--beige2)', borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail.lugar || `Link ${idx + 1}`}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{siteLabelFromUrl(lk) || detail.lugar || `Link ${idx + 1}`}</div>
                           </div>
                           <a href={lk} target="_blank" rel="noreferrer" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>Ver</a>
                           <button
@@ -750,8 +785,7 @@ function WhimmProgressBar({ whimm, height = 6, style }) {
       <div style={{ height, background: 'var(--beige2)', borderRadius: height / 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: height / 2, transition: 'width .3s ease' }} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fmt(progreso)} de {fmt(precio)}</span>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
         <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct}%</span>
       </div>
     </div>
