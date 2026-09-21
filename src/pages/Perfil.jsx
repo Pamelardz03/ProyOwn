@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms } from '../lib/budget'
+import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -94,6 +94,12 @@ export default function Perfil() {
   // — mismo cálculo que usa Compras.jsx para las barras de progreso.
   const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
   const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
+  // Reserva completa para pagos fijos/Vitall (20 sep, onceava tanda, a
+  // pedido de Pame): tercer recuadro para poder confirmar de un vistazo
+  // que sí está considerando el próximo vencimiento de TODOS sus pagos
+  // fijos/Vitall activos (no solo Vitall) — mismo cálculo que ya resta
+  // "Disponible para Whimms" de "Ahorro acumulado real".
+  const reservaPagosFijos = reservaInmediataPagosFijos(pagosFijos)
 
   const riesgos = []
   if (proximosAVencer.length > 0) {
@@ -119,6 +125,11 @@ export default function Perfil() {
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
             <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Solo para Whimms — lo de pagos fijos/Vitall ya se apartó aparte</div>
+          </div>
+          <div className="card" style={{ flex: 1, padding: 14 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Próximo vencimiento de tus {pagosActivos.length} pagos activos</div>
           </div>
         </div>
 
