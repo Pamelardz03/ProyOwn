@@ -4,7 +4,7 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
-import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
+import { daysInMonth, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, disponibleParaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
@@ -59,7 +59,7 @@ function styleForDay(cats, isToday, notiCats) {
 export default function Calendario() {
   const [monthOffset, setMonthOffset] = useState(0)
   const [eventFilter, setEventFilter] = useState('todos')
-  const [proximosVisible, setProximosVisible] = useState(10)
+  const [proximosVisible, setProximosVisible] = useState(20)
   const [servicioTipoFiltro, setServicioTipoFiltro] = useState('todos')
   const { message, show } = useToast()
 
@@ -203,7 +203,7 @@ export default function Calendario() {
             {FILTERS.map((f) => (
               <span
                 key={f.key}
-                onClick={() => { setEventFilter(f.key); setProximosVisible(10); setServicioTipoFiltro('todos') }}
+                onClick={() => { setEventFilter(f.key); setProximosVisible(20); setServicioTipoFiltro('todos') }}
                 className="pill"
                 style={{ background: eventFilter === f.key ? 'var(--wine)' : 'transparent', color: eventFilter === f.key ? '#fff' : 'var(--muted)' }}
               >
@@ -240,34 +240,12 @@ export default function Calendario() {
           </div>
           {proximosFiltrados.length > proximos.length && (
             <button
-              onClick={() => setProximosVisible((n) => n + 10)}
+              onClick={() => setProximosVisible((n) => n + 20)}
               style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}
             >
               Ver más
             </button>
           )}
-        </div>
-
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Cola Whimm proyectada</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {colaWhimm.slice(0, 5).map((it, idx) => {
-              const dias = it.fechaProyectada ? daysUntil(it.fechaProyectada) : null
-              return (
-                <div key={it.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--wine4)' }}>#{idx + 1}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {dias != null ? `${dias} día${dias === 1 ? '' : 's'} · estimado ${formatShortDate(it.fechaProyectada)}` : 'Sin estimado todavía'}
-                    </div>
-                  </div>
-                  <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(it.precio)}</div>
-                </div>
-              )
-            })}
-            {colaWhimm.length === 0 && <div className="empty-state">Sin Whimms en espera</div>}
-          </div>
         </div>
       </div>
 

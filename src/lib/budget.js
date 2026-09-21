@@ -158,8 +158,21 @@ export function totalGastosHasta(gastos, hoyISO) {
   const hoy = hoyISO || todayISO()
   return (gastos || []).reduce((sum, g) => {
     if (g.categoria === 'Vitall' && g.vitallId) return sum
-    return g.fecha && g.fecha <= hoy ? sum + (Number(g.monto) || 0) : sum
+    if (!g.fecha || g.fecha > hoy) return sum
+    // reembolso (treceava tanda, a pedido de Pame): cuando alguien te
+    // regresa parte de un gasto (ej. pagaste la cena completa y tus
+    // amigos te regresan su parte), el monto real que salió de tu
+    // bolsillo es monto - reembolso, no el monto completo registrado.
+    const neto = (Number(g.monto) || 0) - (Number(g.reembolso) || 0)
+    return sum + Math.max(neto, 0)
   }, 0)
+}
+
+// El monto neto de un Gasto después de descontar cualquier reembolso
+// recibido — usado en las pantallas (Gastos, Inicio, Historial) para
+// mostrar y sumar lo que de verdad costó, no el monto bruto registrado.
+export function gastoNeto(g) {
+  return Math.max((Number(g.monto) || 0) - (Number(g.reembolso) || 0), 0)
 }
 
 export function totalVencimientosHasta(pagosFijos, hoyISO) {

@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
+import Onboarding from '../components/Onboarding'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { IconProduct } from '../components/Icons'
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo, fechasPagoVivas, fechasVencimientoVivas, proximoVencimientoPagoFijo } from '../lib/budget'
+import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo, fechasPagoVivas, fechasVencimientoVivas, proximoVencimientoPagoFijo, gastoNeto } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
+import { buildHistorialEvents } from '../lib/historial'
 
 const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
 
@@ -72,13 +74,14 @@ export default function Inicio() {
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
+  const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
 
   const primerNombre = user?.displayName?.split(' ')[0] || 'Pame'
 
   const gastosMes = gastos.filter((g) => isThisMonth(g.fecha))
-  const gastoMensual = gastosMes.reduce((s, g) => s + (Number(g.monto) || 0), 0)
+  const gastoMensual = gastosMes.reduce((s, g) => s + gastoNeto(g), 0)
 
   // Ingresos reales del mes: solo cuenta pagos de sueldos fijos que ya
   // ocurrieron desde que cada uno se registró (fechaInicio) — antes se
@@ -141,26 +144,13 @@ export default function Inicio() {
     .sort((a, b) => b._score - a._score)
     .slice(0, 5)
 
-  const whimmsCompradosConFecha = whimms.filter((w) => w.estado === 'comprado' && w.compradoEn)
-
-  const historial = [
-    ...gastosMes.map((g) => ({ id: `g-${g.id}`, label: g.concepto, monto: -(Number(g.monto) || 0), color: 'var(--wine)', color2: 'var(--text)', ts: toMillis(g.creadoEn) })),
-    ...sueldosRapidos.map((r) => ({ id: `r-${r.id}`, label: r.desc, monto: Number(r.monto) || 0, color: 'var(--green)', color2: 'var(--green)', ts: toMillis(r.creadoEn) })),
-    ...whimmsCompradosConFecha.map((w) => {
-      const precioFinal = Number(w.precioComprado ?? w.precio) || 0
-      const yaApartado = Number(w.montoApartado) || 0
-      return {
-        id: `w-${w.id}`,
-        label: `Se compró: ${w.name}`,
-        monto: -Math.max(precioFinal - yaApartado, 0),
-        color: 'var(--wine)',
-        color2: 'var(--text)',
-        ts: new Date(w.compradoEn).getTime(),
-      }
-    }),
-  ]
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 5)
+  // Historial reciente: mismo feed sin filtro que Historial completo (a
+  // pedido de Pame — antes Inicio solo mostraba gastos/sueldos rápidos/
+  // Whimms comprados, no sueldos fijos depositados ni los eventos de
+  // "Cambios" como crear un Whimm o un Vitall).
+  const historial = buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pagosFijos, whimms, hoyISO: hoy })
+    .sort((a, b) => (b.dateISO < a.dateISO ? -1 : b.dateISO > a.dateISO ? 1 : 0))
+    .slice(0, 8)
 
   return (
     <div className="screen">
@@ -252,14 +242,21 @@ export default function Inicio() {
 
         <div>
           <div className="eyebrow" style={{ marginBottom: 2 }}>Actividad</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Historial reciente</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Historial reciente</div>
+            <Link to="/perfil/historial" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+              Ver todo ›
+            </Link>
+          </div>
           {historial.length > 0 ? (
             <div className="row-list">
               {historial.map((h) => (
                 <div key={h.id} className="row-list-item">
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: h.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontSize: 13 }}>{h.label}</span>
-                  <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: h.color2 }}>{fmtSigned(h.monto)}</span>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: h.dotColor, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 13 }}>{h.title}</span>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: h.amount == null ? 'var(--muted)' : h.amount > 0 ? 'var(--green)' : 'var(--text)' }}>
+                    {h.amount == null ? '—' : fmtSigned(h.amount)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -269,6 +266,7 @@ export default function Inicio() {
         </div>
       </div>
 
+      {!loadingConfig && <Onboarding config={configPresupuesto} />}
       <Toast message={message} />
       <AddSheet onToast={show} cats={cats} pagosFijos={pagosFijos} />
     </div>

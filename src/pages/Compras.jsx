@@ -12,11 +12,17 @@ import { computeWhimmScore } from '../lib/score'
 import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
-const ESTADO_LABEL = {
-  espera: 'En espera',
-  espera_sin_fondos: 'En espera · sin fondos asignados',
-  apartando: 'Apartando fondos',
-  comprado: 'Comprado',
+// Estado real a mostrar (treceava tanda, a pedido de Pame): el campo
+// `estado` guardado solo distingue espera/apartando/comprado — pero un
+// Whimm "en espera" que ya empezó a recibir dinero del reparto automático
+// (acumuladoAutomatico > 0, ver src/lib/budget.js) ya no está realmente
+// "esperando sin avanzar", así que se muestra "Juntando" en vez de "En
+// espera" para que se note la diferencia de un vistazo.
+function estadoDisplay(w) {
+  if (w.estado === 'comprado') return 'Comprado'
+  if (w.estado === 'apartando') return 'Apartando fondos'
+  const progreso = (Number(w.montoApartado) || 0) + (Number(w.acumuladoAutomatico) || 0)
+  return progreso > 0 ? 'Juntando' : 'En espera'
 }
 
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
@@ -52,6 +58,7 @@ export default function Compras() {
   const [dismissed, setDismissed] = useState({})
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
+  const [showConfig, setShowConfig] = useState(false) // submenu: "Financiar a la vez" + reparto
 
   const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
   const [editForm, setEditForm] = useState({ nombre: '', categoria: '', lugar: '', precio: '', imagenUrl: '' })
@@ -111,6 +118,9 @@ export default function Compras() {
   const colchonGastoHormiga = bufferGastoHormiga(budgetParams)
   const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
   const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
+  // Por semana en vez de por día (treceava tanda, a pedido de Pame) — se
+  // siente más natural para pensar en gasto libre que una cifra diaria.
+  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * 7 : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms
@@ -227,7 +237,7 @@ export default function Compras() {
   // (nunca 0/100 — siempre debe quedar algo del otro lado).
   async function setPorcentajeWhimms(p) {
     try {
-      await setUserDoc(user.uid, 'config', 'presupuesto', { porcentajeWhimms: Math.max(0.1, Math.min(0.9, p)) })
+      await setUserDoc(user.uid, 'config', 'presupuesto', { porcentajeWhimms: Math.max(0, Math.min(1, p)) })
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
@@ -332,62 +342,20 @@ export default function Compras() {
             {errorWhimms && <div style={{ fontSize: 11, color: 'var(--red)' }}>{errorWhimms}</div>}
 
             <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>Financiar a la vez</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                  {fmt(disponibleWhimms)} libres se reparten entre los primeros {whimmsSimultaneos}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
+                <div style={{ fontSize: 10, color: colchonBajo ? 'var(--red)' : 'var(--muted)', fontWeight: colchonBajo ? 600 : 400, marginTop: 2 }}>
+                  {fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/sem` : fmt(colchonGastoHormiga)} gastos · {whimmsSimultaneos} a la vez
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                <button
-                  aria-label="Menos Whimms a la vez"
-                  onClick={() => setWhimmsSimultaneos(whimmsSimultaneos - 1)}
-                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
-                >
-                  −
-                </button>
-                <span className="mono" style={{ fontSize: 16, fontWeight: 700, width: 18, textAlign: 'center' }}>{whimmsSimultaneos}</span>
-                <button
-                  aria-label="Más Whimms a la vez"
-                  onClick={() => setWhimmsSimultaneos(whimmsSimultaneos + 1)}
-                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
-                >
-                  +
-                </button>
-              </div>
+              <button
+                aria-label="Editar reparto y prioridad"
+                onClick={() => setShowConfig(true)}
+                style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                <IconEdit size={14} color="var(--wine)" />
+              </button>
             </div>
-
-            <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto: Whimms vs. gasto libre</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
-                  {fmt(disponibleWhimms)} para la wishlist · {fmt(colchonGastoHormiga)} de colchón para gasto hormiga{diasProximoIngreso ? ` (${fmt(colchonPorDia)}/día en los próximos ${diasProximoIngreso} días hasta tu próximo pago)` : ''}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                <button
-                  aria-label="Menos % para Whimms"
-                  onClick={() => setPorcentajeWhimms(porcentajeWhimms - 0.1)}
-                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
-                >
-                  −
-                </button>
-                <span className="mono" style={{ fontSize: 16, fontWeight: 700, width: 40, textAlign: 'center' }}>{Math.round(porcentajeWhimms * 100)}%</span>
-                <button
-                  aria-label="Más % para Whimms"
-                  onClick={() => setPorcentajeWhimms(porcentajeWhimms + 0.1)}
-                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            {colchonBajo && (
-              <div className="card" style={{ padding: 12, background: 'var(--beige2)', fontSize: 11, color: 'var(--red)', fontWeight: 500 }}>
-                Tu colchón de gasto hormiga anda en {fmt(colchonPorDia)}/día hasta tu próximo pago ({diasProximoIngreso} días) — por debajo de tu promedio real reciente ({fmt(gastoHormigaPromedioDiario)}/día). Antes de comprar más Whimms, considera si te va a alcanzar para lo espontáneo.
-              </div>
-            )}
 
             <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
               <button className="segbtn" onClick={() => setSubTabDeseos('activos')} style={{ background: subTabDeseos === 'activos' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'activos' ? '#fff' : 'var(--muted)' }}>
@@ -402,7 +370,7 @@ export default function Compras() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {masCaroListo && (
                   <div className="card" style={{ padding: 12, background: 'var(--beige2)', fontSize: 11, color: 'var(--muted)' }}>
-                    Ya juntaste para {listosParaComprar.length} de golpe — antes de comprarlos todos, considera priorizar el más caro (<strong style={{ color: 'var(--wine)' }}>{masCaroListo.name}</strong>, {fmt(masCaroListo.precio)}) en vez de varios chicos a la vez, para no quedarte sin respaldo.
+                    Mejor 1 caro que varios chicos: prioriza <strong style={{ color: 'var(--wine)' }}>{masCaroListo.name}</strong> ({fmt(masCaroListo.precio)})
                   </div>
                 )}
                 {activosConFecha.map((w, i) => (
@@ -422,9 +390,11 @@ export default function Compras() {
                           )}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
-                            <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>score {(w._score ?? w.score ?? 0).toFixed(2)}</div>
+                            <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '3px 9px', fontSize: 12, fontWeight: 700 }}>
+                              {(w._score ?? w.score ?? 0).toFixed(2)}
+                            </span>
                           </div>
                           <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
@@ -445,7 +415,7 @@ export default function Compras() {
 
                     <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
-                        {ESTADO_LABEL[w.estado] || 'En espera'}
+                        {estadoDisplay(w)}
                       </span>
                       {w.fechaProyectada && (
                         <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
@@ -549,6 +519,71 @@ export default function Compras() {
         )}
       </div>
 
+      {showConfig && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setShowConfig(false)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 16px' }}>Reparto y prioridad</div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>Financiar a la vez</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(disponibleWhimms)} entre los primeros {whimmsSimultaneos}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <button
+                    aria-label="Menos Whimms a la vez"
+                    onClick={() => setWhimmsSimultaneos(whimmsSimultaneos - 1)}
+                    style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                  >
+                    −
+                  </button>
+                  <span className="mono" style={{ fontSize: 16, fontWeight: 700, width: 18, textAlign: 'center' }}>{whimmsSimultaneos}</span>
+                  <button
+                    aria-label="Más Whimms a la vez"
+                    onClick={() => setWhimmsSimultaneos(whimmsSimultaneos + 1)}
+                    style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 600 }}>Whimms vs. gasto libre</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>
+                {fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/semana` : fmt(colchonGastoHormiga)} gastos
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(porcentajeWhimms * 100)}
+                onChange={(e) => setPorcentajeWhimms(Number(e.target.value) / 100)}
+                style={{ width: '100%', accentColor: 'var(--wine)' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <span style={{ fontSize: 9, color: 'var(--muted)' }}>0%</span>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine)' }}>{Math.round(porcentajeWhimms * 100)}% wishlist</span>
+                <span style={{ fontSize: 9, color: 'var(--muted)' }}>100%</span>
+              </div>
+
+              {colchonBajo && (
+                <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginTop: 16 }}>
+                  Bajo tu ritmo: {fmt(colchonPorDia)}/día (prom. {fmt(gastoHormigaPromedioDiario)}/día)
+                </div>
+              )}
+
+              <button className="btn-primary" style={{ marginTop: 20 }} onClick={() => setShowConfig(false)}>
+                Listo
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {notifFor && (
         <>
           <div className="sheet-backdrop" onClick={() => setNotifFor(null)} />
@@ -586,7 +621,7 @@ export default function Compras() {
             <div className="sheet-body">
               <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 6px' }}>Apartar fondos — {apartarFor.name}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
-                Dinero que ya tienes guardado por tu cuenta (efectivo, otra cuenta) para este Whimm — no es parte del presupuesto diario, se suma a lo que ya se acumuló solo.
+                Dinero aparte ya guardado (efectivo, otra cuenta)
               </div>
               <input
                 className="fld"
@@ -651,7 +686,7 @@ export default function Compras() {
                 </div>
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Estado</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{ESTADO_LABEL[detail.estado] || 'En espera'}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{estadoDisplay(detail)}</div>
                 </div>
               </div>
 
@@ -671,7 +706,7 @@ export default function Compras() {
                     {detail.estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos'}
                   </button>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, marginBottom: 16 }}>
-                    Dinero que ya tienes guardado por tu cuenta (efectivo, otra cuenta) — aparte de lo que el presupuesto diario ya va acumulando solo para este Whimm.
+                    Dinero aparte ya guardado (efectivo, otra cuenta)
                   </div>
                 </>
               )}
@@ -691,7 +726,7 @@ export default function Compras() {
                 <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Fecha estimada de compra</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{formatShortDate(detail.fechaProyectada)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Predicción favorable: asume que no hay más gastos en el camino.</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Estimado favorable</div>
                 </div>
               )}
 
@@ -893,7 +928,7 @@ export default function Compras() {
                       onChange={(e) => setEditPrecioComprado(e.target.value)}
                     />
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
-                      Los precios varían del estimado — esto es lo que de verdad se resta de tu saldo y de lo que queda para el resto de la fila.
+                      Lo que de verdad pagaste
                     </div>
                     <input
                       className="fld"
@@ -903,7 +938,7 @@ export default function Compras() {
                       onChange={(e) => setEditMontoApartadoComprado(e.target.value)}
                     />
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
-                      Esa parte no vuelve a restarse de tu Ahorro acumulado real — solo se resta lo que de verdad salió del banco.
+                      No sale de tu banco
                     </div>
                     <input
                       className="fld"
@@ -912,7 +947,7 @@ export default function Compras() {
                       onChange={(e) => setEditCompradoEn(e.target.value)}
                     />
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
-                      Fecha en la que realmente lo compraste (no tiene que ser hoy).
+                      Fecha real de compra
                     </div>
                   </>
                 )}
@@ -974,13 +1009,16 @@ function WhimmProgressBar({ whimm, height = 6, style }) {
   const precio = Number(whimm.precio) || 0
   const progreso = (Number(whimm.montoApartado) || 0) + (Number(whimm.acumuladoAutomatico) || 0)
   const pct = precio > 0 ? Math.min(100, Math.round((progreso / precio) * 100)) : 0
+  // "En cola" en vez de "0%" (treceava tanda): un Whimm en 0% no está
+  // roto, solo está detrás de los primeros `whimmsSimultaneos` de la fila
+  // — sin esto se veía como si no estuviera recibiendo nada por error.
   return (
     <div style={style}>
       <div style={{ height, background: 'var(--beige2)', borderRadius: height / 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: height / 2, transition: 'width .3s ease' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct}%</span>
+        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct > 0 ? `${pct}%` : 'En cola'}</span>
       </div>
     </div>
   )

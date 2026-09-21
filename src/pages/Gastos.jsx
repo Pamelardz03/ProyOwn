@@ -9,7 +9,7 @@ import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
-import { monthlyEqPagoFijo } from '../lib/budget'
+import { monthlyEqPagoFijo, gastoNeto } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
@@ -53,6 +53,9 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.date}</div>
+          {item.reembolso > 0 && (
+            <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 1 }}>+{fmt(item.reembolso)} reembolso</div>
+          )}
         </div>
         <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>-{fmt(item.amount)}</div>
         <button
@@ -127,7 +130,10 @@ export default function Gastos() {
           : g.categoria,
       date: formatShortDate(g.fecha),
       fecha: g.fecha,
-      amount: Number(g.monto) || 0,
+      // Neto de cualquier reembolso (treceava tanda) — lo que de verdad
+      // costó, no el monto bruto registrado.
+      amount: gastoNeto(g),
+      reembolso: Number(g.reembolso) || 0,
     }))
 
   // Whimms comprados dentro del periodo — se suman al gasto de Whimm y se
@@ -175,6 +181,7 @@ export default function Gastos() {
       categoria: g.categoria || 'Whimm',
       categoriaWhimm: g.categoriaWhimm || (cats[0] || ''),
       vitallId: g.vitallId || '',
+      reembolso: String(g.reembolso ?? ''),
     })
     setEditingId(id)
     setSwipeOpenKey(null)
@@ -194,6 +201,7 @@ export default function Gastos() {
         categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
         vitallId: editForm.categoria === 'Vitall' ? editForm.vitallId : '',
         vitallNombre: vitallDoc ? vitallDoc.name : '',
+        reembolso: Number(editForm.reembolso) || 0,
       })
       setEditingId(null)
       setEditForm(null)
@@ -306,6 +314,13 @@ export default function Gastos() {
                     onChange={(e) => setEditForm((f) => ({ ...f, lugar: e.target.value }))}
                   />
                 </div>
+                <input
+                  className="fld"
+                  placeholder="¿Te regresaron algo? (opcional)"
+                  inputMode="decimal"
+                  value={editForm.reembolso}
+                  onChange={(e) => setEditForm((f) => ({ ...f, reembolso: e.target.value }))}
+                />
                 <input
                   className="fld"
                   type="date"

@@ -42,6 +42,7 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
   const [gastoCatSel, setGastoCatSel] = useState(categorias[0])
   const [gastoVitallId, setGastoVitallId] = useState('')
   const [gastoFecha, setGastoFecha] = useState(todayISO())
+  const [gastoReembolso, setGastoReembolso] = useState('')
   const [extraCats, setExtraCats] = useState([])
   const [gastoNewCatOpen, setGastoNewCatOpen] = useState(false)
   const [gastoNewCatValue, setGastoNewCatValue] = useState('')
@@ -110,11 +111,17 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
         vitallId: gastoTipo === 'Vitall' ? gastoVitallId : '',
         vitallNombre: vitallDoc ? vitallDoc.name : '',
         fecha: gastoFecha || todayISO(),
+        // reembolso (treceava tanda): cuando alguien te regresa parte de
+        // este gasto (ej. pagaste algo por todos) — se resta del monto en
+        // Gastos y en tu saldo real, sin necesidad de un sueldo rápido
+        // aparte para esto.
+        reembolso: Number(gastoReembolso) || 0,
       })
       setGastoForm(emptyGasto)
       setGastoTipo('Whimm')
       setGastoVitallId('')
       setGastoFecha(todayISO())
+      setGastoReembolso('')
       setStep('closed')
       onToast?.('Gasto guardado')
     } catch (err) {
@@ -297,6 +304,13 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
                       type="date"
                       value={gastoFecha}
                       onChange={(e) => setGastoFecha(e.target.value)}
+                    />
+                    <input
+                      className="fld"
+                      placeholder="¿Te regresaron algo? (opcional)"
+                      inputMode="decimal"
+                      value={gastoReembolso}
+                      onChange={(e) => setGastoReembolso(e.target.value)}
                     />
                     <div style={{ display: 'flex', gap: 8 }}>
                       {GASTO_TIPOS.map((t) => (

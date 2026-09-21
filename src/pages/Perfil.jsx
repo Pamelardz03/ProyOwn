@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -20,7 +20,7 @@ const LINKS = [
 
 export default function Perfil() {
   const { message, show } = useToast()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
 
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
@@ -71,14 +71,6 @@ export default function Perfil() {
     .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
     .slice(0, 4)
 
-  // Riesgos reales: Vitall/pagos fijos que vencen pronto, y si lo que hay
-  // que reservar cada día para pagos fijos ya supera el presupuesto diario
-  // bruto (una versión simple de la futura alertaDeficit).
-  const pagosActivos = pagosFijos.filter((p) => p.activo !== false)
-  const proximosAVencer = pagosActivos.filter((p) => {
-    const d = daysUntil(proximoVencimientoPagoFijo(p))
-    return d != null && d >= 0 && d <= 8
-  })
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
 
   // Riesgo real de flujo (novena tanda): compara el presupuesto diario
@@ -109,11 +101,14 @@ export default function Perfil() {
   // "Disponible para Whimms" de "Ahorro acumulado real".
   const reservaPagosFijos = reservaInmediataPagosFijos(pagosFijos)
 
+  // Antes también había un aviso genérico de "pago fijo vence en los
+  // próximos 8 días" — se quitó (treceava tanda, a pedido de Pame): un
+  // vencimiento próximo NO es un riesgo por sí solo, ya que su monto
+  // completo ya está reservado (ver "Para pagos fijos/Vitall" arriba); el
+  // texto además siempre decía "8 días" sin importar cuántos días faltaban
+  // de verdad. `riesgosFlujo` (abajo) es el único riesgo real: cuando el
+  // ritmo de ahorro actual no alcanza para juntar a tiempo lo reservado.
   const riesgos = []
-  if (proximosAVencer.length > 0) {
-    const total = proximosAVencer.reduce((s, p) => s + (Number(p.monto) || 0), 0)
-    riesgos.push(`${proximosAVencer.length} pago${proximosAVencer.length === 1 ? '' : 's'} fijo${proximosAVencer.length === 1 ? '' : 's'} vence${proximosAVencer.length === 1 ? '' : 'n'} en los próximos 8 días (${fmt(total)} en total)`)
-  }
   riesgosFlujo.forEach((r) => {
     riesgos.push(`${r.nombre}: necesitas juntar ${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'} para los ${fmt(r.monto)} de ${formatShortDate(r.vencimiento)} — a tu ritmo actual te faltarían ~${fmt(r.faltante)}.`)
   })
@@ -137,7 +132,7 @@ export default function Perfil() {
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Colchón gasto hormiga</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>{fmt(colchonGastoHormiga)}</div>
             {diasProximoIngreso && (
               <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
@@ -147,16 +142,10 @@ export default function Perfil() {
           </div>
         </div>
 
-        {colchonBajo && (
-          <div className="card" style={{ padding: 12, fontSize: 11, color: 'var(--red)' }}>
-            Tu colchón de gasto hormiga ({fmt(colchonPorDia)}/día) está por debajo de tu promedio real reciente ({fmt(gastoHormigaPromedioDiario)}/día) — antes de comprar más Whimms, revisa si te va a alcanzar hasta tu próximo pago.
-          </div>
-        )}
-
         {editingSaldoInicial ? (
           <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-              Lo que ya tenías en el banco antes de empezar a registrar gastos aquí — se suma una sola vez a "Ahorro acumulado real".
+              Lo que ya tenías antes de usar la app
             </div>
             <input
               className="fld"
@@ -208,10 +197,11 @@ export default function Perfil() {
           <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--wine)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600 }}>
             {initial}
           </div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 600 }}>{displayName}</div>
             {user?.email && <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{user.email}</div>}
           </div>
+          <button onClick={() => logout()} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Cerrar sesión</button>
         </div>
 
         {riesgos.length > 0 && (
