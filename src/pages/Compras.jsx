@@ -306,21 +306,20 @@ export default function Compras() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {whimmsOrdenados.map((w, i) => (
                 <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
-                  {w.imagenUrl && (
-                    <img
-                      src={w.imagenUrl}
-                      alt={w.name}
-                      style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 14, marginBottom: 12, display: 'block' }}
-                      onError={(e) => { e.currentTarget.style.display = 'none' }}
-                    />
-                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      {!w.imagenUrl && (
-                        <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16 }}>
+                      <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
+                        {w.imagenUrl ? (
+                          <img
+                            src={w.imagenUrl}
+                            alt={w.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                        ) : (
                           <IconProduct size={30} />
-                        </div>
-                      )}
+                        )}
+                      </div>
                       <div>
                         <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                         <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
@@ -463,33 +462,29 @@ export default function Compras() {
           <div className="sheet-backdrop" style={{ zIndex: 40 }} onClick={() => setDetailId(null)} />
           <div className="card-solid" style={{ position: 'absolute', left: 16, right: 16, top: 40, bottom: 40, borderRadius: 20, boxShadow: '0 12px 32px rgba(0,0,0,.28)', zIndex: 41, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-              {detail.imagenUrl && (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 16, marginBottom: 16, overflow: 'hidden', background: 'var(--beige2)' }}>
-                  <img
-                    src={detail.imagenUrl}
-                    alt={detail.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                    onError={(e) => { e.currentTarget.style.display = 'none' }}
-                  />
-                  <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ position: 'absolute', top: 10, right: 10, width: 32, height: 32, borderRadius: 16, background: 'rgba(250,247,240,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.18)' }}>
-                    <IconClose />
-                  </button>
-                </div>
-              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  {!detail.imagenUrl && <div className="icon-tile" style={{ width: 60, height: 60, borderRadius: 14 }}><IconProduct size={26} /></div>}
+                  <div className="icon-tile" style={{ width: 60, height: 60, borderRadius: 14, background: detail.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
+                    {detail.imagenUrl ? (
+                      <img
+                        src={detail.imagenUrl}
+                        alt={detail.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : (
+                      <IconProduct size={26} />
+                    )}
+                  </div>
                   <div>
                     <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--wine4)' }}>#{whimmsOrdenados.findIndex((w) => w.id === detail.id) + 1}</div>
                     <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{detail.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{detail.categoria}{detail.lugar ? ` · ${detail.lugar}` : ''}</div>
                   </div>
                 </div>
-                {!detail.imagenUrl && (
-                  <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <IconClose />
-                  </button>
-                )}
+                <button aria-label="Cerrar" onClick={() => setDetailId(null)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <IconClose />
+                </button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
