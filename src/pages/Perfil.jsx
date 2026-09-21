@@ -119,17 +119,14 @@ export default function Perfil() {
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Ahorro acumulado real</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(saldoAcumuladoReal)}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Histórico, no se reinicia cada mes</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Solo para Whimms — lo de pagos fijos/Vitall ya se apartó aparte</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Próximo vencimiento de tus {pagosActivos.length} pagos activos</div>
           </div>
         </div>
 

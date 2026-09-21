@@ -16,6 +16,7 @@ const ESTADO_LABEL = {
   espera: 'En espera',
   espera_sin_fondos: 'En espera · sin fondos asignados',
   apartando: 'Apartando fondos',
+  comprado: 'Comprado',
 }
 
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
@@ -112,6 +113,17 @@ export default function Compras() {
   const comprados = whimms.filter((w) => w.estado === 'comprado')
   const whimmsOrdenados = [...activosConFecha, ...comprados]
   const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
+
+  // Cuando 2+ de la fila ya juntaron su precio completo al mismo tiempo,
+  // vale más comprar el más caro de ellos que varios chicos de golpe (a
+  // pedido de Pame) — ver nudge más abajo, solo informativo.
+  const listosParaComprar = activosConFecha.filter((w) => {
+    const progreso = (Number(w.montoApartado) || 0) + (Number(w.acumuladoAutomatico) || 0)
+    return w.precio > 0 && progreso >= w.precio - 1e-6
+  })
+  const masCaroListo = listosParaComprar.length > 1
+    ? [...listosParaComprar].sort((a, b) => b.precio - a.precio)[0]
+    : null
 
   const detail = whimmsOrdenados.find((w) => w.id === detailId)
   const detailLinks = detail ? (detail.links && detail.links.length ? detail.links : detail.link ? [detail.link] : []) : []
@@ -330,6 +342,11 @@ export default function Compras() {
 
             {subTabDeseos === 'activos' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {masCaroListo && (
+                  <div className="card" style={{ padding: 12, background: 'var(--beige2)', fontSize: 11, color: 'var(--muted)' }}>
+                    Ya juntaste para {listosParaComprar.length} de golpe — antes de comprarlos todos, considera priorizar el más caro (<strong style={{ color: 'var(--wine)' }}>{masCaroListo.name}</strong>, {fmt(masCaroListo.precio)}) en vez de varios chicos a la vez, para no quedarte sin respaldo.
+                  </div>
+                )}
                 {activosConFecha.map((w, i) => (
                   <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -347,7 +364,10 @@ export default function Compras() {
                           )}
                         </div>
                         <div>
-                          <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
+                            <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>score {(w._score ?? w.score ?? 0).toFixed(2)}</div>
+                          </div>
                           <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
                         </div>
@@ -614,6 +634,13 @@ export default function Compras() {
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Fecha estimada de compra</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{formatShortDate(detail.fechaProyectada)}</div>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Predicción favorable: asume que no hay más gastos en el camino.</div>
+                </div>
+              )}
+
+              {detail.estado === 'comprado' && detail.compradoEn && (
+                <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Fecha de compra</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{formatShortDate(detail.compradoEn)}</div>
                 </div>
               )}
 
