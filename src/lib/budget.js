@@ -402,6 +402,25 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, presupuestoDiarioNet
     }
   }
 
+  // Fechas siempre en el mismo orden que la prioridad (a pedido de Pame,
+  // dieciseisava tanda: "no me gusta lo de las fechas, quiero que se
+  // cumplan en orden también"). Sin este ajuste, un Whimm barato de menor
+  // score podía completarse antes que uno carísimo de mayor score que
+  // lleva más tiempo activo — el reparto real del dinero no cambia
+  // (`acumuladoAutomatico`/progreso siguen igual, cada Whimm sigue
+  // juntando lo que de verdad le toca), solo la FECHA que se muestra de
+  // cada uno nunca queda antes que la del Whimm justo arriba en la fila.
+  // Si uno no alcanza fecha dentro del horizonte (MAX_DIAS), todos los de
+  // menor score tampoco muestran fecha, por la misma razón.
+  let maxDiasEnOrden = -Infinity
+  let bloqueado = false
+  estado.forEach((e) => {
+    if (bloqueado) { e.diasDesdeHoy = null; return }
+    if (e.diasDesdeHoy == null) { bloqueado = true; return }
+    e.diasDesdeHoy = Math.max(e.diasDesdeHoy, maxDiasEnOrden)
+    maxDiasEnOrden = e.diasDesdeHoy
+  })
+
   const resultById = Object.fromEntries(
     estado.map((e) => [
       e.id,
