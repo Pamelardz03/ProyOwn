@@ -118,7 +118,7 @@ export default function Perfil() {
           <div className="card" style={{ flex: 1, padding: 14 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Ya sin lo reservado a pagos fijos</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Solo para Whimms — lo de pagos fijos/Vitall ya se apartó aparte</div>
           </div>
         </div>
 
