@@ -25,6 +25,21 @@ function estadoDisplay(w) {
   return progreso > 0 ? 'Juntando' : 'En espera'
 }
 
+// "Cuándo comprarlo" en vez de solo una fecha lejana, cuando ya está muy
+// cerca (a pedido de Pame, quinceava tanda: "cuando esperarme mejor dos
+// días, 1 día, o ya de una") — comprar cualquier Whimm de esta fila NUNCA
+// toca tu colchón de gasto hormiga, porque `disponibleParaWhimms` y
+// `bufferGastoHormiga` ya son dos bolsillos separados desde que se reparte
+// el saldo libre (ver src/lib/budget.js) — por eso este aviso no necesita
+// advertir nada sobre gasto hormiga, ya está garantizado por diseño.
+function cuandoComprarLabel(fechaProyectada) {
+  if (!fechaProyectada) return null
+  const dias = daysUntil(fechaProyectada)
+  if (dias == null || dias > 2) return null
+  if (dias <= 0) return 'Cómpralo hoy'
+  return `Espera ${dias} día${dias === 1 ? '' : 's'}`
+}
+
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
 // derivado de su dominio — antes todos los links de un Whimm mostraban el
 // mismo texto (el campo "lugar", que es uno solo por Whimm, no por link).
@@ -120,7 +135,7 @@ export default function Compras() {
   const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
   // Por semana en vez de por día (treceava tanda, a pedido de Pame) — se
   // siente más natural para pensar en gasto libre que una cifra diaria.
-  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * 7 : null
+  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * Math.min(7, diasProximoIngreso) : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms
@@ -419,7 +434,7 @@ export default function Compras() {
                       </span>
                       {w.fechaProyectada && (
                         <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
-                          Estimado {formatShortDate(w.fechaProyectada)}
+                          {cuandoComprarLabel(w.fechaProyectada) || `Estimado ${formatShortDate(w.fechaProyectada)}`}
                         </span>
                       )}
                     </div>
@@ -724,8 +739,12 @@ export default function Compras() {
 
               {detail.fechaProyectada && detail.estado !== 'comprado' && (
                 <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Fecha estimada de compra</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{formatShortDate(detail.fechaProyectada)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>
+                    {cuandoComprarLabel(detail.fechaProyectada) ? '¿Cuándo comprarlo?' : 'Fecha estimada de compra'}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>
+                    {cuandoComprarLabel(detail.fechaProyectada) || formatShortDate(detail.fechaProyectada)}
+                  </div>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Estimado favorable</div>
                 </div>
               )}

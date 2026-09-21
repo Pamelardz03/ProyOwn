@@ -61,6 +61,29 @@ export function ingresosFijosDelMes(sueldosFijos) {
   return sueldosFijos.reduce((sum, s) => sum + ingresoDelMesSueldo(s), 0)
 }
 
+// Ingreso mensual ESPERADO (promedio estable por frecuencia) — a
+// diferencia de `ingresosFijosDelMes` (lo que ya se ha COBRADO en lo que
+// va del mes calendario, correcto para "Saldo del mes"/"Ingresos de este
+// mes"), esta versión sirve de base para cualquier cálculo que proyecte
+// HACIA ADELANTE (presupuesto diario, riesgos de flujo, cola de Whimms):
+// SÍ cuenta el ingreso de tus sueldos fijos futuros conocidos (ej. tu
+// próxima quincena de Kenet, tu próximo Domingo semanal), no solo lo que
+// ya cayó en el banco. Usar "lo ya cobrado este mes" para eso hacía que
+// el presupuesto diario se desplomara casi a $0 justo después de que
+// empieza un mes nuevo (antes de que caiga el primer pago) y se disparara
+// de golpe en cuanto cae un sueldo grande — un vaivén según qué día del
+// mes es, no un ingreso promedio real. (21 sep, catorceava/quinceava
+// tanda, a partir del reporte de Pame de fechas proyectadas demasiado
+// lejanas para Whimms de score bajo, con datos reales donde Kenet — su
+// sueldo más grande — apenas se había cobrado una vez este mes al momento
+// de revisar.)
+export function ingresoMensualEsperado(sueldosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return (sueldosFijos || [])
+    .filter((s) => !s.fechaFin || s.fechaFin >= hoy)
+    .reduce((sum, s) => sum + monthlyEqSueldoLegacy(s), 0)
+}
+
 export function monthlyEqPagoFijo(p) {
   const monto = Number(p.monto) || 0
   return p.frecuencia === 'Semanal' ? monto * 4.33 : monto
@@ -89,7 +112,7 @@ export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
 }
 
 export function presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes }) {
-  const ingresoMensual = ingresosFijosDelMes(sueldosFijos) + (sueldosRapidosMes || 0)
+  const ingresoMensual = ingresoMensualEsperado(sueldosFijos) + (sueldosRapidosMes || 0)
   return ingresoMensual / 30
 }
 

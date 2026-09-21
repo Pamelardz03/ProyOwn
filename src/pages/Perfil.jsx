@@ -130,6 +130,7 @@ export default function Perfil() {
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Solo tu próximo cobro de cada uno</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>

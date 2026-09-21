@@ -80,7 +80,13 @@ export default function Inicio() {
 
   const primerNombre = user?.displayName?.split(' ')[0] || 'Pame'
 
-  const gastosMes = gastos.filter((g) => isThisMonth(g.fecha))
+  // Igual que totalGastosHasta (src/lib/budget.js): un Gasto tipo Vitall
+  // ya se resta del saldo real vía el calendario de vencimientos, así que
+  // si alguna vez se registra uno (Pame decidió no hacerlo, pero un amigo
+  // que use la app podría no saber esa convención) no debe sumarse también
+  // aquí — antes sí se sumaba, lo que hubiera restado el mismo pago dos
+  // veces de "Saldo del mes" (encontrado 21 sep, quinceava tanda).
+  const gastosMes = gastos.filter((g) => isThisMonth(g.fecha) && !(g.categoria === 'Vitall' && g.vitallId))
   const gastoMensual = gastosMes.reduce((s, g) => s + gastoNeto(g), 0)
 
   // Ingresos reales del mes: solo cuenta pagos de sueldos fijos que ya
