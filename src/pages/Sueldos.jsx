@@ -151,7 +151,15 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
     onChange: onSwipeChange,
     onTap: () => { if (isSwipeOpen) onSwipeChange(false); else onOpenDetail() },
   })
-  const proxima = proximaFechaSueldo(s)
+  // Igual criterio que Inicio.jsx/Perfil.jsx (quinta/séptima tanda): si la
+  // próxima fecha real es justo hoy, se muestra la SIGUIENTE ocurrencia en
+  // vez de "en 0 días" — antes esta fila (Sueldos, dentro de Perfil) no
+  // tenía este ajuste, así que "Domingo" decía "en 0 días" aquí mientras
+  // Perfil (la tarjeta "Próximos sueldos") ya correctamente mostraba la
+  // ocurrencia siguiente ("en 7 días").
+  const hoy = todayISO()
+  const proximaCruda = proximaFechaSueldo(s, hoy)
+  const proxima = proximaCruda === hoy ? (fechasPagoVivas(s).find((f) => f > hoy) || null) : proximaCruda
   const dias = daysUntil(proxima)
   return (
     <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
