@@ -40,6 +40,15 @@ function cuandoComprarLabel(fechaProyectada) {
   return `Espera ${dias} día${dias === 1 ? '' : 's'}`
 }
 
+// Score en escala 0.0-10.0 en vez del número crudo de la fórmula (que sale
+// en decimales chicos tipo 0.65, 0.03 — poco intuitivo). Es solo una
+// transformación de escala para mostrarlo (×10, tope en 10) — no cambia el
+// orden ni la fórmula real (`computeWhimmScore`), que sigue siendo la que
+// decide la prioridad (a pedido de Pame, quinceava tanda).
+function scoreOutOf10(score) {
+  return Math.min(10, Math.max(0, Number(score) || 0) * 10).toFixed(1)
+}
+
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
 // derivado de su dominio — antes todos los links de un Whimm mostraban el
 // mismo texto (el campo "lugar", que es uno solo por Whimm, no por link).
@@ -408,7 +417,7 @@ export default function Compras() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                             <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '3px 9px', fontSize: 12, fontWeight: 700 }}>
-                              {(w._score ?? w.score ?? 0).toFixed(2)}
+                              {scoreOutOf10(w._score ?? w.score)}
                             </span>
                           </div>
                           <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>

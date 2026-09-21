@@ -4,7 +4,7 @@ import AddSheet from '../components/AddSheet'
 import { useSwipeX } from '../hooks/useSwipe'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
-import { IconProduct, IconTrash, IconEdit, IconClose } from '../components/Icons'
+import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
@@ -48,7 +48,7 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
         style={{ position: 'relative', padding: 13, display: 'flex', alignItems: 'center', gap: 12, transform: `translateX(${x}px)`, transition: dragging ? 'none' : 'transform .12s ease', touchAction: 'pan-y' }}
       >
         <div className="icon-tile" style={{ width: 38, height: 38 }}>
-          <IconProduct size={17} />
+          <IconReceipt size={17} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</div>
@@ -80,9 +80,17 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
 function WhimmCompraRow({ item, onGoToCompras }) {
   return (
     <div className="card card-solid" style={{ padding: 13, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div className="icon-tile" style={{ width: 38, height: 38 }}>
-        <IconProduct size={17} />
-      </div>
+      {item.imagenUrl ? (
+        <img
+          src={item.imagenUrl}
+          alt=""
+          style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+        />
+      ) : (
+        <div className="icon-tile" style={{ width: 38, height: 38 }}>
+          <IconProduct size={17} />
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>Se compró: {item.name}</div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.date}</div>
@@ -152,6 +160,7 @@ export default function Gastos() {
         date: formatShortDate(w.compradoEn),
         fecha: w.compradoEn,
         amount: Math.max(precioFinal - yaApartado, 0),
+        imagenUrl: w.imagenUrl || '',
       }
     })
 
