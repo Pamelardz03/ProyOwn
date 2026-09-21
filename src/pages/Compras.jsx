@@ -80,6 +80,7 @@ export default function Compras() {
   // (novena tanda, a pedido de Pame) — configurable, default 3. Antes todo
   // el excedente iba solo al #1 hasta completarlo.
   const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
   // ver src/lib/score.js), con una fecha estimada de compra en cascada —
@@ -93,7 +94,7 @@ export default function Compras() {
   // reservado para el próximo vencimiento de cada pago fijo/Vitall activo.
   // Se reparte entre los primeros `whimmsSimultaneos` Whimms de la fila,
   // proporcional a su score — así varios avanzan a la vez.
-  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms }
+  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial }
   const disponibleWhimms = disponibleParaWhimms(budgetParams)
   const activos = whimms
     .filter((w) => w.estado !== 'comprado')

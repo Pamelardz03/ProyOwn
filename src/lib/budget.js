@@ -180,9 +180,17 @@ export function totalWhimmsCompradosHasta(whimms) {
     .reduce((sum, w) => sum + (Number(w.precioComprado ?? w.precio) || 0), 0)
 }
 
-export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO }) {
+// `saldoInicial` (20 sep, onceava tanda): lo que Pame ya tenía en el banco
+// ANTES de empezar a registrar nada en la app (ej. antes de su primera
+// quincena registrada) — sin esto, el cálculo asumía que arrancaba en $0,
+// así que a cualquiera que empezó con algo de dinero ya guardado le iba a
+// dar un número más bajo que su banco real por esa diferencia. Se guarda
+// una sola vez en /users/{uid}/config/presupuesto (mismo documento que
+// `whimmsSimultaneos`) y Pame lo captura ella misma desde Perfil.
+export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO, saldoInicial }) {
   const hoy = hoyISO || todayISO()
   return (
+    (Number(saldoInicial) || 0) +
     totalIngresosHasta(sueldosFijos, sueldosRapidos, hoy) -
     totalGastosHasta(gastos, hoy) -
     totalVencimientosHasta(pagosFijos, hoy) -

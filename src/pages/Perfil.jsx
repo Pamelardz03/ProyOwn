@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
@@ -5,7 +6,7 @@ import { useToast } from '../hooks/useToast'
 import { IconWarning, IconClock, IconCard, IconSalary, IconBars, IconChevronRight } from '../components/Icons'
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
 import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
@@ -26,8 +27,26 @@ export default function Perfil() {
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: gastos } = useUserCollection('gastos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
+
+  // Saldo inicial (20 sep, onceava tanda): lo que Pame ya tenía en el
+  // banco antes de empezar a registrar nada en la app — se captura una
+  // sola vez aquí y se suma dentro de saldoLibreAcumuladoReal (ver
+  // src/lib/budget.js) para que la cifra pueda cuadrar exacto contra el
+  // banco desde el día uno, no solo desde que empezó el registro.
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  const [editingSaldoInicial, setEditingSaldoInicial] = useState(false)
+  const [saldoInicialValue, setSaldoInicialValue] = useState('')
+  function openEditSaldoInicial() {
+    setSaldoInicialValue(saldoInicial ? String(saldoInicial) : '')
+    setEditingSaldoInicial(true)
+  }
+  async function saveSaldoInicial() {
+    await setUserDoc(user.uid, 'config', 'presupuesto', { saldoInicial: Number(saldoInicialValue) || 0 })
+    setEditingSaldoInicial(false)
+  }
 
   const displayName = user?.displayName || 'Pame'
   const initial = displayName.charAt(0).toUpperCase()
@@ -73,8 +92,8 @@ export default function Perfil() {
   // Saldo libre acumulado real y cuánto de eso está de verdad disponible
   // para financiar Whimms sin tocar lo reservado para pagos fijos próximos
   // — mismo cálculo que usa Compras.jsx para las barras de progreso.
-  const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms })
-  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms })
+  const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
+  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
 
   const riesgos = []
   if (proximosAVencer.length > 0) {
@@ -102,6 +121,33 @@ export default function Perfil() {
             <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Ya sin lo reservado a pagos fijos</div>
           </div>
         </div>
+
+        {editingSaldoInicial ? (
+          <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              Lo que ya tenías en el banco antes de empezar a registrar gastos aquí — se suma una sola vez a "Ahorro acumulado real".
+            </div>
+            <input
+              className="fld"
+              placeholder="Saldo inicial"
+              inputMode="decimal"
+              value={saldoInicialValue}
+              onChange={(e) => setSaldoInicialValue(e.target.value)}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={saveSaldoInicial}>Guardar</button>
+              <button className="pill" style={{ flex: 1, textAlign: 'center' }} onClick={() => setEditingSaldoInicial(false)}>Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={openEditSaldoInicial}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', padding: '0 2px' }}
+          >
+            <span>Saldo inicial (antes de registrar aquí): {fmt(saldoInicial)}</span>
+            <span style={{ fontWeight: 600, color: 'var(--wine4)' }}>Editar</span>
+          </div>
+        )}
 
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
