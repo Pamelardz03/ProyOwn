@@ -80,13 +80,17 @@ export default function Calendario() {
   const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
   const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
   const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
-  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
+  // Mismo reparto Whimms/colchón que Compras y Perfil (doceava tanda) —
+  // sin esto, el Calendario proyectaría fechas más rápidas de lo real,
+  // usando el 100% del ahorro diario en vez de solo la parte de Whimms.
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const colaWhimm = proyectarColaWhimms(
     whimms
       .filter((w) => w.estado !== 'comprado')
       .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
       .sort((a, b) => b._score - a._score),
-    presupuestoDiarioNeto,
+    presupuestoDiarioNeto * porcentajeWhimms,
     disponibleWhimms,
     whimmsSimultaneos
   )

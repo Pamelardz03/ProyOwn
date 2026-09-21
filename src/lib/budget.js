@@ -214,10 +214,66 @@ export function reservaInmediataPagosFijos(pagosFijos, hoyISO) {
   return reservasDiariasPagosFijos(pagosFijos, hoyISO).reduce((sum, r) => sum + r.monto, 0)
 }
 
-export function disponibleParaWhimms(params) {
+// Qué fracción del saldo libre (ya sin lo reservado a pagos fijos) se le
+// permite reclamar a la wishlist de Whimms — el resto se queda como
+// colchón de gasto hormiga/imprevistos, sin que "Disponible para Whimms"
+// lo cuente como suyo (doceava tanda, a pedido de Pame: "no darme opción
+// de comprar muchas cosas solo porque tengo el dinero"). Default 50/50,
+// configurable en config/presupuesto (`porcentajeWhimms`, 0 a 1).
+function porcentajeWhimmsDe(params) {
+  const p = Number(params?.porcentajeWhimms)
+  return Number.isFinite(p) ? Math.min(Math.max(p, 0), 1) : 0.5
+}
+
+// El saldo libre total antes de repartirlo entre Whimms y el colchón de
+// gasto hormiga — ver disponibleParaWhimms/bufferGastoHormiga más abajo,
+// que son las dos mitades (según `porcentajeWhimms`) de este mismo número.
+export function disponibleBrutoParaWhimms(params) {
   const saldo = saldoLibreAcumuladoReal(params)
   const reserva = reservaInmediataPagosFijos(params.pagosFijos, params.hoyISO)
   return Math.max(saldo - reserva, 0)
+}
+
+export function disponibleParaWhimms(params) {
+  return disponibleBrutoParaWhimms(params) * porcentajeWhimmsDe(params)
+}
+
+// La otra mitad (o lo que quede según `porcentajeWhimms`) del saldo libre
+// — colchón para gasto hormiga/imprevistos hasta el próximo ingreso, que
+// NO se ofrece para financiar Whimms.
+export function bufferGastoHormiga(params) {
+  return disponibleBrutoParaWhimms(params) * (1 - porcentajeWhimmsDe(params))
+}
+
+// Cuántos días faltan hasta el próximo ingreso de cualquier sueldo fijo
+// (el que sea que caiga primero) — usado para ver el colchón de gasto
+// hormiga como una tasa por día ("cuánto me queda por día hasta que me
+// paguen"), no solo como un monto suelto. Mismo criterio "nunca 0 días"
+// que ya usan Inicio/Perfil/Sueldos: si la próxima fecha de un sueldo es
+// justo hoy, se toma la siguiente ocurrencia.
+export function diasHastaProximoIngreso(sueldosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const dias = (sueldosFijos || [])
+    .map((s) => {
+      const fecha = proximaFechaSueldo(s, hoy)
+      const proxima = fecha === hoy ? (fechasPagoVivas(s).find((f) => f > hoy) || null) : fecha
+      return daysUntil(proxima)
+    })
+    .filter((d) => d != null && d > 0)
+  return dias.length ? Math.min(...dias) : null
+}
+
+// Promedio diario de gasto hormiga real (Gasto tipo Whimm, no Vitall) en
+// los últimos `ventanaDias` — referencia propia de Pame (no un número
+// inventado) para juzgar si el colchón por día hasta el próximo ingreso
+// se está quedando corto comparado con su ritmo real reciente.
+export function promedioGastoHormigaDiario(gastos, hoyISO, ventanaDias = 30) {
+  const hoy = hoyISO || todayISO()
+  const desde = addDaysISO(hoy, -ventanaDias)
+  const total = (gastos || [])
+    .filter((g) => g.categoria === 'Whimm' && g.fecha && g.fecha > desde && g.fecha <= hoy)
+    .reduce((s, g) => s + (Number(g.monto) || 0), 0)
+  return total / ventanaDias
 }
 
 // Reparte el saldo disponible entre los primeros `n` Whimms activos (ya

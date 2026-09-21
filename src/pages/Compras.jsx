@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, isThisMonth, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const ESTADO_LABEL = {
@@ -85,6 +85,10 @@ export default function Compras() {
   // el excedente iba solo al #1 hasta completarlo.
   const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
   const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  // Qué fracción del saldo libre puede reclamar la wishlist — el resto
+  // queda como colchón de gasto hormiga (doceava tanda, a pedido de
+  // Pame). Default 50/50, ajustable con el stepper de abajo.
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
   // ver src/lib/score.js), con una fecha estimada de compra en cascada —
@@ -92,14 +96,23 @@ export default function Compras() {
   // él, asumiendo que no hay más gastos (predicción "favorable").
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
   const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+  // Solo la parte del ahorro diario que le toca a Whimms sigue el mismo
+  // reparto que el saldo ya acumulado, para que "cuándo lo puedo comprar"
+  // sea consistente con "cuánto tengo disponible ahora".
+  const presupuestoDiarioNetoWhimms = presupuestoDiarioNeto * porcentajeWhimms
 
   // Saldo libre acumulado real (histórico, no se reinicia cada mes — ver
   // src/lib/budget.js) y cuánto de eso puede financiar Whimms sin tocar lo
   // reservado para el próximo vencimiento de cada pago fijo/Vitall activo.
   // Se reparte entre los primeros `whimmsSimultaneos` Whimms de la fila,
   // proporcional a su score — así varios avanzan a la vez.
-  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial }
+  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
   const disponibleWhimms = disponibleParaWhimms(budgetParams)
+  const colchonGastoHormiga = bufferGastoHormiga(budgetParams)
+  const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
+  const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
+  const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
+  const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms
     .filter((w) => w.estado !== 'comprado')
     .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
@@ -109,7 +122,7 @@ export default function Compras() {
   // devuelve tanto la fecha proyectada como el acumuladoAutomatico de hoy
   // para las barras de progreso — ya no hace falta llamar asignarSaldoWhimms
   // por separado aquí.
-  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto, disponibleWhimms, whimmsSimultaneos)
+  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNetoWhimms, disponibleWhimms, whimmsSimultaneos)
   const comprados = whimms.filter((w) => w.estado === 'comprado')
   const whimmsOrdenados = [...activosConFecha, ...comprados]
   const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
@@ -202,6 +215,19 @@ export default function Compras() {
   async function setWhimmsSimultaneos(n) {
     try {
       await setUserDoc(user.uid, 'config', 'presupuesto', { whimmsSimultaneos: Math.max(1, Math.min(10, n)) })
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  // Reparto del saldo libre entre Whimms y colchón de gasto hormiga
+  // (stepper en la pestaña Whimm) — persistido junto con whimmsSimultaneos
+  // en /users/{uid}/config/presupuesto. En pasos de 10%, entre 10% y 90%
+  // (nunca 0/100 — siempre debe quedar algo del otro lado).
+  async function setPorcentajeWhimms(p) {
+    try {
+      await setUserDoc(user.uid, 'config', 'presupuesto', { porcentajeWhimms: Math.max(0.1, Math.min(0.9, p)) })
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
@@ -330,6 +356,38 @@ export default function Compras() {
                 </button>
               </div>
             </div>
+
+            <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto: Whimms vs. gasto libre</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>
+                  {fmt(disponibleWhimms)} para la wishlist · {fmt(colchonGastoHormiga)} de colchón para gasto hormiga{diasProximoIngreso ? ` (${fmt(colchonPorDia)}/día en los próximos ${diasProximoIngreso} días hasta tu próximo pago)` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <button
+                  aria-label="Menos % para Whimms"
+                  onClick={() => setPorcentajeWhimms(porcentajeWhimms - 0.1)}
+                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                >
+                  −
+                </button>
+                <span className="mono" style={{ fontSize: 16, fontWeight: 700, width: 40, textAlign: 'center' }}>{Math.round(porcentajeWhimms * 100)}%</span>
+                <button
+                  aria-label="Más % para Whimms"
+                  onClick={() => setPorcentajeWhimms(porcentajeWhimms + 0.1)}
+                  style={{ width: 28, height: 28, borderRadius: 14, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: 'var(--wine)' }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {colchonBajo && (
+              <div className="card" style={{ padding: 12, background: 'var(--beige2)', fontSize: 11, color: 'var(--red)', fontWeight: 500 }}>
+                Tu colchón de gasto hormiga anda en {fmt(colchonPorDia)}/día hasta tu próximo pago ({diasProximoIngreso} días) — por debajo de tu promedio real reciente ({fmt(gastoHormigaPromedioDiario)}/día). Antes de comprar más Whimms, considera si te va a alcanzar para lo espontáneo.
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
               <button className="segbtn" onClick={() => setSubTabDeseos('activos')} style={{ background: subTabDeseos === 'activos' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'activos' ? '#fff' : 'var(--muted)' }}>

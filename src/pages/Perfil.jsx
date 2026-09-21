@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos } from '../lib/budget'
+import { proximaFechaSueldo, proximoVencimientoPagoFijo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -92,8 +92,16 @@ export default function Perfil() {
   // Saldo libre acumulado real y cuánto de eso está de verdad disponible
   // para financiar Whimms sin tocar lo reservado para pagos fijos próximos
   // — mismo cálculo que usa Compras.jsx para las barras de progreso.
+  // Reparto Whimms/colchón de gasto hormiga (doceava tanda, a pedido de
+  // Pame) — mismo criterio que Compras/Calendario, default 50/50.
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
   const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
-  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
+  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  const colchonGastoHormiga = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
+  const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
+  const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
+  const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   // Reserva completa para pagos fijos/Vitall (20 sep, onceava tanda, a
   // pedido de Pame): tercer recuadro para poder confirmar de un vistazo
   // que sí está considerando el próximo vencimiento de TODOS sus pagos
@@ -115,20 +123,35 @@ export default function Perfil() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         <h1>Perfil</h1>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div className="card" style={{ flex: 1, padding: 14 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Ahorro acumulado real</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(saldoAcumuladoReal)}</div>
           </div>
-          <div className="card" style={{ flex: 1, padding: 14 }}>
+          <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
           </div>
-          <div className="card" style={{ flex: 1, padding: 14 }}>
+          <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
           </div>
+          <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Colchón gasto hormiga</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>{fmt(colchonGastoHormiga)}</div>
+            {diasProximoIngreso && (
+              <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
+                {fmt(colchonPorDia)}/día en {diasProximoIngreso}d hasta tu próximo pago
+              </div>
+            )}
+          </div>
         </div>
+
+        {colchonBajo && (
+          <div className="card" style={{ padding: 12, fontSize: 11, color: 'var(--red)' }}>
+            Tu colchón de gasto hormiga ({fmt(colchonPorDia)}/día) está por debajo de tu promedio real reciente ({fmt(gastoHormigaPromedioDiario)}/día) — antes de comprar más Whimms, revisa si te va a alcanzar hasta tu próximo pago.
+          </div>
+        )}
 
         {editingSaldoInicial ? (
           <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
