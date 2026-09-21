@@ -3,10 +3,10 @@ import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
-import { useUserCollection } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { daysInMonth, daysUntil, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, disponibleParaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
@@ -68,6 +68,7 @@ export default function Calendario() {
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: gastos } = useUserCollection('gastos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
 
@@ -77,12 +78,17 @@ export default function Calendario() {
 
   const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
   const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+  const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
   const colaWhimm = proyectarColaWhimms(
     whimms
       .filter((w) => w.estado !== 'comprado')
       .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
       .sort((a, b) => b._score - a._score),
-    presupuestoDiarioNeto
+    presupuestoDiarioNeto,
+    disponibleWhimms,
+    whimmsSimultaneos
   )
 
   // Eventos reales: pagos de sueldos fijos (nómina), vencimientos de pagos

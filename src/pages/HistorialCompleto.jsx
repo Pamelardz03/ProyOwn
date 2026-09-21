@@ -117,6 +117,25 @@ export default function HistorialCompleto() {
         dotColor: '#3f6b45',
         dateISO: isoFromTimestamp(w.creadoEn),
       })
+
+      // Cuando un Whimm se marca comprado se registra como un Gasto más
+      // (entra en el filtro "Gastos", no en "Cambios") — el monto es lo
+      // que de verdad salió del banco, restando lo que ya estaba apartado
+      // en efectivo/otra cuenta.
+      if (w.estado === 'comprado' && w.compradoEn) {
+        const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+        const yaApartado = Number(w.montoApartado) || 0
+        out.push({
+          id: `whimmcomprado-${w.id}`,
+          cat: 'gasto',
+          subcat: w.categoria || '',
+          badge: 'Whimm',
+          title: `Se compró "${w.name || 'un Whimm'}"`,
+          amount: -Math.max(precioFinal - yaApartado, 0),
+          dotColor: GASTO_DOT.Whimm,
+          dateISO: w.compradoEn,
+        })
+      }
     })
 
     return out.filter((e) => e.dateISO)

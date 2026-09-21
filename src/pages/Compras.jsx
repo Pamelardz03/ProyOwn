@@ -7,9 +7,9 @@ import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconCh
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate, daysUntil, isThisMonth } from '../lib/date'
+import { formatShortDate, daysUntil, isThisMonth, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, asignarSaldoWhimms } from '../lib/budget'
+import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const ESTADO_LABEL = {
@@ -45,6 +45,7 @@ export default function Compras() {
   const { user } = useAuth()
   const { message, show } = useToast()
   const [tab, setTab] = useState('deseos')
+  const [subTabDeseos, setSubTabDeseos] = useState('activos') // 'activos' | 'comprados' — historial de Whimms ya comprados, separado de la cola que se sigue recorriendo
   const [detailId, setDetailId] = useState(null)
   const [notifFor, setNotifFor] = useState(null) // { id, collection, name, notifFormal, notifMini }
   const [dismissed, setDismissed] = useState({})
@@ -58,6 +59,8 @@ export default function Compras() {
   const [editEstado, setEditEstado] = useState('espera')
   const [editMontoApartado, setEditMontoApartado] = useState('')
   const [editPrecioComprado, setEditPrecioComprado] = useState('')
+  const [editMontoApartadoComprado, setEditMontoApartadoComprado] = useState('')
+  const [editCompradoEn, setEditCompradoEn] = useState('')
   const [editLinks, setEditLinks] = useState([''])
   const [editNotifFormal, setEditNotifFormal] = useState(true)
   const [editNotifMini, setEditNotifMini] = useState(true)
@@ -100,14 +103,15 @@ export default function Compras() {
     .filter((w) => w.estado !== 'comprado')
     .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
-  const asignados = asignarSaldoWhimms(activos, disponibleWhimms, whimmsSimultaneos)
-  const acumuladoAutomaticoById = Object.fromEntries(asignados.map((w) => [w.id, w.acumuladoAutomatico]))
-  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto).map((w) => ({
-    ...w,
-    acumuladoAutomatico: acumuladoAutomaticoById[w.id] || 0,
-  }))
+  // proyectarColaWhimms ya reparte el saldo libre entre los primeros
+  // whimmsSimultaneos por score (mismo criterio que asignarSaldoWhimms) y
+  // devuelve tanto la fecha proyectada como el acumuladoAutomatico de hoy
+  // para las barras de progreso — ya no hace falta llamar asignarSaldoWhimms
+  // por separado aquí.
+  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNeto, disponibleWhimms, whimmsSimultaneos)
   const comprados = whimms.filter((w) => w.estado === 'comprado')
   const whimmsOrdenados = [...activosConFecha, ...comprados]
+  const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
 
   const detail = whimmsOrdenados.find((w) => w.id === detailId)
   const detailLinks = detail ? (detail.links && detail.links.length ? detail.links : detail.link ? [detail.link] : []) : []
@@ -206,6 +210,8 @@ export default function Compras() {
     setEditEstado(w.estado || 'espera')
     setEditMontoApartado(String(w.montoApartado ?? ''))
     setEditPrecioComprado(String(w.precioComprado ?? w.precio ?? ''))
+    setEditMontoApartadoComprado(String(w.montoApartado ?? ''))
+    setEditCompradoEn(w.compradoEn || todayISO())
     setEditLinks(w.links && w.links.length ? w.links : w.link ? [w.link] : [''])
     setEditNotifFormal(w.notifFormal !== false)
     setEditNotifMini(w.notifMini !== false)
@@ -247,8 +253,18 @@ export default function Compras() {
         deseo: editDeseo,
         score,
         estado: editEstado,
-        montoApartado: editEstado === 'apartando' ? Number(editMontoApartado) || 0 : 0,
+        // Al marcar "comprado" se conserva lo que ya estaba apartado en
+        // efectivo/otra cuenta (editMontoApartadoComprado) en vez de
+        // resetearlo a 0 — de eso depende que totalWhimmsCompradosHasta
+        // solo reste del banco la parte que de verdad salió de ahí.
+        montoApartado:
+          editEstado === 'apartando'
+            ? Number(editMontoApartado) || 0
+            : editEstado === 'comprado'
+              ? Number(editMontoApartadoComprado) || 0
+              : 0,
         precioComprado: editEstado === 'comprado' ? (Number(editPrecioComprado) || precio) : null,
+        compradoEn: editEstado === 'comprado' ? (editCompradoEn || todayISO()) : null,
         notifFormal: editNotifFormal,
         notifMini: editNotifMini,
       })
@@ -303,60 +319,112 @@ export default function Compras() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {whimmsOrdenados.map((w, i) => (
-                <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                      <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
-                        {w.imagenUrl ? (
-                          <img
-                            src={w.imagenUrl}
-                            alt={w.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                            onError={(e) => { e.currentTarget.style.display = 'none' }}
-                          />
-                        ) : (
-                          <IconProduct size={30} />
-                        )}
-                      </div>
-                      <div>
-                        <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-                    <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>
-                      {fmt(w.estado === 'comprado' ? (w.precioComprado ?? w.precio) : w.precio)}
-                    </div>
-                    <button
-                      aria-label="Notificaciones"
-                      onClick={(e) => { e.stopPropagation(); openNotif(w, 'whimms') }}
-                      style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                    >
-                      <IconBell />
-                    </button>
-                  </div>
-
-                  <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
-                      {ESTADO_LABEL[w.estado] || 'En espera'}
-                    </span>
-                    {w.fechaProyectada && w.estado !== 'comprado' && (
-                      <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
-                        Estimado {formatShortDate(w.fechaProyectada)}
-                      </span>
-                    )}
-                  </div>
-
-                  {w.estado !== 'comprado' && <WhimmProgressBar whimm={w} style={{ marginTop: 10 }} />}
-                </div>
-              ))}
-              {!loadingWhimms && !errorWhimms && whimms.length === 0 && <div className="empty-state">Sin Whimms todavía</div>}
+            <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
+              <button className="segbtn" onClick={() => setSubTabDeseos('activos')} style={{ background: subTabDeseos === 'activos' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'activos' ? '#fff' : 'var(--muted)' }}>
+                En fila ({activosConFecha.length})
+              </button>
+              <button className="segbtn" onClick={() => setSubTabDeseos('comprados')} style={{ background: subTabDeseos === 'comprados' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'comprados' ? '#fff' : 'var(--muted)' }}>
+                Comprados ({compradosOrdenados.length})
+              </button>
             </div>
+
+            {subTabDeseos === 'activos' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {activosConFecha.map((w, i) => (
+                  <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
+                          {w.imagenUrl ? (
+                            <img
+                              src={w.imagenUrl}
+                              alt={w.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                              onError={(e) => { e.currentTarget.style.display = 'none' }}
+                            />
+                          ) : (
+                            <IconProduct size={30} />
+                          )}
+                        </div>
+                        <div>
+                          <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                      <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precio)}</div>
+                      <button
+                        aria-label="Notificaciones"
+                        onClick={(e) => { e.stopPropagation(); openNotif(w, 'whimms') }}
+                        style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      >
+                        <IconBell />
+                      </button>
+                    </div>
+
+                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
+                        {ESTADO_LABEL[w.estado] || 'En espera'}
+                      </span>
+                      {w.fechaProyectada && (
+                        <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
+                          Estimado {formatShortDate(w.fechaProyectada)}
+                        </span>
+                      )}
+                    </div>
+
+                    <WhimmProgressBar whimm={w} style={{ marginTop: 10 }} />
+                  </div>
+                ))}
+                {!loadingWhimms && !errorWhimms && activosConFecha.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
+              </div>
+            )}
+
+            {subTabDeseos === 'comprados' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {compradosOrdenados.map((w) => (
+                  <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
+                          {w.imagenUrl ? (
+                            <img
+                              src={w.imagenUrl}
+                              alt={w.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                              onError={(e) => { e.currentTarget.style.display = 'none' }}
+                            />
+                          ) : (
+                            <IconProduct size={30} />
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                      <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precioComprado ?? w.precio)}</div>
+                    </div>
+
+                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, color: 'var(--green)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8, fontWeight: 600 }}>
+                        Comprado
+                      </span>
+                      {w.compradoEn && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatShortDate(w.compradoEn)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!loadingWhimms && !errorWhimms && compradosOrdenados.length === 0 && <div className="empty-state">Aún no has comprado ningún Whimm</div>}
+              </div>
+            )}
           </div>
         )}
 
@@ -741,6 +809,25 @@ export default function Compras() {
                     />
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
                       Los precios varían del estimado — esto es lo que de verdad se resta de tu saldo y de lo que queda para el resto de la fila.
+                    </div>
+                    <input
+                      className="fld"
+                      placeholder="¿Cuánto de eso ya tenías apartado en efectivo/otra cuenta? (opcional)"
+                      inputMode="decimal"
+                      value={editMontoApartadoComprado}
+                      onChange={(e) => setEditMontoApartadoComprado(e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
+                      Esa parte no vuelve a restarse de tu Ahorro acumulado real — solo se resta lo que de verdad salió del banco.
+                    </div>
+                    <input
+                      className="fld"
+                      type="date"
+                      value={editCompradoEn}
+                      onChange={(e) => setEditCompradoEn(e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -4 }}>
+                      Fecha en la que realmente lo compraste (no tiene que ser hoy).
                     </div>
                   </>
                 )}

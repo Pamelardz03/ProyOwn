@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
 import { useSwipeX } from '../hooks/useSwipe'
 import Toast from '../components/Toast'
@@ -67,8 +68,33 @@ function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
   )
 }
 
+// Fila de un Whimm ya comprado, mostrado dentro de Gastos junto a los
+// gastos normales (a pedido de Pame: el dinero de Whimms comprados debe
+// sumarse y aparecer en la lista aquí). Es de solo lectura porque el
+// registro real vive en el documento del Whimm, no en `gastos` — para
+// editar el precio final, el monto apartado o la fecha de compra, o para
+// deshacer la compra, se hace desde Compras.
+function WhimmCompraRow({ item, onGoToCompras }) {
+  return (
+    <div className="card card-solid" style={{ padding: 13, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="icon-tile" style={{ width: 38, height: 38 }}>
+        <IconProduct size={17} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Se compró: {item.name}</div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{item.cat} · {item.date}</div>
+      </div>
+      <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>-{fmt(item.amount)}</div>
+      <button aria-label="Ver en Compras" onClick={() => onGoToCompras(item.whimmId)}>
+        <IconEdit />
+      </button>
+    </div>
+  )
+}
+
 export default function Gastos() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { message, show } = useToast()
   const [periodo, setPeriodo] = useState('mes')
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
@@ -100,11 +126,38 @@ export default function Gastos() {
           ? `Vitall · ${g.vitallNombre || 'sin vincular'}`
           : g.categoria,
       date: formatShortDate(g.fecha),
+      fecha: g.fecha,
       amount: Number(g.monto) || 0,
     }))
 
+  // Whimms comprados dentro del periodo — se suman al gasto de Whimm y se
+  // agregan a la lista, netos de lo que ya estaba apartado en efectivo/otra
+  // cuenta (esa parte no salió de la cuenta que este total representa).
+  const whimmCompras = whimms
+    .filter((w) => w.estado === 'comprado' && w.compradoEn && filterFn(w.compradoEn))
+    .map((w) => {
+      const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+      const yaApartado = Number(w.montoApartado) || 0
+      return {
+        id: `whimmcompra-${w.id}`,
+        whimmId: w.id,
+        name: w.name,
+        cat: `Whimm · ${w.categoria || 'sin categoría'}`,
+        date: formatShortDate(w.compradoEn),
+        fecha: w.compradoEn,
+        amount: Math.max(precioFinal - yaApartado, 0),
+      }
+    })
+
   const vitallGastado = items.filter((it) => it.tipoRaw === 'Vitall').reduce((s, it) => s + it.amount, 0)
-  const whimmGastado = items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0)
+  const whimmGastado =
+    items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0) +
+    whimmCompras.reduce((s, it) => s + it.amount, 0)
+
+  const listaCompleta = [
+    ...items.map((it) => ({ ...it, _kind: 'gasto' })),
+    ...whimmCompras.map((it) => ({ ...it, _kind: 'whimmCompra' })),
+  ].sort((a, b) => compareISODesc(a.fecha ?? a.date, b.fecha ?? b.date))
   // Costo mensual total de los Vitalls activos (igual cálculo que en
   // Inicio) — a pedido de Pame, en vez de solo lo que se haya registrado
   // como Gasto tipo Vitall en el periodo (que puede quedar en $0 si nunca
@@ -201,17 +254,21 @@ export default function Gastos() {
         {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {items.map((it) => (
-            <ExpenseRow
-              key={it.id}
-              item={it}
-              isOpen={swipeOpenKey === it.id}
-              onSwipe={(open) => setSwipeOpenKey(open ? it.id : null)}
-              onDelete={() => deleteItem(it.id)}
-              onEdit={openEdit}
-            />
-          ))}
-          {!loading && !error && items.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
+          {listaCompleta.map((it) =>
+            it._kind === 'whimmCompra' ? (
+              <WhimmCompraRow key={it.id} item={it} onGoToCompras={(whimmId) => navigate('/compras', { state: { openWhimmId: whimmId } })} />
+            ) : (
+              <ExpenseRow
+                key={it.id}
+                item={it}
+                isOpen={swipeOpenKey === it.id}
+                onSwipe={(open) => setSwipeOpenKey(open ? it.id : null)}
+                onDelete={() => deleteItem(it.id)}
+                onEdit={openEdit}
+              />
+            )
+          )}
+          {!loading && !error && listaCompleta.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
         </div>
       </div>
 

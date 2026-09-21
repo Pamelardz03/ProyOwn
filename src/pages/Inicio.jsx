@@ -114,8 +114,20 @@ export default function Inicio() {
   ].filter((d) => d != null && d > 0)
   const proximoPagoDias = proximosDias.length ? Math.min(...proximosDias) : null
 
+  // Whimms comprados este mes — lo que realmente salió del banco (se resta
+  // lo que ya estaba apartado en efectivo/otra cuenta, igual que en
+  // totalWhimmsCompradosHasta). Van separados de "Gastos": esos son gasto
+  // hormiga espontáneo, esto es wishlist planeada.
+  const whimmsCompradosMes = whimms.filter((w) => w.estado === 'comprado' && isThisMonth(w.compradoEn))
+  const whimmMensual = whimmsCompradosMes.reduce((s, w) => {
+    const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+    const yaApartado = Number(w.montoApartado) || 0
+    return s + Math.max(precioFinal - yaApartado, 0)
+  }, 0)
+
   const distribucion = [
     { label: 'Gastos', color: 'var(--wine)', monto: gastoMensual },
+    { label: 'Whimms', color: 'var(--green)', monto: whimmMensual },
     { label: 'Pagos fijos', color: 'var(--wine4)', monto: otrosFijosMensual },
     { label: 'Vitall', color: 'var(--amber)', monto: vitallMensual },
   ].filter((d) => d.monto > 0)
@@ -129,9 +141,23 @@ export default function Inicio() {
     .sort((a, b) => b._score - a._score)
     .slice(0, 5)
 
+  const whimmsCompradosConFecha = whimms.filter((w) => w.estado === 'comprado' && w.compradoEn)
+
   const historial = [
     ...gastosMes.map((g) => ({ id: `g-${g.id}`, label: g.concepto, monto: -(Number(g.monto) || 0), color: 'var(--wine)', color2: 'var(--text)', ts: toMillis(g.creadoEn) })),
     ...sueldosRapidos.map((r) => ({ id: `r-${r.id}`, label: r.desc, monto: Number(r.monto) || 0, color: 'var(--green)', color2: 'var(--green)', ts: toMillis(r.creadoEn) })),
+    ...whimmsCompradosConFecha.map((w) => {
+      const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+      const yaApartado = Number(w.montoApartado) || 0
+      return {
+        id: `w-${w.id}`,
+        label: `Se compró: ${w.name}`,
+        monto: -Math.max(precioFinal - yaApartado, 0),
+        color: 'var(--wine)',
+        color2: 'var(--text)',
+        ts: new Date(w.compradoEn).getTime(),
+      }
+    }),
   ]
     .sort((a, b) => b.ts - a.ts)
     .slice(0, 5)

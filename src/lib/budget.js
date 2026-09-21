@@ -175,9 +175,16 @@ export function totalVencimientosHasta(pagosFijos, hoyISO) {
 // demás Whimms) es lo que de verdad se pagó, no el estimado original
 // (pedido por Pame, onceava tanda).
 export function totalWhimmsCompradosHasta(whimms) {
+  // Solo se resta la parte que realmente salió del banco (Ahorro acumulado
+  // real refleja tu cuenta Nu). Si parte del precio ya se había apartado en
+  // efectivo/otra cuenta (montoApartado), esa parte no vuelve a restarse.
   return (whimms || [])
     .filter((w) => w.estado === 'comprado')
-    .reduce((sum, w) => sum + (Number(w.precioComprado ?? w.precio) || 0), 0)
+    .reduce((sum, w) => {
+      const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+      const yaApartado = Number(w.montoApartado) || 0
+      return sum + Math.max(precioFinal - yaApartado, 0)
+    }, 0)
 }
 
 // `saldoInicial` (20 sep, onceava tanda): lo que Pame ya tenía en el banco
@@ -230,17 +237,90 @@ export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible, n) {
   })
 }
 
-// Cascada de fechas proyectadas: el Whimm top de la cola acumula el
-// presupuestoDiarioNeto hasta poder comprarse; el excedente sigue
-// acumulando para el siguiente, y así con el resto de la fila.
-export function proyectarColaWhimms(whimmsOrdenados, presupuestoDiarioNeto) {
-  let diasAcum = 0
-  return whimmsOrdenados.map((w) => {
-    const precio = Number(w.precio) || 0
-    const dias = presupuestoDiarioNeto > 0 ? Math.ceil(precio / presupuestoDiarioNeto) : null
-    diasAcum += dias || 0
-    return { ...w, fechaProyectada: dias != null ? addDaysISO(todayISO(), diasAcum) : null }
+// Proyecta la fecha estimada de compra de cada Whimm activo de la fila,
+// simulando día por día el reparto REAL del ahorro (duodécima tanda, a
+// pedido de Pame): antes esto era una cascada serial que asumía que cada
+// Whimm arrancaba desde $0 y que solo UNO a la vez recibía todo el
+// presupuesto diario — no coincidía con `asignarSaldoWhimms`, que reparte
+// el saldo libre entre los primeros `whimmsSimultaneos` a la vez, ni con
+// el progreso que cada Whimm ya trae (montoApartado + su parte ya
+// asignada del saldo libre). Por eso, si se compraban varios Whimms de
+// golpe con dinero ya acumulado, los que seguían en la fila se veían con
+// fechas mucho más próximas de golpe, aunque en realidad no se había
+// ahorrado nada nuevo todavía para ellos.
+//
+// Ahora: el punto de partida de cada Whimm es su progreso real de HOY
+// (igual que `asignarSaldoWhimms`), y de ahí en adelante se reparte el
+// `presupuestoDiarioNeto` (el ahorro diario real, según ingreso mensual y
+// frecuencias de sueldo) entre los primeros `whimmsSimultaneos` de la fila
+// que aún no se completan, por score — igual que hoy, pero como flujo
+// diario. Cuando uno se completa, el siguiente de la fila entra a recibir
+// presupuesto desde ESE momento (no desde antes), así que los que venían
+// más atrás nunca "se recorren" hacia una fecha más próxima solo porque
+// otros se compraron con dinero que ya estaba ahorrado.
+export function proyectarColaWhimms(whimmsActivosOrdenados, presupuestoDiarioNeto, disponibleWhimms, whimmsSimultaneos) {
+  const lista = whimmsActivosOrdenados || []
+  const n = Math.max(Number(whimmsSimultaneos) || 1, 1)
+  const diario = Math.max(Number(presupuestoDiarioNeto) || 0, 0)
+  const hoy = todayISO()
+
+  // Progreso de hoy: lo apartado a mano + la parte de hoy del saldo libre
+  // ya disponible, repartida por score entre los primeros `n` de la fila
+  // (mismo criterio que `asignarSaldoWhimms`, reutilizado aquí para que el
+  // punto de arranque de la simulación sea el mismo que ven las barras de
+  // progreso).
+  const activosHoy = asignarSaldoWhimms(lista, disponibleWhimms, n)
+  const acumuladoHoyById = Object.fromEntries(activosHoy.map((w) => [w.id, w.acumuladoAutomatico]))
+
+  const estado = lista.map((w) => ({
+    id: w.id,
+    score: Math.max(w.score ?? w._score ?? 0, 0.01),
+    precio: Number(w.precio) || 0,
+    progreso: (Number(w.montoApartado) || 0) + (acumuladoHoyById[w.id] || 0),
+    diasDesdeHoy: null,
+  }))
+
+  // Lo que ya alcanza para comprarse hoy mismo con el saldo libre que ya
+  // está repartido (posible si el saldo cubre a varios de la fila de una).
+  estado.forEach((e) => {
+    if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = 0
   })
+
+  const MAX_DIAS = 20 * 365 // más allá de esto simplemente no se proyecta fecha
+  if (diario > 0) {
+    let diasTranscurridos = 0
+    let fases = 0
+    while (fases < lista.length + 2 && diasTranscurridos < MAX_DIAS) {
+      fases += 1
+      const activos = estado.filter((e) => e.diasDesdeHoy == null).slice(0, n)
+      if (activos.length === 0) break
+      const scoreTotal = activos.reduce((s, e) => s + e.score, 0)
+      const shares = activos.map((e) => (scoreTotal > 0 ? (diario * e.score) / scoreTotal : 0))
+      let minDias = Infinity
+      activos.forEach((e, i) => {
+        if (shares[i] > 0) minDias = Math.min(minDias, Math.max(e.precio - e.progreso, 0) / shares[i])
+      })
+      if (!Number.isFinite(minDias)) break
+      minDias = Math.min(minDias, MAX_DIAS - diasTranscurridos)
+      activos.forEach((e, i) => { e.progreso += shares[i] * minDias })
+      diasTranscurridos += minDias
+      activos.forEach((e) => {
+        if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = Math.ceil(diasTranscurridos)
+      })
+    }
+  }
+
+  const resultById = Object.fromEntries(
+    estado.map((e) => [
+      e.id,
+      {
+        fechaProyectada: e.diasDesdeHoy != null ? addDaysISO(hoy, e.diasDesdeHoy) : null,
+        acumuladoAutomatico: acumuladoHoyById[e.id] || 0,
+      },
+    ])
+  )
+
+  return lista.map((w) => ({ ...w, ...resultById[w.id] }))
 }
 
 
