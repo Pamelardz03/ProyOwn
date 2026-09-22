@@ -81,11 +81,13 @@ function WhimmCompraRow({ item, onGoToCompras }) {
   return (
     <div className="card card-solid" style={{ padding: 13, display: 'flex', alignItems: 'center', gap: 12 }}>
       {item.imagenUrl ? (
-        <img
-          src={item.imagenUrl}
-          alt=""
-          style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-        />
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+          <img
+            src={item.imagenUrl}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        </div>
       ) : (
         <div className="icon-tile" style={{ width: 38, height: 38 }}>
           <IconProduct size={17} />
