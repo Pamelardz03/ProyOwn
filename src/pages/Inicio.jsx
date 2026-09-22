@@ -146,7 +146,7 @@ export default function Inicio() {
   // el que está acumulando fondos activamente.
   const whimmsTop = whimms
     .filter((w) => w.estado !== 'comprado')
-    .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+    .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
     .slice(0, 5)
 

@@ -149,7 +149,7 @@ export default function Compras() {
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms
     .filter((w) => w.estado !== 'comprado')
-    .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+    .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
   // proyectarColaWhimms ya reparte el saldo libre entre los primeros
   // whimmsSimultaneos por score (mismo criterio que asignarSaldoWhimms) y

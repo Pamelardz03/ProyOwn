@@ -88,7 +88,7 @@ export default function Calendario() {
   const colaWhimm = proyectarColaWhimms(
     whimms
       .filter((w) => w.estado !== 'comprado')
-      .map((w) => ({ ...w, _score: w.score ?? computeWhimmScore(w) }))
+      .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
       .sort((a, b) => b._score - a._score),
     presupuestoDiarioNeto * porcentajeWhimms,
     disponibleWhimms,

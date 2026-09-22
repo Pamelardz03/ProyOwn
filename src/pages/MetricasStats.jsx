@@ -21,7 +21,7 @@ export default function MetricasStats() {
   const catScores = {}
   whimms.forEach((w) => {
     if (!w.categoria) return
-    const s = w.score ?? computeWhimmScore(w)
+    const s = computeWhimmScore(w)
     const bucket = catScores[w.categoria] || { sum: 0, count: 0 }
     bucket.sum += s
     bucket.count += 1
