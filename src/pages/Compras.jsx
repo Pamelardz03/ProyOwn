@@ -7,9 +7,9 @@ import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconCh
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate, daysUntil, isThisMonth, todayISO } from '../lib/date'
+import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 // Estado real a mostrar (treceava tanda, a pedido de Pame): el campo
@@ -42,11 +42,18 @@ function cuandoComprarLabel(fechaProyectada) {
 
 // Score en escala 0.0-10.0 en vez del número crudo de la fórmula (que sale
 // en decimales chicos tipo 0.65, 0.03 — poco intuitivo). Es solo una
-// transformación de escala para mostrarlo (×10, tope en 10) — no cambia el
-// orden ni la fórmula real (`computeWhimmScore`), que sigue siendo la que
-// decide la prioridad (a pedido de Pame, quinceava tanda).
+// transformación de escala para mostrarlo — no cambia el orden ni la
+// fórmula real (`computeWhimmScore`), que sigue siendo la que decide la
+// prioridad (a pedido de Pame, quinceava tanda). El multiplicador (×2.2,
+// antes ×10) se recalibró en la dieciochoava tanda: con la fórmula v2
+// (precio^0.25, ver src/lib/score.js) el score crudo de un Whimm real de
+// Pame llega hasta ~4.5 (necesidad/deseo al máximo + el precio más barato
+// de su lista, ~$125) — con ×10 casi cualquier Whimm con buena prioridad
+// se topaba en 10.0 sin distinguirse de otro. Con ×2.2 ese mismo tope
+// llega a ~9.9, dejando espacio para diferenciar entre los que antes se
+// veían idénticos.
 function scoreOutOf10(score) {
-  return Math.min(10, Math.max(0, Number(score) || 0) * 10).toFixed(1)
+  return Math.min(10, Math.max(0, Number(score) || 0) * 2.2).toFixed(1)
 }
 
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
@@ -122,15 +129,12 @@ export default function Compras() {
   const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
-  // ver src/lib/score.js), con una fecha estimada de compra en cascada —
-  // el #1 acumula el presupuesto diario neto, y el resto sigue detrás de
-  // él, asumiendo que no hay más gastos (predicción "favorable").
-  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
-  const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
-  // Solo la parte del ahorro diario que le toca a Whimms sigue el mismo
-  // reparto que el saldo ya acumulado, para que "cuándo lo puedo comprar"
-  // sea consistente con "cuánto tengo disponible ahora".
-  const presupuestoDiarioNetoWhimms = presupuestoDiarioNeto * porcentajeWhimms
+  // ver src/lib/score.js), con una fecha estimada de compra por EVENTOS
+  // reales de dinero (dieciochoava tanda, a pedido de Pame) — cada sueldo
+  // fijo que cae se reparte de una vez entre los primeros de la fila,
+  // después de cubrir lo que venza antes, en vez de asumir un goteo diario
+  // parejo. Ver `construirFlujoFuturo` en src/lib/budget.js.
+  const eventosFlujo = construirFlujoFuturo({ sueldosFijos, pagosFijos })
 
   // Saldo libre acumulado real (histórico, no se reinicia cada mes — ver
   // src/lib/budget.js) y cuánto de eso puede financiar Whimms sin tocar lo
@@ -156,7 +160,7 @@ export default function Compras() {
   // devuelve tanto la fecha proyectada como el acumuladoAutomatico de hoy
   // para las barras de progreso — ya no hace falta llamar asignarSaldoWhimms
   // por separado aquí.
-  const activosConFecha = proyectarColaWhimms(activos, presupuestoDiarioNetoWhimms, disponibleWhimms, whimmsSimultaneos)
+  const activosConFecha = proyectarColaWhimms(activos, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos)
   const comprados = whimms.filter((w) => w.estado === 'comprado')
   const whimmsOrdenados = [...activosConFecha, ...comprados]
   const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))

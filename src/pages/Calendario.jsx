@@ -4,9 +4,9 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
-import { daysInMonth, formatShortDate, todayISO, isThisMonth, compareISOAsc, addDaysISO } from '../lib/date'
+import { daysInMonth, formatShortDate, todayISO, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { estimatePresupuestoDiarioNeto, proyectarColaWhimms, disponibleParaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, disponibleParaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
@@ -76,8 +76,7 @@ export default function Calendario() {
   // fijo" ahora deja elegir cualquier categoría abierta, ver AddSheet.jsx).
   const tiposPagoFiltro = [...new Set(pagosFijos.map((p) => p.tipo).filter(Boolean))].sort()
 
-  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
-  const presupuestoDiarioNeto = estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos })
+  const eventosFlujo = construirFlujoFuturo({ sueldosFijos, pagosFijos })
   const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
   const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
   // Mismo reparto Whimms/colchón que Compras y Perfil (doceava tanda) —
@@ -90,7 +89,8 @@ export default function Calendario() {
       .filter((w) => w.estado !== 'comprado')
       .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
       .sort((a, b) => b._score - a._score),
-    presupuestoDiarioNeto * porcentajeWhimms,
+    eventosFlujo,
+    porcentajeWhimms,
     disponibleWhimms,
     whimmsSimultaneos
   )

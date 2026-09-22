@@ -329,31 +329,63 @@ export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible, n) {
   })
 }
 
+// Línea de tiempo de eventos de dinero FUTUROS (dieciochoava tanda, a
+// pedido de Pame: "quiero que la fecha esperada esté en base a los
+// ingresos de sueldos, ya contando los pagos fijos, y en base al
+// porcentaje que le doy a Whimms" — el dinero no llega parejito cada día
+// como asumía `estimatePresupuestoDiarioNeto`, llega en montos concretos
+// en fechas concretas: tu quincena de Kenet cae el 30, no 1/30 de ella
+// cada día del mes). Cada evento es un día real con dinero que se mueve:
+// positivo cuando cae un sueldo fijo, negativo cuando vence un pago
+// fijo/Vitall activo. Se excluye a propósito el PRÓXIMO vencimiento de
+// cada pago fijo (el que ya reserva `reservaInmediataPagosFijos` del saldo
+// de HOY) — si también se restara aquí, se contaría dos veces; esta línea
+// de tiempo solo cubre lo que pasa DESPUÉS de eso.
+export function construirFlujoFuturo({ sueldosFijos, pagosFijos, hoyISO }) {
+  const hoy = hoyISO || todayISO()
+  const hasta = addDaysISO(hoy, HORIZONTE_DIAS_SUELDO)
+  const porFecha = {}
+  ;(sueldosFijos || []).forEach((s) => {
+    fechasPagoVivas(s, hasta)
+      .filter((f) => f > hoy)
+      .forEach((f) => { porFecha[f] = (porFecha[f] || 0) + (Number(s.monto) || 0) })
+  })
+  ;(pagosFijos || []).filter((p) => p.activo !== false).forEach((p) => {
+    const proximo = proximoVencimientoPagoFijo(p, hoy)
+    fechasVencimientoVivas(p, hasta)
+      .filter((f) => f > hoy && f > (proximo || hoy))
+      .forEach((f) => { porFecha[f] = (porFecha[f] || 0) - (Number(p.monto) || 0) })
+  })
+  return Object.keys(porFecha)
+    .sort(compareISOAsc)
+    .map((fecha) => ({ fecha, neto: porFecha[fecha] }))
+}
+
 // Proyecta la fecha estimada de compra de cada Whimm activo de la fila,
-// simulando día por día el reparto REAL del ahorro (duodécima tanda, a
-// pedido de Pame): antes esto era una cascada serial que asumía que cada
-// Whimm arrancaba desde $0 y que solo UNO a la vez recibía todo el
-// presupuesto diario — no coincidía con `asignarSaldoWhimms`, que reparte
-// el saldo libre entre los primeros `whimmsSimultaneos` a la vez, ni con
-// el progreso que cada Whimm ya trae (montoApartado + su parte ya
-// asignada del saldo libre). Por eso, si se compraban varios Whimms de
-// golpe con dinero ya acumulado, los que seguían en la fila se veían con
-// fechas mucho más próximas de golpe, aunque en realidad no se había
-// ahorrado nada nuevo todavía para ellos.
+// simulando el reparto REAL del ahorro evento por evento (duodécima tanda:
+// simulación día por día; dieciochoava tanda: por EVENTOS de dinero real
+// en vez de una tasa diaria pareja — ver `construirFlujoFuturo` arriba).
+// Antes esto asumía que el ahorro llega en un goteo constante cada día
+// (`presupuestoDiarioNeto`); ahora, cada vez que cae un sueldo fijo, ese
+// monto se reparte de una vez (según `porcentajeWhimms`) entre los
+// primeros `whimmsSimultaneos` de la fila que aún no se completan, por
+// score — pudiendo completar más de uno de golpe si el monto alcanza — y
+// cada vencimiento de pago fijo/Vitall se resta PRIMERO de lo que caiga
+// después, antes de repartir nada, tal como Pame ya lo piensa a mano
+// ("cubro los pagos fijos de esa quincena y el resto es para Whimms").
 //
-// Ahora: el punto de partida de cada Whimm es su progreso real de HOY
-// (igual que `asignarSaldoWhimms`), y de ahí en adelante se reparte el
-// `presupuestoDiarioNeto` (el ahorro diario real, según ingreso mensual y
-// frecuencias de sueldo) entre los primeros `whimmsSimultaneos` de la fila
-// que aún no se completan, por score — igual que hoy, pero como flujo
-// diario. Cuando uno se completa, el siguiente de la fila entra a recibir
-// presupuesto desde ESE momento (no desde antes), así que los que venían
-// más atrás nunca "se recorren" hacia una fecha más próxima solo porque
-// otros se compraron con dinero que ya estaba ahorrado.
-export function proyectarColaWhimms(whimmsActivosOrdenados, presupuestoDiarioNeto, disponibleWhimms, whimmsSimultaneos) {
+// El punto de partida de cada Whimm sigue siendo su progreso real de HOY
+// (igual que `asignarSaldoWhimms`): lo apartado a mano + su parte ya
+// asignada del saldo libre ya disponible. Cuando uno se completa, el
+// siguiente de la fila entra a recibir dinero desde ESE evento (no desde
+// antes), así que los que venían más atrás nunca "se recorren" hacia una
+// fecha más próxima solo porque otros se compraron con dinero que ya
+// estaba ahorrado.
+export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos) {
   const lista = whimmsActivosOrdenados || []
   const n = Math.max(Number(whimmsSimultaneos) || 1, 1)
-  const diario = Math.max(Number(presupuestoDiarioNeto) || 0, 0)
+  const pctRaw = Number(porcentajeWhimms)
+  const pct = Number.isFinite(pctRaw) ? Math.min(Math.max(pctRaw, 0), 1) : 0.5
   const hoy = todayISO()
 
   // Progreso de hoy: lo apartado a mano + la parte de hoy del saldo libre
@@ -378,27 +410,47 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, presupuestoDiarioNet
     if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = 0
   })
 
-  const MAX_DIAS = 20 * 365 // más allá de esto simplemente no se proyecta fecha
-  if (diario > 0) {
-    let diasTranscurridos = 0
-    let fases = 0
-    while (fases < lista.length + 2 && diasTranscurridos < MAX_DIAS) {
-      fases += 1
+  // `poolSinRepartir` es dinero que ya cayó (sueldos) menos lo que ya
+  // venció (pagos fijos) pero que aún no se ha repartido entre
+  // Whimms/colchón — se reparte por completo (la parte de Whimms) cada
+  // vez que un evento positivo lo deja en números positivos, así que en la
+  // práctica solo "espera" cuando un vencimiento se adelanta a su sueldo.
+  let poolSinRepartir = 0
+  const eventos = eventosFlujo || []
+  let idx = 0
+  while (idx < eventos.length && estado.some((e) => e.diasDesdeHoy == null)) {
+    const evento = eventos[idx]
+    idx += 1
+    poolSinRepartir += evento.neto
+    if (evento.neto <= 0 || poolSinRepartir <= 0) continue // vencimiento, o un sueldo que ni cubre lo ya debido
+
+    let restante = poolSinRepartir * pct
+    poolSinRepartir = 0
+    const dias = Math.max(daysUntil(evento.fecha), 0)
+
+    // Reparte este ingreso entre los primeros `n` Whimms activos por
+    // score, en más de una vuelta si alcanza para completar alguno y
+    // todavía queda dinero para el siguiente de la fila.
+    let sigueRepartiendo = restante > 1e-6
+    while (sigueRepartiendo) {
       const activos = estado.filter((e) => e.diasDesdeHoy == null).slice(0, n)
       if (activos.length === 0) break
       const scoreTotal = activos.reduce((s, e) => s + e.score, 0)
-      const shares = activos.map((e) => (scoreTotal > 0 ? (diario * e.score) / scoreTotal : 0))
-      let minDias = Infinity
+      const shares = activos.map((e) => (scoreTotal > 0 ? (restante * e.score) / scoreTotal : 0))
+      let usado = 0
+      let completoAlguno = false
       activos.forEach((e, i) => {
-        if (shares[i] > 0) minDias = Math.min(minDias, Math.max(e.precio - e.progreso, 0) / shares[i])
+        const falta = Math.max(e.precio - e.progreso, 0)
+        const aplicar = Math.min(shares[i], falta)
+        e.progreso += aplicar
+        usado += aplicar
+        if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) {
+          e.diasDesdeHoy = dias
+          completoAlguno = true
+        }
       })
-      if (!Number.isFinite(minDias)) break
-      minDias = Math.min(minDias, MAX_DIAS - diasTranscurridos)
-      activos.forEach((e, i) => { e.progreso += shares[i] * minDias })
-      diasTranscurridos += minDias
-      activos.forEach((e) => {
-        if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = Math.ceil(diasTranscurridos)
-      })
+      restante -= usado
+      sigueRepartiendo = completoAlguno && restante > 1e-6
     }
   }
 
