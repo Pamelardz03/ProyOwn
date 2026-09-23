@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasPeriodoActual, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 // Estado real a mostrar (treceava tanda, a pedido de Pame): el campo
@@ -144,11 +144,16 @@ export default function Compras() {
   const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
   const disponibleWhimms = disponibleParaWhimms(budgetParams)
   const colchonGastoHormiga = bufferGastoHormiga(budgetParams)
-  const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
-  const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
+  // Tasa diaria ESTABLE (22 sep, a pedido de Pame): se divide entre la
+  // duración fija del periodo de pago vigente, no entre lo que va
+  // quedando — así no se "reparte" el mismo colchón entre menos días
+  // solo porque pasó el tiempo sin gastar; si no gastas, la tasa se
+  // queda igual y lo no gastado sigue disponible completo para después.
+  const diasPeriodo = diasPeriodoActual(sueldosFijos)
+  const colchonPorDia = diasPeriodo ? colchonGastoHormiga / diasPeriodo : null
   // Por semana en vez de por día (treceava tanda, a pedido de Pame) — se
   // siente más natural para pensar en gasto libre que una cifra diaria.
-  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * Math.min(7, diasProximoIngreso) : null
+  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * 7 : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms

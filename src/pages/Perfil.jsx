@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, diasPeriodoActual, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -91,7 +91,12 @@ export default function Perfil() {
   const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const colchonGastoHormiga = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
-  const colchonPorDia = diasProximoIngreso ? colchonGastoHormiga / diasProximoIngreso : null
+  // Tasa diaria ESTABLE (22 sep) — ver nota completa en Compras.jsx /
+  // src/lib/budget.js: se divide entre la duración fija del periodo de
+  // pago vigente (diasPeriodoActual), no entre lo que va quedando, para
+  // que no gastar no infle sola la cifra por dividir entre menos días.
+  const diasPeriodo = diasPeriodoActual(sueldosFijos)
+  const colchonPorDia = diasPeriodo ? colchonGastoHormiga / diasPeriodo : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   // Reserva completa para pagos fijos/Vitall (20 sep, onceava tanda, a
@@ -135,9 +140,9 @@ export default function Perfil() {
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>{fmt(colchonGastoHormiga)}</div>
-            {diasProximoIngreso && (
+            {colchonPorDia != null && (
               <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
-                {fmt(colchonPorDia)}/día en {diasProximoIngreso}d hasta tu próximo pago
+                {fmt(colchonPorDia)}/día fijo{diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
               </div>
             )}
           </div>

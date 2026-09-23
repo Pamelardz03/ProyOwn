@@ -1,4 +1,4 @@
-import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil } from './date'
+import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil, parseISODate } from './date'
 
 // Un sueldo fijo no tiene fecha de fin por default — 2 años hacia adelante
 // es más que suficiente para cualquier vista/paginación real de la app.
@@ -297,6 +297,42 @@ export function diasHastaProximoIngreso(sueldosFijos, hoyISO) {
     })
     .filter((d) => d != null && d > 0)
   return dias.length ? Math.min(...dias) : null
+}
+
+// --- Tasa diaria de colchón ESTABLE, no "repartida" entre lo que queda ---
+// A pedido explícito de Pame (22 sep): "cuánto tengo disponible por día"
+// no debe recalcularse dividiendo el mismo colchón entre los días que
+// van quedando hasta el próximo pago (eso hace que la cifra se infle sola
+// nada más porque pasan los días sin gastar, aunque el colchón real no
+// haya crecido) — quiere que, si no se gasta, el dinero se vaya juntando
+// normal para el día siguiente, con una tasa diaria que no cambie por sí
+// sola. `limitesPeriodoActual` encuentra la fecha de pago (de cualquier
+// sueldo fijo) más reciente que ya cayó y la próxima que va a caer —
+// delimitan el periodo de pago vigente.
+export function limitesPeriodoActual(sueldosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const hasta = addDaysISO(hoy, HORIZONTE_DIAS_SUELDO)
+  const todas = (sueldosFijos || []).flatMap((s) => fechasPagoVivas(s, hasta))
+  const pasadas = todas.filter((f) => f <= hoy).sort(compareISOAsc)
+  const futuras = todas.filter((f) => f > hoy).sort(compareISOAsc)
+  return {
+    inicio: pasadas.length ? pasadas[pasadas.length - 1] : null,
+    fin: futuras.length ? futuras[0] : null,
+  }
+}
+
+// Duración FIJA (en días) del periodo de pago vigente — de la última
+// fecha de pago real a la próxima. A diferencia de `diasHastaProximoIngreso`
+// (que se encoge día a día), este número se mantiene constante durante
+// todo el periodo, así que sirve como divisor estable para la tasa diaria
+// del colchón: si no gastas, el colchón no se "reparte" entre menos días
+// restantes — la tasa diaria se queda igual, y lo que no gastaste sigue
+// disponible tal cual para el día siguiente (y el que sigue).
+export function diasPeriodoActual(sueldosFijos, hoyISO) {
+  const { inicio, fin } = limitesPeriodoActual(sueldosFijos, hoyISO)
+  if (!inicio || !fin) return null
+  const dias = Math.round((parseISODate(fin) - parseISODate(inicio)) / 86400000)
+  return dias > 0 ? dias : null
 }
 
 // Promedio diario de gasto hormiga real (Gasto tipo Whimm, no Vitall) en
