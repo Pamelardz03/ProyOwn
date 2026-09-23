@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, diasPeriodoActual, promedioGastoHormigaDiario } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 // Estado real a mostrar (treceava tanda, a pedido de Pame): el campo
@@ -144,13 +144,19 @@ export default function Compras() {
   const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
   const disponibleWhimms = disponibleParaWhimms(budgetParams)
   const colchonGastoHormiga = bufferGastoHormiga(budgetParams)
-  // Tasa diaria ESTABLE (22 sep, a pedido de Pame): se divide entre la
-  // duración fija del periodo de pago vigente, no entre lo que va
-  // quedando — así no se "reparte" el mismo colchón entre menos días
-  // solo porque pasó el tiempo sin gastar; si no gastas, la tasa se
-  // queda igual y lo no gastado sigue disponible completo para después.
-  const diasPeriodo = diasPeriodoActual(sueldosFijos)
-  const colchonPorDia = diasPeriodo ? colchonGastoHormiga / diasPeriodo : null
+  // Presupuesto diario TOTAL, whimms + gasto libre juntos (23 sep, a
+  // pedido de Pame: "así no cambian los 200 de los futuros días") — se
+  // calcula ANTES de aplicar `porcentajeWhimms`, así que mover el slider
+  // de "Whimms vs. gasto libre" nunca cambia este número, solo cambia
+  // cómo se reparte entre juntar para whimms y tener libre para gastar
+  // hoy. `colchonPorDia`/`whimmPorDia` son ese mismo total ya partido por
+  // el % vigente — igual que antes, pero ahora anclados a un total visible
+  // y estable en vez de cada uno calculado por separado. Sigue usando la
+  // duración fija del periodo de pago (22 sep) como divisor, así tampoco
+  // se infla solo porque pasen los días sin gastar.
+  const presupuestoTotal = presupuestoDiarioTotal(budgetParams)
+  const colchonPorDia = presupuestoTotal != null ? presupuestoTotal * (1 - porcentajeWhimms) : null
+  const whimmPorDia = presupuestoTotal != null ? presupuestoTotal * porcentajeWhimms : null
   // Por semana en vez de por día (treceava tanda, a pedido de Pame) — se
   // siente más natural para pensar en gasto libre que una cifra diaria.
   const colchonPorSemana = colchonPorDia != null ? colchonPorDia * 7 : null
@@ -378,7 +384,7 @@ export default function Compras() {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
                 <div style={{ fontSize: 10, color: colchonBajo ? 'var(--red)' : 'var(--muted)', fontWeight: colchonBajo ? 600 : 400, marginTop: 2 }}>
-                  {fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/sem` : fmt(colchonGastoHormiga)} gastos · {whimmsSimultaneos} a la vez
+                  {presupuestoTotal != null ? `${fmt(presupuestoTotal)}/día total · ` : ''}{fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/sem` : fmt(colchonGastoHormiga)} gastos · {whimmsSimultaneos} a la vez
                 </div>
               </div>
               <button
@@ -586,7 +592,7 @@ export default function Compras() {
 
               <div style={{ fontSize: 12, fontWeight: 600 }}>Whimms vs. gasto libre</div>
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>
-                {fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/semana` : fmt(colchonGastoHormiga)} gastos
+                {presupuestoTotal != null ? `${fmt(presupuestoTotal)}/día total (fijo, no cambia con este %) · ` : ''}{fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/semana` : fmt(colchonGastoHormiga)} gastos
               </div>
               <input
                 type="range"
@@ -602,6 +608,11 @@ export default function Compras() {
                 <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine)' }}>{Math.round(porcentajeWhimms * 100)}% wishlist</span>
                 <span style={{ fontSize: 9, color: 'var(--muted)' }}>100%</span>
               </div>
+              {presupuestoTotal != null && (
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, textAlign: 'center' }}>
+                  Hoy, de ese {fmt(presupuestoTotal)}: {fmt(whimmPorDia)} se junta para whimms · {fmt(colchonPorDia)} libre para gastar
+                </div>
+              )}
 
               {colchonBajo && (
                 <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginTop: 16 }}>

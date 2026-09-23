@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, diasPeriodoActual, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -91,12 +91,13 @@ export default function Perfil() {
   const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const colchonGastoHormiga = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
-  // Tasa diaria ESTABLE (22 sep) — ver nota completa en Compras.jsx /
-  // src/lib/budget.js: se divide entre la duración fija del periodo de
-  // pago vigente (diasPeriodoActual), no entre lo que va quedando, para
-  // que no gastar no infle sola la cifra por dividir entre menos días.
-  const diasPeriodo = diasPeriodoActual(sueldosFijos)
-  const colchonPorDia = diasPeriodo ? colchonGastoHormiga / diasPeriodo : null
+  // Presupuesto diario TOTAL (23 sep) — ver nota completa en Compras.jsx /
+  // src/lib/budget.js: whimms + gasto libre juntos, calculado ANTES de
+  // aplicar el % de reparto, así que editar el % en Compras nunca cambia
+  // este total, solo cómo se reparte. Sigue usando la duración fija del
+  // periodo de pago (22 sep) como divisor.
+  const presupuestoTotal = presupuestoDiarioTotal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  const colchonPorDia = presupuestoTotal != null ? presupuestoTotal * (1 - porcentajeWhimms) : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   // Reserva completa para pagos fijos/Vitall (20 sep, onceava tanda, a
@@ -142,7 +143,7 @@ export default function Perfil() {
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>{fmt(colchonGastoHormiga)}</div>
             {colchonPorDia != null && (
               <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
-                {fmt(colchonPorDia)}/día fijo{diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
+                {fmt(colchonPorDia)}/día fijo (de {fmt(presupuestoTotal)} totales){diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
               </div>
             )}
           </div>

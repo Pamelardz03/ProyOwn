@@ -335,6 +335,21 @@ export function diasPeriodoActual(sueldosFijos, hoyISO) {
   return dias > 0 ? dias : null
 }
 
+// Presupuesto diario TOTAL — whimms + gasto libre juntos, ANTES de aplicar
+// `porcentajeWhimms` — a pedido de Pame (23 sep): "si me da 200 al día por
+// whimm y gastos, yo decido el porcentaje... así no cambian los 200 de los
+// futuros días". Este número no debe moverse cuando ella edite el slider
+// de "Whimms vs. gasto libre" — el % solo decide cómo se reparte ESTE
+// mismo total entre juntar para whimms y tener libre para gastar hoy, no
+// cambia el total en sí (por eso se calcula sobre `disponibleBrutoParaWhimms`,
+// que es previo a aplicar el %). Usa la misma duración fija de periodo que
+// `diasPeriodoActual`, así tampoco se infla solo porque no se gaste.
+export function presupuestoDiarioTotal(params) {
+  const dias = diasPeriodoActual(params.sueldosFijos, params.hoyISO)
+  if (!dias) return null
+  return disponibleBrutoParaWhimms(params) / dias
+}
+
 // Promedio diario de gasto hormiga real (Gasto tipo Whimm, no Vitall) en
 // los últimos `ventanaDias` — referencia propia de Pame (no un número
 // inventado) para juzgar si el colchón por día hasta el próximo ingreso
