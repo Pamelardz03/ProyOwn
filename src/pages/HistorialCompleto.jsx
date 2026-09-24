@@ -33,8 +33,9 @@ export default function HistorialCompleto() {
   const { data: whimms } = useUserCollection('whimms')
 
   function openEditOcurrencia(it) {
-    setOcurrenciaMontoValue(String(Math.abs(it.amount) || ''))
-    setEditingOcurrencia({ pagoFijoId: it.pagoFijoId, fecha: it.ocurrenciaFecha, nombre: it.pagoFijoNombre })
+    const montoActual = Math.abs(it.amount) || 0
+    setOcurrenciaMontoValue(String(montoActual))
+    setEditingOcurrencia({ pagoFijoId: it.pagoFijoId, fecha: it.ocurrenciaFecha, nombre: it.pagoFijoNombre, montoActual })
   }
 
   // Editar CUALQUIER registro del historial desde aquí mismo (a pedido de
@@ -53,6 +54,13 @@ export default function HistorialCompleto() {
 
   async function guardarExcepcion(patch) {
     if (!editingOcurrencia) return
+    // Si el monto que escribió es el mismo que ya tenía, no hay nada que
+    // guardar (a pedido de Pame) — "no se cobró" nunca es un no-op real,
+    // porque en cuanto se omite una ocurrencia desaparece de esta lista.
+    if (patch.monto != null && patch.monto === editingOcurrencia.montoActual) {
+      setEditingOcurrencia(null)
+      return
+    }
     const p = pagosFijos.find((x) => x.id === editingOcurrencia.pagoFijoId)
     if (!p) return
     setSavingOcurrencia(true)

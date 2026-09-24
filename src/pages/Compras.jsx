@@ -12,6 +12,7 @@ import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
+import { hayCambios } from '../lib/objectDiff'
 
 // Estado real a mostrar (treceava tanda, a pedido de Pame): el campo
 // `estado` guardado solo distingue espera/apartando/comprado — pero un
@@ -385,37 +386,42 @@ export default function Compras() {
     if (!editingWhimm) return
     const precio = Number(editForm.precio)
     if (!editForm.nombre.trim() || !precio) return
+    const links = editLinks.map((l) => l.trim()).filter(Boolean)
+    const score = computeWhimmScore({ necesidad: editNecesidad, deseo: editDeseo, precio })
+    const payload = {
+      name: editForm.nombre.trim(),
+      categoria: editForm.categoria,
+      precio,
+      lugar: editForm.lugar.trim(),
+      imagenUrl: editForm.imagenUrl.trim(),
+      links,
+      link: links[0] || '',
+      necesidad: editNecesidad,
+      deseo: editDeseo,
+      score,
+      estado: editEstado,
+      // Al marcar "comprado" se conserva lo que ya estaba apartado en
+      // efectivo/otra cuenta (editMontoApartadoComprado) en vez de
+      // resetearlo a 0 — de eso depende que totalWhimmsCompradosHasta
+      // solo reste del banco la parte que de verdad salió de ahí.
+      montoApartado:
+        editEstado === 'apartando'
+          ? Number(editMontoApartado) || 0
+          : editEstado === 'comprado'
+            ? Number(editMontoApartadoComprado) || 0
+            : 0,
+      precioComprado: editEstado === 'comprado' ? (Number(editPrecioComprado) || precio) : null,
+      compradoEn: editEstado === 'comprado' ? (editCompradoEn || todayISO()) : null,
+      notifFormal: editNotifFormal,
+      notifMini: editNotifMini,
+    }
+    if (!hayCambios(editingWhimm, payload)) {
+      setEditingWhimm(null)
+      return
+    }
     setEditSaving(true)
     try {
-      const links = editLinks.map((l) => l.trim()).filter(Boolean)
-      const score = computeWhimmScore({ necesidad: editNecesidad, deseo: editDeseo, precio })
-      await updateUserDoc(user.uid, 'whimms', editingWhimm.id, {
-        name: editForm.nombre.trim(),
-        categoria: editForm.categoria,
-        precio,
-        lugar: editForm.lugar.trim(),
-        imagenUrl: editForm.imagenUrl.trim(),
-        links,
-        link: links[0] || '',
-        necesidad: editNecesidad,
-        deseo: editDeseo,
-        score,
-        estado: editEstado,
-        // Al marcar "comprado" se conserva lo que ya estaba apartado en
-        // efectivo/otra cuenta (editMontoApartadoComprado) en vez de
-        // resetearlo a 0 — de eso depende que totalWhimmsCompradosHasta
-        // solo reste del banco la parte que de verdad salió de ahí.
-        montoApartado:
-          editEstado === 'apartando'
-            ? Number(editMontoApartado) || 0
-            : editEstado === 'comprado'
-              ? Number(editMontoApartadoComprado) || 0
-              : 0,
-        precioComprado: editEstado === 'comprado' ? (Number(editPrecioComprado) || precio) : null,
-        compradoEn: editEstado === 'comprado' ? (editCompradoEn || todayISO()) : null,
-        notifFormal: editNotifFormal,
-        notifMini: editNotifMini,
-      })
+      await updateUserDoc(user.uid, 'whimms', editingWhimm.id, payload)
       setEditingWhimm(null)
       if (detailId === editingWhimm.id) setDetailId(null)
       show('Whimm actualizado')

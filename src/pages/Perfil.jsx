@@ -44,7 +44,10 @@ export default function Perfil() {
     setEditingSaldoInicial(true)
   }
   async function saveSaldoInicial() {
-    await setUserDoc(user.uid, 'config', 'presupuesto', { saldoInicial: Number(saldoInicialValue) || 0 })
+    const nuevo = Number(saldoInicialValue) || 0
+    if (nuevo !== saldoInicial) {
+      await setUserDoc(user.uid, 'config', 'presupuesto', { saldoInicial: nuevo })
+    }
     setEditingSaldoInicial(false)
   }
 

@@ -10,6 +10,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { proximoVencimientoPagoFijo } from '../lib/budget'
+import { hayCambios } from '../lib/objectDiff'
 
 const TIPOS = ['Vitall', 'Vivienda', 'Transporte', 'Deuda']
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
@@ -263,19 +264,24 @@ export default function PreciosFijos() {
     if (!editForm.name.trim()) { show('Falta el nombre'); return }
     if (!monto) { show('Falta el monto'); return }
     if (!editForm.tipo.trim()) { show('Falta la categoría'); return }
+    const payload = {
+      name: editForm.name.trim(),
+      monto,
+      tipo: editForm.tipo.trim(),
+      frecuencia: editForm.frecuencia,
+      fecha: editForm.fecha,
+      finito: editForm.finito,
+      numPagos: editForm.finito ? (Number(editForm.numPagos) || null) : null,
+      notifFormal: editForm.notifFormal,
+      notifMini: editForm.notifMini,
+    }
+    if (!hayCambios(items.find((p) => p.id === editing.id), payload)) {
+      closeEdit()
+      return
+    }
     setSaving(true)
     try {
-      await updateUserDoc(user.uid, 'pagosFijos', editing.id, {
-        name: editForm.name.trim(),
-        monto,
-        tipo: editForm.tipo.trim(),
-        frecuencia: editForm.frecuencia,
-        fecha: editForm.fecha,
-        finito: editForm.finito,
-        numPagos: editForm.finito ? (Number(editForm.numPagos) || null) : null,
-        notifFormal: editForm.notifFormal,
-        notifMini: editForm.notifMini,
-      })
+      await updateUserDoc(user.uid, 'pagosFijos', editing.id, payload)
       show('Pago fijo actualizado')
       closeEdit()
     } catch (err) {

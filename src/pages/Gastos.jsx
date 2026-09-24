@@ -10,6 +10,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
 import { gastoNeto, disponibleParaWhimms, bufferGastoHormiga } from '../lib/budget'
+import { hayCambios } from '../lib/objectDiff'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
@@ -221,20 +222,28 @@ export default function Gastos() {
 
   async function saveEdit() {
     if (!editForm.concepto.trim() || !Number(editForm.monto)) return
+    const vitallDoc = editForm.categoria === 'Vitall' ? vitalls.find((v) => v.id === editForm.vitallId) : null
+    const payload = {
+      concepto: editForm.concepto.trim(),
+      monto: Number(editForm.monto),
+      lugar: editForm.lugar.trim(),
+      fecha: editForm.fecha || todayISO(),
+      categoria: editForm.categoria,
+      categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
+      vitallId: editForm.categoria === 'Vitall' ? editForm.vitallId : '',
+      vitallNombre: vitallDoc ? vitallDoc.name : '',
+      reembolso: Number(editForm.reembolso) || 0,
+    }
+    // Si no cambió nada, no escribe, no muestra toast y no deja rastro en
+    // Historial — solo cierra la hoja (a pedido de Pame).
+    if (!hayCambios(gastos.find((g) => g.id === editingId), payload)) {
+      setEditingId(null)
+      setEditForm(null)
+      return
+    }
     setSavingEdit(true)
     try {
-      const vitallDoc = editForm.categoria === 'Vitall' ? vitalls.find((v) => v.id === editForm.vitallId) : null
-      await updateUserDoc(user.uid, 'gastos', editingId, {
-        concepto: editForm.concepto.trim(),
-        monto: Number(editForm.monto),
-        lugar: editForm.lugar.trim(),
-        fecha: editForm.fecha || todayISO(),
-        categoria: editForm.categoria,
-        categoriaWhimm: editForm.categoria === 'Whimm' ? editForm.categoriaWhimm : '',
-        vitallId: editForm.categoria === 'Vitall' ? editForm.vitallId : '',
-        vitallNombre: vitallDoc ? vitallDoc.name : '',
-        reembolso: Number(editForm.reembolso) || 0,
-      })
+      await updateUserDoc(user.uid, 'gastos', editingId, payload)
       setEditingId(null)
       setEditForm(null)
       show('Gasto actualizado')

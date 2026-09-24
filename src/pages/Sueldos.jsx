@@ -10,6 +10,7 @@ import { useUserCollection, addUserDoc, updateUserDoc, deleteUserDoc } from '../
 import { fmt, fmtSigned } from '../lib/format'
 import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, isFeriadoMX, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
 import { proximaFechaSueldo, fechasPagoVivas, ingresoDelMesSueldo } from '../lib/budget'
+import { hayCambios } from '../lib/objectDiff'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const MES_FULL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -395,6 +396,10 @@ export default function Sueldos() {
         notifMini: sueldoNotifMini,
       }
       if (editingFijoId) {
+        if (!hayCambios(fijos.find((f) => f.id === editingFijoId), payload)) {
+          resetFijoFlow()
+          return
+        }
         await updateUserDoc(user.uid, 'sueldosFijos', editingFijoId, payload)
         show('Sueldo fijo actualizado')
       } else {
@@ -434,6 +439,10 @@ export default function Sueldos() {
         fecha: rapidoForm.fecha || todayISO(),
       }
       if (editingRapidoId) {
+        if (!hayCambios(rapidos.find((r) => r.id === editingRapidoId), payload)) {
+          closeRapidoForm()
+          return
+        }
         await updateUserDoc(user.uid, 'sueldosRapidos', editingRapidoId, payload)
         show('Sueldo rápido actualizado')
       } else {
