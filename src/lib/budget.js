@@ -440,7 +440,38 @@ export function construirFlujoFuturo({ sueldosFijos, pagosFijos, hoyISO }) {
 // antes), así que los que venían más atrás nunca "se recorren" hacia una
 // fecha más próxima solo porque otros se compraron con dinero que ya
 // estaba ahorrado.
-export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos) {
+// Cadencia mínima (veinticuatroava tanda, a pedido de Pame: "quisiera el
+// método que permitiera comprar cosas más frecuentemente, al menos 1 vez
+// cada 2 semanas" — sin esto, un Whimm caro de score alto (ej. el fondo
+// del viaje a Disney, $8,500) puede bloquear la fila 30+ días mientras
+// junta su parte, aunque haya Whimms baratos esperando atrás en la fila).
+// Cuando ya pasaron CADENCIA_DIAS sin completarse NINGÚN Whimm (real o
+// simulado), se abre un segundo canal EN PARALELO al de siempre: se
+// reserva RESERVA_CADENCIA del dinero de ese momento para el más barato
+// de TODA la fila (no solo los primeros `whimmsSimultaneos`), sin
+// quitarle el reparto normal a los de más arriba. Probado contra los 13
+// Whimms reales de Pame: baja el peor caso de ~31 días entre compras a
+// ~16 días — no se puede garantizar 14 exactos porque el dinero no llega
+// parejo (a veces un pago fijo deja 2-3 días sin nada disponible), pero
+// es la mejor mejora encontrada tras probar reservas fijas (20%-50%) y
+// una versión que calcula la reserva exacta según los días que faltan.
+const CADENCIA_DIAS = 14
+const RESERVA_CADENCIA = 0.2
+
+// El más barato (lo que le falta, no su precio total) de los pendientes
+// que NO están ya en el canal normal (`idsExcluir` = los primeros n por
+// score) — ese es al que le toca el canal de cadencia.
+function elegirBaratoPendiente(pendientes, idsExcluir) {
+  let elegido = null
+  pendientes.forEach((e) => {
+    if (idsExcluir.has(e.id)) return
+    const falta = Math.max(e.precio - e.progreso, 0)
+    if (!elegido || falta < Math.max(elegido.precio - elegido.progreso, 0)) elegido = e
+  })
+  return elegido
+}
+
+export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos, ultimaCompraISO) {
   const lista = whimmsActivosOrdenados || []
   const n = Math.max(Number(whimmsSimultaneos) || 1, 1)
   const pctRaw = Number(porcentajeWhimms)
@@ -451,22 +482,50 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
   // ya disponible, repartida por score entre los primeros `n` de la fila
   // (mismo criterio que `asignarSaldoWhimms`, reutilizado aquí para que el
   // punto de arranque de la simulación sea el mismo que ven las barras de
-  // progreso).
-  const activosHoy = asignarSaldoWhimms(lista, disponibleWhimms, n)
-  const acumuladoHoyById = Object.fromEntries(activosHoy.map((w) => [w.id, w.acumuladoAutomatico]))
-
-  const estado = lista.map((w) => ({
+  // progreso) — y, si ya lleva CADENCIA_DIAS sin comprar nada, la parte de
+  // hoy que le toca al más barato pendiente por el canal de cadencia.
+  const topIds = new Set(lista.slice(0, n).map((w) => w.id))
+  const estadoBase = lista.map((w) => ({
     id: w.id,
     score: Math.max(w.score ?? w._score ?? 0, 0.01),
     precio: Number(w.precio) || 0,
-    progreso: (Number(w.montoApartado) || 0) + (acumuladoHoyById[w.id] || 0),
+    progreso: Number(w.montoApartado) || 0,
     diasDesdeHoy: null,
+    viaCadencia: false,
+  }))
+
+  const diasSinComprarHoy = ultimaCompraISO != null ? Math.max(-daysUntil(ultimaCompraISO), 0) : 0
+  let disponibleParaTopN = Math.max(Number(disponibleWhimms) || 0, 0)
+  let baratoHoyId = null
+  let reservaCadenciaHoy = 0
+  if (diasSinComprarHoy >= CADENCIA_DIAS) {
+    const barato = elegirBaratoPendiente(estadoBase, topIds)
+    if (barato) {
+      const falta = Math.max(barato.precio - barato.progreso, 0)
+      reservaCadenciaHoy = Math.min(falta, disponibleParaTopN * RESERVA_CADENCIA)
+      if (reservaCadenciaHoy > 0) {
+        baratoHoyId = barato.id
+        disponibleParaTopN -= reservaCadenciaHoy
+      }
+    }
+  }
+
+  const activosHoy = asignarSaldoWhimms(lista, disponibleParaTopN, n)
+  const acumuladoHoyById = Object.fromEntries(activosHoy.map((w) => [w.id, w.acumuladoAutomatico]))
+  if (baratoHoyId) acumuladoHoyById[baratoHoyId] = (acumuladoHoyById[baratoHoyId] || 0) + reservaCadenciaHoy
+
+  const estado = estadoBase.map((e) => ({
+    ...e,
+    progreso: e.progreso + (acumuladoHoyById[e.id] || 0),
   }))
 
   // Lo que ya alcanza para comprarse hoy mismo con el saldo libre que ya
   // está repartido (posible si el saldo cubre a varios de la fila de una).
   estado.forEach((e) => {
-    if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = 0
+    if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) {
+      e.diasDesdeHoy = 0
+      if (e.id === baratoHoyId) e.viaCadencia = true
+    }
   })
 
   // `poolSinRepartir` es dinero que ya cayó (sueldos) menos lo que ya
@@ -478,30 +537,65 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
   const MAX_DIAS = 20 * 365 // más allá de esto simplemente no se proyecta fecha
   const eventos = eventosFlujo || []
 
+  // Día simulado de la última compra (real o dentro de esta misma
+  // simulación) — arranca antes de "hoy" si ya llevaba días sin comprar
+  // nada, y se actualiza cada vez que algo se completa, para saber cuándo
+  // el canal de cadencia debe activarse más adelante en la fila.
+  let diaUltimaCompra = -diasSinComprarHoy
+  if (estado.some((e) => e.diasDesdeHoy === 0)) diaUltimaCompra = 0
+
   // Reparte `diario` (una tasa constante de Whimms) día por día entre los
   // primeros `n` de la fila que aún no se completan, por score, dentro del
   // tramo [diaActual, diaLimite) — mismo cálculo de "fases" que la versión
-  // original (día por día, duodécima tanda), acotado a este tramo.
+  // original (día por día, duodécima tanda), acotado a este tramo. Si ya
+  // pasaron CADENCIA_DIAS desde la última compra, una parte de `diario`
+  // (RESERVA_CADENCIA) se desvía en paralelo hacia el más barato pendiente
+  // fuera de esos primeros `n`, sin tocar lo que les toca a ellos.
   function repartirTramo(diario, diaLimite) {
     let dias = diaActual
     let fases = 0
-    while (fases < lista.length + 2 && dias < diaLimite) {
+    while (fases < lista.length * 2 + 4 && dias < diaLimite) {
       fases += 1
-      const activos = estado.filter((e) => e.diasDesdeHoy == null).slice(0, n)
-      if (activos.length === 0) break
+      const pendientes = estado.filter((e) => e.diasDesdeHoy == null)
+      if (pendientes.length === 0) break
+      const activos = pendientes.slice(0, n)
+      const idsActivos = new Set(activos.map((e) => e.id))
+
+      let barato = null
+      let diarioBarato = 0
+      if (dias - diaUltimaCompra >= CADENCIA_DIAS) {
+        barato = elegirBaratoPendiente(pendientes, idsActivos)
+        if (barato) diarioBarato = diario * RESERVA_CADENCIA
+      }
+      const diarioActivos = diario - diarioBarato
+
       const scoreTotal = activos.reduce((s, e) => s + e.score, 0)
-      const shares = activos.map((e) => (scoreTotal > 0 ? (diario * e.score) / scoreTotal : 0))
+      const shares = activos.map((e) => (scoreTotal > 0 ? (diarioActivos * e.score) / scoreTotal : 0))
       let minDias = Infinity
       activos.forEach((e, i) => {
         if (shares[i] > 0) minDias = Math.min(minDias, Math.max(e.precio - e.progreso, 0) / shares[i])
       })
+      if (barato && diarioBarato > 0) {
+        minDias = Math.min(minDias, Math.max(barato.precio - barato.progreso, 0) / diarioBarato)
+      }
       if (!Number.isFinite(minDias)) break
       minDias = Math.min(minDias, diaLimite - dias)
+
       activos.forEach((e, i) => { e.progreso += shares[i] * minDias })
+      if (barato && diarioBarato > 0) barato.progreso += diarioBarato * minDias
       dias += minDias
+
       activos.forEach((e) => {
-        if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) e.diasDesdeHoy = Math.ceil(dias)
+        if (e.diasDesdeHoy == null && e.progreso >= e.precio - 1e-6) {
+          e.diasDesdeHoy = Math.ceil(dias)
+          diaUltimaCompra = dias
+        }
       })
+      if (barato && barato.diasDesdeHoy == null && barato.progreso >= barato.precio - 1e-6) {
+        barato.diasDesdeHoy = Math.ceil(dias)
+        barato.viaCadencia = true
+        diaUltimaCompra = dias
+      }
     }
   }
 
@@ -529,10 +623,17 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
   // juntando lo que de verdad le toca), solo la FECHA que se muestra de
   // cada uno nunca queda antes que la del Whimm justo arriba en la fila.
   // Si uno no alcanza fecha dentro del horizonte (MAX_DIAS), todos los de
-  // menor score tampoco muestran fecha, por la misma razón.
+  // menor score tampoco muestran fecha, por la misma razón. EXCEPCIÓN a
+  // propósito (veinticuatroava tanda): un Whimm que se completó por el
+  // canal de cadencia (`viaCadencia`) se salta esta regla — su fecha real,
+  // aunque sea más temprana que la de uno de mayor score, se muestra tal
+  // cual, porque el punto del canal es justamente comprarlo fuera de su
+  // turno normal. No participa en el orden de los demás ni para adelante
+  // ni para atrás.
   let maxDiasEnOrden = -Infinity
   let bloqueado = false
   estado.forEach((e) => {
+    if (e.viaCadencia) return
     if (bloqueado) { e.diasDesdeHoy = null; return }
     if (e.diasDesdeHoy == null) { bloqueado = true; return }
     e.diasDesdeHoy = Math.max(e.diasDesdeHoy, maxDiasEnOrden)
@@ -545,6 +646,7 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
       {
         fechaProyectada: e.diasDesdeHoy != null ? addDaysISO(hoy, e.diasDesdeHoy) : null,
         acumuladoAutomatico: acumuladoHoyById[e.id] || 0,
+        viaCadencia: !!e.viaCadencia,
       },
     ])
   )

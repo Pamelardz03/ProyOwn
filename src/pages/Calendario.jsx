@@ -84,6 +84,12 @@ export default function Calendario() {
   // usando el 100% del ahorro diario en vez de solo la parte de Whimms.
   const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
   const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  // Misma cadencia mínima que en Compras.jsx (veinticuatroava tanda): la
+  // fecha de última compra real es la que activa el canal extra hacia el
+  // más barato pendiente dentro de proyectarColaWhimms.
+  const ultimaCompraISO = whimms
+    .filter((w) => w.estado === 'comprado')
+    .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
   const colaWhimm = proyectarColaWhimms(
     whimms
       .filter((w) => w.estado !== 'comprado')
@@ -92,7 +98,8 @@ export default function Calendario() {
     eventosFlujo,
     porcentajeWhimms,
     disponibleWhimms,
-    whimmsSimultaneos
+    whimmsSimultaneos,
+    ultimaCompraISO
   )
 
   // Eventos reales: pagos de sueldos fijos (nómina), vencimientos de pagos

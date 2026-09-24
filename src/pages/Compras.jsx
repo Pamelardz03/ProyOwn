@@ -171,8 +171,13 @@ export default function Compras() {
   // devuelve tanto la fecha proyectada como el acumuladoAutomatico de hoy
   // para las barras de progreso — ya no hace falta llamar asignarSaldoWhimms
   // por separado aquí.
-  const activosConFecha = proyectarColaWhimms(activos, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos)
   const comprados = whimms.filter((w) => w.estado === 'comprado')
+  // Última fecha de compra real, para el canal de cadencia mínima
+  // (veinticuatroava tanda) dentro de proyectarColaWhimms: si ya pasaron
+  // 14 días sin comprar NINGÚN Whimm, se le da prioridad extra al más
+  // barato pendiente para que la fila no se estanque.
+  const ultimaCompraISO = comprados.reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
+  const activosConFecha = proyectarColaWhimms(activos, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos, ultimaCompraISO)
   const whimmsOrdenados = [...activosConFecha, ...comprados]
   const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
 
@@ -456,6 +461,11 @@ export default function Compras() {
                       <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
                         {estadoDisplay(w)}
                       </span>
+                      {w.viaCadencia && (
+                        <span style={{ fontSize: 11, color: 'var(--wine4)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8, fontWeight: 600 }}>
+                          Turno especial
+                        </span>
+                      )}
                       {w.fechaProyectada && (
                         <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>
                           {cuandoComprarLabel(w.fechaProyectada) || `Estimado ${formatShortDate(w.fechaProyectada)}`}
@@ -774,7 +784,9 @@ export default function Compras() {
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>
                     {cuandoComprarLabel(detail.fechaProyectada) || formatShortDate(detail.fechaProyectada)}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>Estimado favorable</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>
+                    {detail.viaCadencia ? 'Se adelantó su turno: llevabas 14+ días sin comprar nada' : 'Estimado favorable'}
+                  </div>
                 </div>
               )}
 
