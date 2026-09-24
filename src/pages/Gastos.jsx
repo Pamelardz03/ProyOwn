@@ -9,7 +9,7 @@ import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
-import { monthlyEqPagoFijo, gastoNeto } from '../lib/budget'
+import { gastoNeto } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
@@ -175,11 +175,6 @@ export default function Gastos() {
     ...items.map((it) => ({ ...it, _kind: 'gasto' })),
     ...whimmCompras.map((it) => ({ ...it, _kind: 'whimmCompra' })),
   ].sort((a, b) => compareISODesc(a.fecha ?? a.date, b.fecha ?? b.date))
-  // Costo mensual total de los Vitalls activos (igual cálculo que en
-  // Inicio) — a pedido de Pame, en vez de solo lo que se haya registrado
-  // como Gasto tipo Vitall en el periodo (que puede quedar en $0 si nunca
-  // se anota ese pago como Gasto, ya que los Vitalls se cobran solos).
-  const vitallMensual = vitalls.filter((p) => p.activo !== false).reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
 
   function openEdit(id) {
     const g = gastos.find((x) => x.id === id)
@@ -261,8 +256,8 @@ export default function Gastos() {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Vitall (mensual)</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(vitallMensual)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Gastos (no Whimm)</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(vitallGastado)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 12 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimm</div>

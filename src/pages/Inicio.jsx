@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { ingresosFijosDelMes, monthlyEqPagoFijo, proximaFechaSueldo, fechasPagoVivas, fechasVencimientoVivas, proximoVencimientoPagoFijo, gastoNeto } from '../lib/budget'
+import { ingresosFijosDelMes, monthlyEqPagoFijo, gastoNeto, disponibleParaWhimms, construirFlujoFuturo, proyectarColaWhimms } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -75,6 +75,11 @@ export default function Inicio() {
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
+  // Mismos defaults que Compras.jsx/Calendario.jsx, para que la proyección
+  // de "próxima compra" use exactamente la misma cuenta que esas pantallas.
+  const whimmsSimultaneos = configPresupuesto?.whimmsSimultaneos || 3
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
 
   const cats = deriveWhimmCats(whimms, gastos)
 
@@ -101,27 +106,38 @@ export default function Inicio() {
   const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
   const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
 
-  const saldoMes = ingresoMensual - gastoMensual - vitallMensual - otrosFijosMensual
-
-  // El próximo pago de un sueldo fijo/pago fijo se calcula en vivo (no lee
-  // el campo `fecha` guardado, que se fija una sola vez al darlo de alta y
-  // se queda obsoleto). Nunca debe mostrar "0 días": si la fecha más
-  // próxima es justo hoy (ya es el día de pago), se muestra la siguiente
-  // ocurrencia en su lugar en vez de "0".
   const hoy = todayISO()
-  const proximaFechaSueldoNoHoy = (s) => {
-    const fecha = proximaFechaSueldo(s, hoy)
-    return fecha === hoy ? (fechasPagoVivas(s).find((f) => f > hoy) || null) : fecha
-  }
-  const proximoVencimientoPagoFijoNoHoy = (p) => {
-    const fecha = proximoVencimientoPagoFijo(p, hoy)
-    return fecha === hoy ? (fechasVencimientoVivas(p).find((f) => f > hoy) || null) : fecha
-  }
-  const proximosDias = [
-    ...sueldosFijos.map((s) => daysUntil(proximaFechaSueldoNoHoy(s))),
-    ...pagosActivos.map((p) => daysUntil(proximoVencimientoPagoFijoNoHoy(p))),
-  ].filter((d) => d != null && d > 0)
-  const proximoPagoDias = proximosDias.length ? Math.min(...proximosDias) : null
+
+  // Saldo para compras (23 sep, a pedido de Pame): ya no resta pagos fijos
+  // ni Vitall — esos ya se reservan aparte en el motor de ahorro de
+  // Compras/Perfil, así que restarlos también aquí hacía ver este número
+  // más bajo de lo que en realidad hay libre para gastar/comprar.
+  const saldoParaCompras = ingresoMensual - gastoMensual
+
+  // Racha de días sin ningún Gasto registrado (cualquier tipo) — la fecha
+  // del Gasto más reciente hasta hoy, cero si hay uno hoy mismo.
+  const fechaUltimoGasto = gastos.reduce((max, g) => (g.fecha && g.fecha > (max || '') ? g.fecha : max), null)
+  const diasSinGastar = fechaUltimoGasto ? Math.max(-daysUntil(fechaUltimoGasto), 0) : null
+
+  // Próxima compra de la fila de Whimms (23 sep, a pedido de Pame, en vez
+  // del tile de "Próximo pago"): mismo motor real que Compras.jsx/
+  // Calendario.jsx (`proyectarColaWhimms`, con el canal de cadencia mínima
+  // de la tanda 24), así que puede ser un Whimm que no es el #1 por score
+  // si ya le tocó "turno especial". Se toma el de fecha proyectada más
+  // próxima entre TODOS los activos, no solo el primero de la fila.
+  const activosParaProyeccion = whimms
+    .filter((w) => w.estado !== 'comprado')
+    .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
+    .sort((a, b) => b._score - a._score)
+  const eventosFlujoInicio = construirFlujoFuturo({ sueldosFijos, pagosFijos })
+  const disponibleWhimmsInicio = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  const ultimaCompraISOInicio = whimms
+    .filter((w) => w.estado === 'comprado')
+    .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
+  const proximaCompra = proyectarColaWhimms(activosParaProyeccion, eventosFlujoInicio, porcentajeWhimms, disponibleWhimmsInicio, whimmsSimultaneos, ultimaCompraISOInicio)
+    .filter((w) => w.fechaProyectada)
+    .sort((a, b) => (a.fechaProyectada < b.fechaProyectada ? -1 : a.fechaProyectada > b.fechaProyectada ? 1 : 0))[0] || null
+  const diasProximaCompra = proximaCompra ? daysUntil(proximaCompra.fechaProyectada) : null
 
   // Whimms comprados este mes — lo que realmente salió del banco (se resta
   // lo que ya estaba apartado en efectivo/otra cuenta, igual que en
@@ -163,23 +179,34 @@ export default function Inicio() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div>
           <div className="eyebrow">{weekdayShort(todayISO())} · {formatShortDate(todayISO())}</div>
-          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {primerNombre}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>
+            Hola, {primerNombre}
+            {diasSinGastar != null && (
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)' }}>
+                {' · '}{diasSinGastar === 0 ? 'gastaste hoy' : `${diasSinGastar} día${diasSinGastar === 1 ? '' : 's'} sin gastar`}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="hero">
-          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Saldo del mes</div>
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Saldo para compras</div>
           <div className="mono stat-display" style={{ fontSize: 40, lineHeight: 1.05, marginTop: 6 }}>
-            {fmt(saldoMes)}
+            {fmt(saldoParaCompras)}
             <span style={{ fontSize: 16, opacity: 0.7 }}> MXN</span>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
-              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Gastado este mes</div>
+              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Acumulado</div>
               <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(gastoMensual)}</div>
             </div>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
-              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Próximo pago</div>
-              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{proximoPagoDias != null ? `${proximoPagoDias} días` : '—'}</div>
+              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {proximaCompra ? proximaCompra.name : 'Próxima compra'}
+              </div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>
+                {proximaCompra ? (diasProximaCompra != null && diasProximaCompra <= 0 ? 'Hoy' : `${diasProximaCompra} días`) : '—'}
+              </div>
             </div>
           </div>
         </div>
