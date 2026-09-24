@@ -419,6 +419,12 @@ export default function Compras() {
                 )}
                 {activosConFecha.map((w, i) => (
                   <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '6px 14px', fontSize: 20, fontWeight: 800 }}>
+                        {scoreOutOf10(w._score ?? w.score)}
+                      </span>
+                      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                         <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
@@ -434,13 +440,7 @@ export default function Compras() {
                           )}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
-                            <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '3px 9px', fontSize: 12, fontWeight: 700 }}>
-                              {scoreOutOf10(w._score ?? w.score)}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
+                          <div style={{ fontSize: 15, fontWeight: 600 }}>{w.name}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
                         </div>
                       </div>

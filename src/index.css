@@ -85,7 +85,7 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 
 .back-btn{width:36px;height:36px;border-radius:18px;background:var(--card);display:flex;align-items:center;justify-content:center;border:1px solid var(--beige3);flex-shrink:0}
 
-.toast{position:absolute;bottom:150px;left:16px;right:16px;background:rgba(179,173,142,.88);color:var(--wine);padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;text-align:center;z-index:50;box-shadow:0 6px 16px rgba(0,0,0,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.toast{position:absolute;bottom:78px;left:16px;right:16px;background:rgba(179,173,142,.88);color:var(--wine);padding:12px 16px;border-radius:12px;font-size:13px;font-weight:700;text-align:center;z-index:50;box-shadow:0 6px 16px rgba(0,0,0,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
 .fab{position:absolute;right:16px;bottom:84px;width:56px;height:56px;border-radius:28px;background:var(--wine);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(58,15,31,.35);z-index:20}
 

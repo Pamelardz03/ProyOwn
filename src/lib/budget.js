@@ -89,7 +89,8 @@ export function monthlyEqPagoFijo(p) {
   return p.frecuencia === 'Semanal' ? monto * 4.33 : monto
 }
 
-// --- Reserva real por vencimiento próximo (20 sep, novena tanda) ---
+// --- Reserva real por vencimiento próximo (20 sep, novena tanda; ---
+// --- acumulación gradual, 23 sep, vigésima sexta tanda) ---
 // Reemplaza el promedio fijo por ciclo (monto/30 días sin importar cuándo
 // vence de verdad) que había antes: ahora cada pago fijo/Vitall activo
 // exige juntar monto/díasRestantes cada día hasta su PRÓXIMO vencimiento
@@ -97,6 +98,22 @@ export function monthlyEqPagoFijo(p) {
 // "pesa" más en el presupuesto diario mientras más cerca está — si debo
 // $900 y faltan 4 días, son $225/día esos 4 días, no un promedio parejo
 // todo el mes.
+//
+// `reservaAcumulada` (vigésima sexta tanda, a pedido de Pame: "no me
+// convence que me quita dinero de whimms apenas pague un pago fijo, con
+// otra ronda de pagos fijos siempre") — antes `reservaInmediataPagosFijos`
+// apartaba de un jalón el monto COMPLETO del siguiente vencimiento de
+// CADA pago fijo activo, todo el tiempo, sin importar qué tan lejos
+// estuviera: en cuanto pagabas uno, su "próximo vencimiento" saltaba al
+// siguiente ciclo pero la reserva volvía a exigir el monto completo de
+// inmediato, como si venciera hoy. Ahora la reserva de cada pago fijo
+// CRECE a lo largo del ciclo: $0 justo después de pagarlo (o de darlo de
+// alta, para el primer ciclo), subiendo día a día en línea recta hasta
+// llegar al monto completo justo el día que vence — igual que ya
+// acumulan los Whimms, no un "corte" de un solo golpe. `cicloDias` es la
+// duración de ESTE ciclo (del vencimiento anterior al próximo); si no hay
+// vencimiento anterior (primer ciclo), se usa la fecha de alta del pago
+// fijo como inicio.
 export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
   const hoy = hoyISO || todayISO()
   return (pagosFijos || [])
@@ -106,7 +123,12 @@ export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
       if (!vencimiento) return null
       const dias = Math.max(daysUntil(vencimiento), 1)
       const monto = Number(p.monto) || 0
-      return { pago: p, vencimiento, dias, monto, reservaDiaria: monto / dias }
+      const serieHastaVencimiento = fechasVencimientoVivas(p, vencimiento).sort(compareISOAsc)
+      const anterior = [...serieHastaVencimiento].filter((f) => f < vencimiento).pop() || p.fecha || hoy
+      const cicloDias = Math.max(Math.round((parseISODate(vencimiento) - parseISODate(anterior)) / 86400000), 1)
+      const transcurridos = Math.min(Math.max(cicloDias - dias, 0), cicloDias)
+      const reservaAcumulada = monto * (transcurridos / cicloDias)
+      return { pago: p, vencimiento, dias, monto, reservaDiaria: monto / dias, reservaAcumulada }
     })
     .filter(Boolean)
 }
@@ -242,12 +264,13 @@ export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, 
 }
 
 // Del saldo acumulado real, cuánto NO se le puede prestar a los Whimms
-// porque ya está comprometido con el próximo vencimiento de cada pago fijo
-// activo (se reserva el monto COMPLETO del siguiente ciclo de cada uno,
-// no solo la fracción diaria) — así un pago grande que ya está "cerca" no
-// se lo come la wishlist antes de que llegue su fecha.
+// porque ya está comprometido con los pagos fijos activos — la reserva de
+// CADA uno se acumula gradualmente a lo largo de su ciclo (ver
+// `reservasDiariasPagosFijos`, vigésima sexta tanda), así un pago grande
+// que ya está "cerca" pesa cada vez más, pero uno que se acaba de pagar
+// no vuelve a quitarle dinero a whimms de un jalón.
 export function reservaInmediataPagosFijos(pagosFijos, hoyISO) {
-  return reservasDiariasPagosFijos(pagosFijos, hoyISO).reduce((sum, r) => sum + r.monto, 0)
+  return reservasDiariasPagosFijos(pagosFijos, hoyISO).reduce((sum, r) => sum + r.reservaAcumulada, 0)
 }
 
 // Qué fracción del saldo libre (ya sin lo reservado a pagos fijos) se le
@@ -338,14 +361,20 @@ export function diasPeriodoActual(sueldosFijos, hoyISO) {
 // Presupuesto diario TOTAL — whimms + gasto libre juntos, ANTES de aplicar
 // `porcentajeWhimms` — a pedido de Pame (23 sep): "si me da 200 al día por
 // whimm y gastos, yo decido el porcentaje... así no cambian los 200 de los
-// futuros días". Este número no debe moverse cuando ella edite el slider
-// de "Whimms vs. gasto libre" — el % solo decide cómo se reparte ESTE
-// mismo total entre juntar para whimms y tener libre para gastar hoy, no
-// cambia el total en sí (por eso se calcula sobre `disponibleBrutoParaWhimms`,
-// que es previo a aplicar el %). Usa la misma duración fija de periodo que
-// `diasPeriodoActual`, así tampoco se infla solo porque no se gaste.
+// futuros días". El % solo decide cómo se reparte ESTE mismo total entre
+// juntar para whimms y tener libre para gastar hoy, no cambia el total en
+// sí (por eso se calcula sobre `disponibleBrutoParaWhimms`, que es previo
+// a aplicar el %).
+//
+// Divisor (vuelta atrás, 23 sep — tanda 26): entre la tanda 22 y esta, se
+// probó `diasPeriodoActual` (duración FIJA del periodo de pago, para que
+// la tasa diaria no se "inflara" sola con los días sin gastar) y `diasHastaProximoIngreso`
+// (los días que van QUEDANDO hasta el próximo pago, encogiéndose día a
+// día). A pedido explícito de Pame, se regresa a `diasHastaProximoIngreso`:
+// el saldo no gastado se reparte equitativamente entre los días que
+// quedan del periodo actual, no entre la duración fija de todo el periodo.
 export function presupuestoDiarioTotal(params) {
-  const dias = diasPeriodoActual(params.sueldosFijos, params.hoyISO)
+  const dias = diasHastaProximoIngreso(params.sueldosFijos, params.hoyISO)
   if (!dias) return null
   return disponibleBrutoParaWhimms(params) / dias
 }

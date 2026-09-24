@@ -7,9 +7,9 @@ import { useToast } from '../hooks/useToast'
 import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
-import { gastoNeto } from '../lib/budget'
+import { gastoNeto, disponibleParaWhimms, bufferGastoHormiga } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const PERIODOS = ['dia', 'semana', 'mes', 'anio']
@@ -117,9 +117,24 @@ export default function Gastos() {
   const { data: gastos, loading, error } = useUserCollection('gastos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
+  const { data: sueldosFijos } = useUserCollection('sueldosFijos')
+  const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
   const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
+
+  // Los dos "bolsillos" en que se reparte el saldo libre (misma lógica que
+  // Compras, ver src/lib/budget.js) — a pedido de Pame (vigésima sexta
+  // tanda): aquí en Gastos quería ver, uno al lado del otro, cuánto de ese
+  // dinero de Whimms está disponible para gastos del día a día (colchón de
+  // gasto hormiga) y cuánto está juntado para la wishlist, no cuánto ya se
+  // gastó por categoría (eso lo reemplaza).
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
+  const whimmsParaGastos = bufferGastoHormiga(budgetParams)
+  const whimmsParaWishlist = disponibleParaWhimms(budgetParams)
 
   // Al empatar en fecha (varios gastos el mismo día), el más recién creado
   // va primero — antes desempataba con el orden natural de la colección
@@ -256,12 +271,12 @@ export default function Gastos() {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Gastos (no Whimm)</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(vitallGastado)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimms para gastos</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(whimmsParaGastos)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimm</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(whimmGastado)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimms de la wishlist</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(whimmsParaWishlist)}</div>
           </div>
         </div>
 
