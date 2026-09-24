@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaProximoIngreso, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, saldoLibreAcumuladoReal, disponibleParaWhimms, reservaInmediataPagosFijos, bufferGastoHormiga, diasHastaSueldoMayor, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -93,7 +93,7 @@ export default function Perfil() {
   const saldoAcumuladoReal = saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial })
   const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const colchonGastoHormiga = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
-  const diasProximoIngreso = diasHastaProximoIngreso(sueldosFijos)
+  const diasProximoIngreso = diasHastaSueldoMayor(sueldosFijos)
   // Presupuesto diario TOTAL (23 sep) — ver nota completa en Compras.jsx /
   // src/lib/budget.js: whimms + gasto libre juntos, calculado ANTES de
   // aplicar el % de reparto, así que editar el % en Compras nunca cambia

@@ -177,9 +177,6 @@ export default function Compras() {
   const presupuestoTotal = presupuestoDiarioTotal(budgetParams)
   const colchonPorDia = presupuestoTotal != null ? presupuestoTotal * (1 - porcentajeWhimms) : null
   const whimmPorDia = presupuestoTotal != null ? presupuestoTotal * porcentajeWhimms : null
-  // Por semana en vez de por día (treceava tanda, a pedido de Pame) — se
-  // siente más natural para pensar en gasto libre que una cifra diaria.
-  const colchonPorSemana = colchonPorDia != null ? colchonPorDia * 7 : null
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
   const activos = whimms
@@ -451,7 +448,9 @@ export default function Compras() {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
                 <div style={{ fontSize: 10, color: colchonBajo ? 'var(--red)' : 'var(--muted)', fontWeight: colchonBajo ? 600 : 400, marginTop: 2 }}>
-                  {presupuestoTotal != null ? `${fmt(presupuestoTotal)}/día total · ` : ''}{fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/sem` : fmt(colchonGastoHormiga)} gastos · {whimmsSimultaneos} a la vez
+                  {presupuestoTotal != null
+                    ? `${fmt(presupuestoTotal)} hoy · ${fmt(whimmPorDia)} whimms · ${fmt(colchonPorDia)} gastos`
+                    : `${fmt(disponibleWhimms)} wishlist · ${fmt(colchonGastoHormiga)} gastos`} · {whimmsSimultaneos} a la vez
                 </div>
               </div>
               <button
@@ -664,7 +663,9 @@ export default function Compras() {
 
               <div style={{ fontSize: 12, fontWeight: 600 }}>Whimms vs. gasto libre</div>
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>
-                {presupuestoTotal != null ? `${fmt(presupuestoTotal)}/día total (fijo, no cambia con este %) · ` : ''}{fmt(disponibleWhimms)} wishlist · {colchonPorSemana != null ? `${fmt(colchonPorSemana)}/semana` : fmt(colchonGastoHormiga)} gastos
+                {presupuestoTotal != null
+                  ? `${fmt(presupuestoTotal)} hoy · ${fmt(whimmPorDia)} whimms · ${fmt(colchonPorDia)} gastos`
+                  : `${fmt(disponibleWhimms)} wishlist · ${fmt(colchonGastoHormiga)} gastos`}
               </div>
               <input
                 type="range"

@@ -125,9 +125,28 @@ function sueldoDeMayorMonto(sueldosFijos) {
 // fijo/Vitall que vence DESPUÉS de esta fecha todavía no se reserva de tu
 // saldo actual, porque ese mismo sueldo va a traer el dinero para cubrirlo
 // antes de que llegue su fecha.
-function proximoLimiteReserva(sueldosFijos, hoyISO) {
+export function proximoLimiteReserva(sueldosFijos, hoyISO) {
   const mayor = sueldoDeMayorMonto(sueldosFijos)
   return mayor ? proximaFechaSueldo(mayor, hoyISO || todayISO()) : null
+}
+
+// Cuántos días faltan hasta ese sueldo más grande — mismo criterio que
+// `diasHastaProximoIngreso` pero anclado siempre al sueldo PRINCIPAL (ej.
+// Kenet), no al que sea que caiga primero entre todos (a pedido de Pame,
+// vigésima novena tanda, cont.: "el próximo pago muéstralo de cuándo
+// sigue la próxima quincena" — un sueldo chico y frecuente como Domingo
+// no debe ser el que define "cuánto falta para el próximo pago").
+export function diasHastaSueldoMayor(sueldosFijos, hoyISO) {
+  return daysUntil(proximoLimiteReserva(sueldosFijos, hoyISO))
+}
+
+// Duración NATURAL del ciclo según la frecuencia — usada como respaldo
+// del ramp cuando un pago fijo/Vitall es tan nuevo que todavía no tiene
+// ninguna ocurrencia anterior real (ver más abajo).
+function cicloNaturalDias(frecuencia) {
+  if (frecuencia === 'Semanal') return 7
+  if (frecuencia === 'Quincenal') return 15
+  return 30
 }
 
 export function reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
@@ -148,8 +167,19 @@ export function reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
       const dias = Math.max(daysUntil(vencimiento), 1)
       const monto = montoOcurrenciaPagoFijo(p, vencimiento)
       const serieHastaVencimiento = fechasVencimientoVivas(p, vencimiento).sort(compareISOAsc)
-      const anterior = [...serieHastaVencimiento].filter((f) => f < vencimiento).pop() || p.fecha || hoy
-      const cicloDias = Math.max(Math.round((parseISODate(vencimiento) - parseISODate(anterior)) / 86400000), 1)
+      const anteriorReal = [...serieHastaVencimiento].filter((f) => f < vencimiento).pop() || null
+      // Si todavía no hay ninguna ocurrencia anterior real (el pago fijo
+      // se acaba de crear y esta es su primera vez), usar la fecha misma
+      // como "anterior" hacía que el ciclo se viera de 1 día — un pago
+      // que vence hasta dentro de varios días se veía con $0 reservado
+      // aunque ya casi llegara su fecha (encontrado 24 sep: Pame reportó
+      // "tengo 45 mañana" pero la app solo reservaba $6 de dos Vitalls
+      // nuevos). Ahora, sin anterior real, se usa la duración NATURAL del
+      // ciclo según su frecuencia como respaldo, para que el ramp sí
+      // suba con normalidad según qué tan cerca está el vencimiento.
+      const cicloDias = anteriorReal
+        ? Math.max(Math.round((parseISODate(vencimiento) - parseISODate(anteriorReal)) / 86400000), 1)
+        : cicloNaturalDias(p.frecuencia)
       const transcurridos = Math.min(Math.max(cicloDias - dias, 0), cicloDias)
       const reservaAcumulada = monto * (transcurridos / cicloDias)
       return { pago: p, vencimiento, dias, monto, reservaDiaria: monto / dias, reservaAcumulada }
@@ -398,7 +428,7 @@ export function diasPeriodoActual(sueldosFijos, hoyISO) {
 // el saldo no gastado se reparte equitativamente entre los días que
 // quedan del periodo actual, no entre la duración fija de todo el periodo.
 export function presupuestoDiarioTotal(params) {
-  const dias = diasHastaProximoIngreso(params.sueldosFijos, params.hoyISO)
+  const dias = diasHastaSueldoMayor(params.sueldosFijos, params.hoyISO)
   if (!dias) return null
   return disponibleBrutoParaWhimms(params) / dias
 }
