@@ -122,7 +122,7 @@ export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
       const vencimiento = proximoVencimientoPagoFijo(p, hoy)
       if (!vencimiento) return null
       const dias = Math.max(daysUntil(vencimiento), 1)
-      const monto = Number(p.monto) || 0
+      const monto = montoOcurrenciaPagoFijo(p, vencimiento)
       const serieHastaVencimiento = fechasVencimientoVivas(p, vencimiento).sort(compareISOAsc)
       const anterior = [...serieHastaVencimiento].filter((f) => f < vencimiento).pop() || p.fecha || hoy
       const cicloDias = Math.max(Math.round((parseISODate(vencimiento) - parseISODate(anterior)) / 86400000), 1)
@@ -224,7 +224,7 @@ export function totalVencimientosHasta(pagosFijos, hoyISO) {
   const hoy = hoyISO || todayISO()
   return (pagosFijos || [])
     .filter((p) => p.activo !== false)
-    .reduce((sum, p) => sum + fechasVencimientoVivas(p).filter((f) => f <= hoy).length * (Number(p.monto) || 0), 0)
+    .reduce((sum, p) => sum + fechasVencimientoVivas(p).filter((f) => f <= hoy).reduce((s2, f) => s2 + montoOcurrenciaPagoFijo(p, f), 0), 0)
 }
 
 // Usa el precio REAL de compra (`precioComprado`) cuando existe, en vez del
@@ -692,6 +692,16 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
 // pasa esa fecha.
 const HORIZONTE_DIAS_PAGOFIJO = 365
 
+// `excepciones` (vigésima sexta tanda, a pedido de Pame: "los pagos fijos
+// se pueden editar en el historial... y solo se eliminará esa frecuencia")
+// — mapa { [fechaISODeLaOcurrencia]: { omitida: true } | { monto: N } }
+// guardado en el propio documento del pago fijo. Una ocurrencia "omitida"
+// (ej. el día que no fue a clases y no pagó el estacionamiento) deja de
+// existir para CUALQUIER cálculo — ya no se reserva, no se cuenta en el
+// saldo, y la serie salta derecho a la siguiente — sin tocar la
+// definición recurrente ni las demás fechas. Eliminar el pago fijo
+// completo sigue siendo una acción aparte, con su propia confirmación,
+// en PreciosFijos.jsx.
 export function fechasVencimientoVivas(pagoFijo, hastaISO) {
   if (!pagoFijo.fecha) return []
   const hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_PAGOFIJO)
@@ -699,7 +709,8 @@ export function fechasVencimientoVivas(pagoFijo, hastaISO) {
   if (pagoFijo.finito && pagoFijo.numPagos) {
     fechas = [...fechas].sort(compareISOAsc).slice(0, Number(pagoFijo.numPagos) || fechas.length)
   }
-  return fechas
+  const excepciones = pagoFijo.excepciones || {}
+  return fechas.filter((f) => !excepciones[f]?.omitida)
 }
 
 // El próximo vencimiento (hoy o después) de un pago fijo — reemplaza leer
@@ -708,4 +719,13 @@ export function proximoVencimientoPagoFijo(pagoFijo, hoyISO) {
   const hoy = hoyISO || todayISO()
   const fechas = fechasVencimientoVivas(pagoFijo)
   return fechas.find((f) => f >= hoy) || null
+}
+
+// Monto real de UNA ocurrencia puntual — el monto guardado por default, o
+// el que se haya corregido solo para esa fecha exacta (misma excepción de
+// arriba). El monto general del pago fijo (y las demás fechas) no cambia.
+export function montoOcurrenciaPagoFijo(pagoFijo, fechaISO) {
+  const ex = (pagoFijo.excepciones || {})[fechaISO]
+  if (ex && ex.monto != null) return Number(ex.monto) || 0
+  return Number(pagoFijo.monto) || 0
 }

@@ -137,6 +137,12 @@ export default function PreciosFijos() {
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [saving, setSaving] = useState(false)
+  // Confirmación al eliminar el pago fijo COMPLETO (vigésima sexta tanda,
+  // a pedido de Pame: "si elimina el pago en pagos fijos ahí ya es cuando
+  // pregunta") — a diferencia de editar/omitir una sola ocurrencia desde
+  // el Historial, esto borra la definición recurrente entera y todas sus
+  // fechas futuras, así que sí necesita confirmarse.
+  const [confirmDelete, setConfirmDelete] = useState(null) // { id, name }
 
   const totalMonthly = items.reduce((sum, p) => sum + monthlyEq(p), 0)
   // Categorías reales que existen en los pagos fijos de Pame (no solo las
@@ -256,7 +262,7 @@ export default function PreciosFijos() {
               isSwipeOpen={swipeOpenId === p.id}
               onSwipeChange={(open) => setSwipeOpenId(open ? p.id : null)}
               onEdit={() => openEdit(p)}
-              onDelete={() => removePago(p.id)}
+              onDelete={() => setConfirmDelete({ id: p.id, name: p.name })}
               onToggleActivo={() => toggleActivo(p.id, p.activo)}
               onSetFecha={(fecha) => setFecha(p.id, fecha)}
             />
@@ -338,6 +344,31 @@ export default function PreciosFijos() {
               <ToggleRow label="Recordatorio mini" hint="Diario, desde que se activa hasta el día de pago" on={editForm.notifMini} onClick={() => setEditForm((f) => ({ ...f, notifMini: !f.notifMini }))} />
               <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveEdit} disabled={saving}>
                 Guardar cambios
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {confirmDelete && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setConfirmDelete(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>¿Eliminar &quot;{confirmDelete.name}&quot;?</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                Esto borra el pago fijo por completo, incluyendo todas sus fechas futuras. Si solo un día no se cobró como siempre, es mejor editarlo desde el Historial en vez de borrar esto.
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--red)', marginTop: 4 }}
+                onClick={() => { removePago(confirmDelete.id); setConfirmDelete(null) }}
+              >
+                Eliminar de todos modos
+              </button>
+              <button className="pill" style={{ textAlign: 'center' }} onClick={() => setConfirmDelete(null)}>
+                Cancelar
               </button>
             </div>
           </div>

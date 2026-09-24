@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { IconChevronLeft } from '../components/Icons'
-import { useUserCollection } from '../lib/firestoreCollections'
-import { formatShortDate } from '../lib/date'
+import { IconChevronLeft, IconEdit, IconClose } from '../components/Icons'
+import { useAuth } from '../lib/AuthContext'
+import { useUserCollection, updateUserDoc } from '../lib/firestoreCollections'
+import { formatShortDate, todayISO } from '../lib/date'
 import { buildHistorialEvents } from '../lib/historial'
 
 const FILTERS = [
@@ -13,9 +14,16 @@ const FILTERS = [
 ]
 
 export default function HistorialCompleto() {
+  const { user } = useAuth()
   const [cat, setCat] = useState('todos')
   const [subcat, setSubcat] = useState('todos')
   const [sort, setSort] = useState('fecha')
+  // Edición puntual de UNA ocurrencia de pago fijo/Vitall (vigésima sexta
+  // tanda, a pedido de Pame) — nunca borra ni afecta la definición
+  // recurrente, solo esa fecha exacta (ver `excepciones` en budget.js).
+  const [editingOcurrencia, setEditingOcurrencia] = useState(null) // { pagoFijoId, fecha, nombre, montoActual }
+  const [ocurrenciaMontoValue, setOcurrenciaMontoValue] = useState('')
+  const [savingOcurrencia, setSavingOcurrencia] = useState(false)
 
   const { data: gastos } = useUserCollection('gastos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
@@ -23,7 +31,28 @@ export default function HistorialCompleto() {
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
 
-  const hoy = new Date().toISOString().slice(0, 10)
+  function openEditOcurrencia(it) {
+    setOcurrenciaMontoValue(String(Math.abs(it.amount) || ''))
+    setEditingOcurrencia({ pagoFijoId: it.pagoFijoId, fecha: it.ocurrenciaFecha, nombre: it.pagoFijoNombre })
+  }
+
+  async function guardarExcepcion(patch) {
+    if (!editingOcurrencia) return
+    const p = pagosFijos.find((x) => x.id === editingOcurrencia.pagoFijoId)
+    if (!p) return
+    setSavingOcurrencia(true)
+    try {
+      const excepciones = { ...(p.excepciones || {}), [editingOcurrencia.fecha]: patch }
+      await updateUserDoc(user.uid, 'pagosFijos', p.id, { excepciones })
+      setEditingOcurrencia(null)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSavingOcurrencia(false)
+    }
+  }
+
+  const hoy = todayISO()
 
   const events = useMemo(
     () => buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pagosFijos, whimms, hoyISO: hoy }),
@@ -110,11 +139,61 @@ export default function HistorialCompleto() {
                 <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: it.amountColor }}>{it.amountText}</div>
                 <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{it.dateLabel}</div>
               </div>
+              {it.editable === 'pagoFijoOcurrencia' && (
+                <button aria-label="Editar este cobro" onClick={() => openEditOcurrencia(it)} style={{ flexShrink: 0 }}>
+                  <IconEdit />
+                </button>
+              )}
             </div>
           ))}
           {items.length === 0 && <div className="empty-state">Sin resultados para este filtro</div>}
         </div>
       </div>
+
+      {editingOcurrencia && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setEditingOcurrencia(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
+                <button aria-label="Cerrar" onClick={() => setEditingOcurrencia(null)}>
+                  <IconClose />
+                </button>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Editar cobro: {editingOcurrencia.nombre}</div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+                Solo cambia esta fecha ({formatShortDate(editingOcurrencia.fecha)}) — las demás ocurrencias y la definición del pago fijo siguen igual.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  className="fld"
+                  placeholder="Monto de este día"
+                  inputMode="decimal"
+                  value={ocurrenciaMontoValue}
+                  onChange={(e) => setOcurrenciaMontoValue(e.target.value)}
+                />
+                <button
+                  className="btn-primary"
+                  disabled={savingOcurrencia || !Number(ocurrenciaMontoValue)}
+                  style={{ opacity: savingOcurrencia ? 0.7 : 1 }}
+                  onClick={() => guardarExcepcion({ monto: Number(ocurrenciaMontoValue) })}
+                >
+                  Guardar monto de este día
+                </button>
+                <button
+                  className="pill"
+                  style={{ textAlign: 'center' }}
+                  disabled={savingOcurrencia}
+                  onClick={() => guardarExcepcion({ omitida: true })}
+                >
+                  No se cobró este día
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

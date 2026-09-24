@@ -4,7 +4,7 @@
 // completo y sin filtro (antes Inicio armaba su propia lista reducida,
 // solo con gastos/sueldos rápidos/Whimms comprados — sin sueldos fijos ni
 // los eventos de "Cambios" como crear un Whimm o un Vitall).
-import { gastoNeto } from './budget'
+import { gastoNeto, fechasVencimientoVivas, montoOcurrenciaPagoFijo } from './budget'
 
 const GASTO_DOT = { Whimm: '#8c5a6e', Vitall: '#5c2536' }
 
@@ -84,6 +84,34 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
       dotColor: '#7a7156',
       dateISO: isoFromTimestamp(p.creadoEn),
     })
+
+    // Una fila por cada ocurrencia YA vencida (vigésima sexta tanda, a
+    // pedido de Pame) — antes el historial no mostraba nada de los cobros
+    // de pagos fijos/Vitall en sí, solo el registro de cuando se creó. Se
+    // puede editar cada una desde aquí (HistorialCompleto.jsx: cambiar el
+    // monto de ese día o marcarlo como no cobrado) sin afectar la
+    // definición recurrente ni las demás fechas — ver `excepciones` en
+    // src/lib/budget.js.
+    if (p.activo !== false) {
+      fechasVencimientoVivas(p, hoy)
+        .filter((f) => f <= hoy)
+        .forEach((f) => {
+          out.push({
+            id: `pagofijovenc-${p.id}-${f}`,
+            cat: 'gasto',
+            subcat: p.tipo === 'Vitall' ? (p.name || '') : (p.tipo || ''),
+            badge: p.tipo === 'Vitall' ? 'Vitall' : 'Pago fijo',
+            title: `Se cobró "${p.name || 'pago'}"`,
+            amount: -montoOcurrenciaPagoFijo(p, f),
+            dotColor: GASTO_DOT.Vitall,
+            dateISO: f,
+            editable: 'pagoFijoOcurrencia',
+            pagoFijoId: p.id,
+            pagoFijoNombre: p.name || 'pago',
+            ocurrenciaFecha: f,
+          })
+        })
+    }
   })
 
   ;(whimms || []).forEach((w) => {
