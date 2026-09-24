@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import { useUserDoc, setUserDoc } from './lib/firestoreCollections'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import Inicio from './pages/Inicio'
@@ -24,10 +26,39 @@ function LocalModeBanner() {
   )
 }
 
+// Pide permiso de notificaciones UNA sola vez después de iniciar sesión
+// (a pedido de Pame, vigésima sexta tanda: "pregunta por permiso al
+// entrar a la app después de registrarse. Y mantén ese permiso hasta que
+// el usuario lo cambie") — se guarda `notifPermisoPedido` en
+// config/presupuesto para no volver a preguntar en cada sesión; si el
+// usuario después cambia el permiso desde el propio navegador, la app
+// respeta esa decisión sin volver a insistir.
+function useNotifPermissionRequest() {
+  const { user } = useAuth()
+  const { data: config, loading } = useUserDoc('config', 'presupuesto')
+
+  useEffect(() => {
+    if (!user || loading) return
+    if (config?.notifPermisoPedido) return
+    if (typeof Notification === 'undefined') {
+      setUserDoc(user.uid, 'config', 'presupuesto', { notifPermisoPedido: true, notifPermisoEstado: 'no-soportado' })
+      return
+    }
+    if (Notification.permission !== 'default') {
+      setUserDoc(user.uid, 'config', 'presupuesto', { notifPermisoPedido: true, notifPermisoEstado: Notification.permission })
+      return
+    }
+    Notification.requestPermission().then((result) => {
+      setUserDoc(user.uid, 'config', 'presupuesto', { notifPermisoPedido: true, notifPermisoEstado: result })
+    })
+  }, [user, loading, config])
+}
+
 function AppShell() {
   const location = useLocation()
   const showNav = MAIN_TABS.includes(location.pathname)
   const { firebaseReady } = useAuth()
+  useNotifPermissionRequest()
 
   return (
     <div className="app-shell">

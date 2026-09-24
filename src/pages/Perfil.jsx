@@ -230,6 +230,13 @@ export default function Perfil() {
             <div style={{ fontSize: 10, color: 'var(--muted)', borderTop: '1px solid var(--beige2)', paddingTop: 10 }}>
               Próximamente aquí: tarjetas registradas y más ajustes de la cuenta.
             </div>
+            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+              Notificaciones: {{
+                granted: 'activadas',
+                denied: 'desactivadas (cámbialo desde los ajustes del navegador/celular)',
+                'no-soportado': 'no disponibles en este navegador',
+              }[configPresupuesto?.notifPermisoEstado] || 'aún sin decidir'}
+            </div>
           </div>
         </div>
 
