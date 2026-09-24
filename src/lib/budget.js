@@ -1,4 +1,4 @@
-import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil, parseISODate } from './date'
+import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil, parseISODate, diasEntreISO } from './date'
 
 // Un sueldo fijo no tiene fecha de fin por default — 2 años hacia adelante
 // es más que suficiente para cualquier vista/paginación real de la app.
@@ -138,6 +138,15 @@ export function proximoLimiteReserva(sueldosFijos, hoyISO) {
 // no debe ser el que define "cuánto falta para el próximo pago").
 export function diasHastaSueldoMayor(sueldosFijos, hoyISO) {
   return daysUntil(proximoLimiteReserva(sueldosFijos, hoyISO))
+}
+
+// Igual que `diasHastaSueldoMayor`, pero evaluado como si "hoy" fuera
+// `fechaISO` en vez del día real — necesario para calcular la meta diaria
+// de gastos en fechas PASADAS dentro de `procesarDiasPendientes` (usa
+// `diasEntreISO`, que no depende del reloj real, en vez de `daysUntil`).
+export function diasHastaSueldoMayorEnFecha(sueldosFijos, fechaISO) {
+  const limite = proximoLimiteReserva(sueldosFijos, fechaISO)
+  return limite ? diasEntreISO(fechaISO, limite) : null
 }
 
 // Duración NATURAL del ciclo según la frecuencia — usada como respaldo
@@ -796,4 +805,206 @@ export function montoOcurrenciaPagoFijo(pagoFijo, fechaISO) {
   const ex = (pagoFijo.excepciones || {})[fechaISO]
   if (ex && ex.monto != null) return Number(ex.monto) || 0
   return Number(pagoFijo.monto) || 0
+}
+
+// --- Bolsillos independientes: Whimms vs. gastos del día (trigésima ---
+// --- segunda tanda, a pedido extenso de Pame) ---
+// Hasta la tanda 31, "disponible para Whimms" y "disponible para gastos"
+// eran solo una FOTO instantánea: se tomaba tu saldo real total de HOY y
+// se partía por tu % en el momento de dibujar la pantalla — no existían
+// dos cuentas de verdad. Eso causaba 3 problemas que Pame reportó en la
+// misma conversación: (1) comprar un Whimm "ya listo" (con dinero que en
+// teoría ya era solo de whimms) también le bajaba su presupuesto del día,
+// porque ambos números salían de partir el MISMO saldo compartido, que
+// bajaba completo con cualquier gasto; (2) mover el slider de % reacomodaba
+// de golpe TODO lo ya acumulado, en vez de solo cambiar cómo se reparte lo
+// que entre de ahora en adelante; (3) no había manera de saber "cuánto ya
+// llevo acumulado de verdad para whimms" porque no se iba sumando en
+// ningún lado, se recalculaba desde cero cada vez.
+//
+// Ahora `saldoWhimms` y `saldoGastos` son dos saldos reales, guardados en
+// `config/presupuesto` junto con `ultimoProcesado` (el último día ya
+// asentado). Reglas exactas (confirmadas con Pame):
+//   - Cada sueldo (fijo o rápido) que cae se parte por `porcentajeWhimms`
+//     y alimenta las dos cuentas por separado.
+//   - Un pago fijo/Vitall que se cobra sale completo de GASTOS (no de
+//     whimms) el día exacto de su vencimiento real.
+//   - Comprar un Whimm sale completo de WHIMMS (ver `registrarCompraWhimm`
+//     no existe como tal — el descuento ya lo hacía `totalWhimmsCompradosHasta`
+//     sobre el saldo real; aquí solo se refleja también en `saldoWhimms`,
+//     ver `whimmsCompradosEnFecha` más abajo).
+//   - Gastos (gasto hormiga) tiene una META diaria = saldoGastos ÷ días
+//     que faltan hasta el próximo sueldo grande. Al cerrar cada día: si
+//     sobró dinero de esa meta (gastaste menos o nada), el sobrante se
+//     reparte por el mismo % entre whimms y gastos — un premio chico para
+//     las dos cuentas. Si gastaste MÁS de la meta, la diferencia se
+//     descuenta primero de whimms; si whimms no alcanza, el resto se
+//     queda absorbido en gastos (baja la meta del día siguiente sola,
+//     nunca se vuelve a cobrar aparte).
+//   - Cambiar `porcentajeWhimms` NUNCA reparte otra vez lo que ya está
+//     acumulado — solo cambia cómo se reparte lo que entre de ahora en
+//     adelante (por eso la UI de Compras exige confirmar el cambio en
+//     vez de aplicarlo al instante, a diferencia de `whimmsSimultaneos`).
+//
+// No hay manera de reconstruir con exactitud qué % tenía Pame puesta cada
+// día del pasado (solo se guarda el valor vigente), así que las dos
+// cuentas ARRANCAN el día que se activa esta tanda con el reparto de HOY
+// (ver `inicializarBolsillos`) en vez de fingir un historial que no
+// existe — decisión explícita de Pame ("si que empieze hoy").
+
+// Cuánto sueldo (fijo o rápido) cae EXACTAMENTE en `fechaISO` — a
+// diferencia de `totalIngresosHasta` (acumulado hasta una fecha), esto es
+// solo el monto de ESE día puntual, para ir avanzando los bolsillos día
+// por día.
+export function sueldosEnFecha(sueldosFijos, sueldosRapidos, fechaISO) {
+  const fijos = (sueldosFijos || []).reduce(
+    (sum, s) => sum + (fechasPagoVivas(s).includes(fechaISO) ? Number(s.monto) || 0 : 0),
+    0
+  )
+  const rapidos = (sueldosRapidos || []).reduce(
+    (sum, r) => sum + (r.fecha === fechaISO ? Number(r.monto) || 0 : 0),
+    0
+  )
+  return fijos + rapidos
+}
+
+// Cuánto de pagos fijos/Vitall activos vence EXACTAMENTE en `fechaISO`
+// (respetando excepciones/monto por ocurrencia) — este monto sale
+// completo de la cuenta de gastos ese mismo día, sin rampa (a diferencia
+// de `reservasDiariasPagosFijos`, que sigue existiendo tal cual solo como
+// aviso anticipado en Perfil/"riesgos detectados").
+export function vencimientosEnFecha(pagosFijos, fechaISO) {
+  return (pagosFijos || [])
+    .filter((p) => p.activo !== false)
+    .reduce((sum, p) => sum + (fechasVencimientoVivas(p).includes(fechaISO) ? montoOcurrenciaPagoFijo(p, fechaISO) : 0), 0)
+}
+
+// Cuánto se compró de Whimms de la wishlist EXACTAMENTE en `fechaISO`
+// (neto de lo ya apartado en efectivo/otra cuenta) — sale completo de la
+// cuenta de whimms ese mismo día.
+export function whimmsCompradosEnFecha(whimms, fechaISO) {
+  return (whimms || [])
+    .filter((w) => w.estado === 'comprado' && w.compradoEn === fechaISO)
+    .reduce((sum, w) => {
+      const precioFinal = Number(w.precioComprado ?? w.precio) || 0
+      const yaApartado = Number(w.montoApartado) || 0
+      return sum + Math.max(precioFinal - yaApartado, 0)
+    }, 0)
+}
+
+// Gasto hormiga (Gasto tipo Whimm sin vincular a un Whimm real, ver
+// `promedioGastoHormigaDiario`) real EXACTAMENTE en `fechaISO`.
+export function gastoHormigaEnFecha(gastos, fechaISO) {
+  return (gastos || []).reduce((sum, g) => {
+    if (g.categoria === 'Vitall' && g.vitallId) return sum
+    if (g.fecha !== fechaISO) return sum
+    return sum + gastoNeto(g)
+  }, 0)
+}
+
+// Arranque de los dos bolsillos: el reparto de HOY de tu saldo libre real
+// TOTAL (sin excluir ninguna reserva de pagos fijos — esos ahora salen
+// completos el día que se cobran de verdad, ver `vencimientosEnFecha`),
+// con `ultimoProcesado` en AYER — así el resto del día de hoy (cualquier
+// sueldo/pago fijo/compra/gasto ya registrado hoy mismo) lo aplica
+// `bolsillosDeHoy` en vivo, sin que se cuente dos veces aquí.
+export function inicializarBolsillos(params, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const ayer = addDaysISO(hoy, -1)
+  const pct = porcentajeWhimmsDe(params)
+  // `totalWhimmsCompradosHasta` (usada dentro de `saldoLibreAcumuladoReal`)
+  // NO filtra por fecha — siempre resta TODAS las compras marcadas
+  // "comprado", sin importar `compradoEn`. En el uso normal de la app
+  // (hoy=hoy real) no importa, porque ninguna compra real puede tener
+  // fecha futura. Pero aquí sembramos a propósito con hoyISO=ayer, así
+  // que hay que excluir a mano cualquier compra fechada exactamente hoy
+  // (compradoEn > ayer): si no, se restaría aquí en la semilla Y otra vez
+  // cuando el motor de días la procese en su fecha real, restándola dos
+  // veces del total.
+  const whimmsHastaAyer = (params.whimms || []).filter((w) => !(w.estado === 'comprado' && w.compradoEn > ayer))
+  const total = Math.max(saldoLibreAcumuladoReal({ ...params, whimms: whimmsHastaAyer, hoyISO: ayer }), 0)
+  return {
+    saldoWhimms: total * pct,
+    saldoGastos: total * (1 - pct),
+    ultimoProcesado: ayer,
+  }
+}
+
+// Asienta uno por uno los días YA COMPLETAMENTE PASADOS entre
+// `bolsillos.ultimoProcesado` (exclusivo) y `hoyISO` (exclusivo — el día
+// de hoy todavía está en curso, lo asienta `bolsillosDeHoy` en vivo sin
+// guardar nada hasta que de verdad termine). Usa siempre el
+// `porcentajeWhimms` VIGENTE para repartir cualquier sueldo/premio de esos
+// días (no se guarda un historial de % pasados — ver nota grande arriba).
+export function procesarDiasPendientes(bolsillos) {
+  const hoy = bolsillos.hoyISO || todayISO()
+  const pct = porcentajeWhimmsDe(bolsillos)
+  let saldoWhimms = Number(bolsillos.saldoWhimms) || 0
+  let saldoGastos = Number(bolsillos.saldoGastos) || 0
+  const ultimoProcesado = bolsillos.ultimoProcesado || addDaysISO(hoy, -1)
+
+  if (ultimoProcesado >= addDaysISO(hoy, -1)) {
+    return { saldoWhimms, saldoGastos, ultimoProcesado }
+  }
+
+  const { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms } = bolsillos
+  let dia = addDaysISO(ultimoProcesado, 1)
+  let guard = 0
+  while (dia < hoy && guard < 3660) {
+    saldoWhimms -= whimmsCompradosEnFecha(whimms, dia)
+    saldoGastos -= vencimientosEnFecha(pagosFijos, dia)
+    const ingresoDia = sueldosEnFecha(sueldosFijos, sueldosRapidos, dia)
+    saldoWhimms += ingresoDia * pct
+    saldoGastos += ingresoDia * (1 - pct)
+
+    const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(sueldosFijos, dia) || 1, 1)
+    const meta = Math.max(saldoGastos, 0) / diasRestantes
+    const gastoReal = gastoHormigaEnFecha(gastos, dia)
+    saldoGastos -= gastoReal
+    const diferencia = meta - gastoReal
+    if (diferencia > 0) {
+      const aWhimms = diferencia * pct
+      saldoGastos -= aWhimms
+      saldoWhimms += aWhimms
+    } else if (diferencia < 0) {
+      const deficit = -diferencia
+      const deWhimms = Math.min(deficit, Math.max(saldoWhimms, 0))
+      saldoWhimms -= deWhimms
+      saldoGastos += deWhimms
+      // Lo que no cubra whimms se queda absorbido en gastos (ya restado
+      // arriba vía gastoReal) — la meta del día siguiente sale más baja
+      // sola, sin necesidad de "cobrarlo" aparte.
+    }
+    dia = addDaysISO(dia, 1)
+    guard++
+  }
+  return { saldoWhimms, saldoGastos, ultimoProcesado: addDaysISO(hoy, -1) }
+}
+
+// Vista EN VIVO para mostrar en pantalla: parte de los bolsillos ya
+// asentados (como quedaron al final de AYER) y le suma/resta lo que ya
+// pasó HOY MISMO (sueldo que cayó, pago fijo que venció, Whimm que se
+// compró, gasto hormiga ya registrado) — pero sin la meta/premio/castigo
+// del día, porque hoy todavía no termina. Esta es la única función que
+// deben usar Inicio/Compras/Perfil para mostrar "disponible para whimms"
+// y "disponible para gastos" — nunca los valores crudos guardados.
+export function bolsillosDeHoy(bolsillos, params, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const pct = porcentajeWhimmsDe(params)
+  let saldoWhimms = Number(bolsillos.saldoWhimms) || 0
+  let saldoGastos = Number(bolsillos.saldoGastos) || 0
+
+  const ingresoHoy = sueldosEnFecha(params.sueldosFijos, params.sueldosRapidos, hoy)
+  saldoWhimms += ingresoHoy * pct
+  saldoGastos += ingresoHoy * (1 - pct)
+  saldoGastos -= vencimientosEnFecha(params.pagosFijos, hoy)
+  saldoWhimms -= whimmsCompradosEnFecha(params.whimms, hoy)
+  saldoGastos -= gastoHormigaEnFecha(params.gastos, hoy)
+
+  const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(params.sueldosFijos, hoy) || 1, 1)
+  return {
+    saldoWhimms: Math.max(saldoWhimms, 0),
+    saldoGastos: Math.max(saldoGastos, 0),
+    metaGastosHoy: Math.max(saldoGastos, 0) / diasRestantes,
+  }
 }

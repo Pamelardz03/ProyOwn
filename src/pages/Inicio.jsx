@@ -7,8 +7,9 @@ import { IconProduct, IconEdit } from '../components/Icons'
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
+import { useBolsillos } from '../hooks/useBolsillos'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { cobradoMesPagoFijo, gastoNeto, disponibleParaWhimms, bufferGastoHormiga, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, fechasPagoVivas } from '../lib/budget'
+import { cobradoMesPagoFijo, gastoNeto, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, fechasPagoVivas } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -109,19 +110,22 @@ export default function Inicio() {
 
   const hoy = todayISO()
 
-  // Dinero real disponible para Whimms AHORA (mismo cálculo que Compras/
-  // Gastos/Perfil) — se calcula aquí arriba porque "Saldo para compras"
-  // (justo abajo) y "Próxima compra" (más abajo) lo comparten.
-  const disponibleWhimmsInicio = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
-  const colchonGastoHormigaInicio = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  // Bolsillos independientes de Whimms/gastos (trigésima segunda tanda,
+  // ver src/lib/budget.js) — reemplaza la foto instantánea de
+  // disponibleParaWhimms/bufferGastoHormiga: ahora son dos cuentas reales
+  // que se calculan aquí arriba porque "Saldo para compras" (justo abajo)
+  // y "Próxima compra" (más abajo) lo comparten.
+  const { saldoWhimms: disponibleWhimmsInicio, saldoGastos: colchonGastoHormigaInicio } = useBolsillos({
+    configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
+  })
 
   // Saldo para compras (vigésima séptima tanda, corrección de Pame sobre
   // el cálculo de calendario que daba 3677 contra 2400 reales — ver
   // detalle en esa tanda; vigésima novena tanda, ajuste de alcance: no es
   // solo lo disponible para la wishlist, es TODO el dinero para "cosas
   // que quiero comprar" — la wishlist Y el colchón de gasto sorpresa/
-  // impulso, los dos bolsillos en que se reparte el saldo libre según el
-  // % configurado).
+  // impulso, los dos bolsillos reales en que se reparte cada sueldo según
+  // el % configurado).
   const saldoParaCompras = disponibleWhimmsInicio + colchonGastoHormigaInicio
 
   // Próxima compra de la fila de Whimms (23 sep, a pedido de Pame, en vez

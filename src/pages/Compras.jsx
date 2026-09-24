@@ -8,9 +8,10 @@ import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconCh
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useBolsillos } from '../hooks/useBolsillos'
 import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, disponibleParaWhimms, bufferGastoHormiga, presupuestoDiarioTotal, promedioGastoHormigaDiario } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 import { hayCambios } from '../lib/objectDiff'
 
@@ -30,9 +31,9 @@ function estadoDisplay(w) {
 // "Cuándo comprarlo" en vez de solo una fecha lejana, cuando ya está muy
 // cerca (a pedido de Pame, quinceava tanda: "cuando esperarme mejor dos
 // días, 1 día, o ya de una") — comprar cualquier Whimm de esta fila NUNCA
-// toca tu colchón de gasto hormiga, porque `disponibleParaWhimms` y
-// `bufferGastoHormiga` ya son dos bolsillos separados desde que se reparte
-// el saldo libre (ver src/lib/budget.js) — por eso este aviso no necesita
+// toca tu meta de gasto del día, porque `saldoWhimms` y `saldoGastos` son
+// dos bolsillos REALMENTE independientes (trigésima segunda tanda, ver
+// useBolsillos()/src/lib/budget.js) — por eso este aviso no necesita
 // advertir nada sobre gasto hormiga, ya está garantizado por diseño.
 function cuandoComprarLabel(fechaProyectada) {
   if (!fechaProyectada) return null
@@ -109,6 +110,14 @@ export default function Compras() {
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
   const [showConfig, setShowConfig] = useState(false) // submenu: "Financiar a la vez" + reparto
+  // Vista previa del % antes de confirmar (trigésima segunda tanda, a
+  // pedido de Pame: cambiar el % ya no es instantáneo — se puede ver cómo
+  // quedaría el reparto y solo se aplica al darle a "Guardar"). Se
+  // reinicia al valor confirmado cada vez que se abre la hoja.
+  const [porcentajePreview, setPorcentajePreview] = useState(porcentajeWhimms)
+  useEffect(() => {
+    if (showConfig) setPorcentajePreview(porcentajeWhimms)
+  }, [showConfig, porcentajeWhimms])
   const [pauseDialogFor, setPauseDialogFor] = useState(null) // Vitall pendiente de elegir alcance de pausa
 
   const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
@@ -133,7 +142,7 @@ export default function Compras() {
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: gastos } = useUserCollection('gastos')
-  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
+  const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
   const servicios = pagosFijos.filter((p) => p.tipo === 'Vitall')
 
   const cats = deriveWhimmCats(whimms, gastos)
@@ -156,29 +165,18 @@ export default function Compras() {
   // parejo. Ver `construirFlujoFuturo` en src/lib/budget.js.
   const eventosFlujo = construirFlujoFuturo({ sueldosFijos, pagosFijos })
 
-  // Saldo libre acumulado real (histórico, no se reinicia cada mes — ver
-  // src/lib/budget.js) y cuánto de eso puede financiar Whimms sin tocar lo
-  // reservado para el próximo vencimiento de cada pago fijo/Vitall activo.
-  // Se reparte entre los primeros `whimmsSimultaneos` Whimms de la fila,
-  // proporcional a su score — así varios avanzan a la vez.
-  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
-  const disponibleWhimms = disponibleParaWhimms(budgetParams)
-  const colchonGastoHormiga = bufferGastoHormiga(budgetParams)
-  // Presupuesto diario TOTAL, whimms + gasto libre juntos (23 sep, a
-  // pedido de Pame: "así no cambian los 200 de los futuros días") — se
-  // calcula ANTES de aplicar `porcentajeWhimms`, así que mover el slider
-  // de "Whimms vs. gasto libre" nunca cambia este número, solo cambia
-  // cómo se reparte entre juntar para whimms y tener libre para gastar
-  // hoy. `colchonPorDia`/`whimmPorDia` son ese mismo total ya partido por
-  // el % vigente — igual que antes, pero ahora anclados a un total visible
-  // y estable en vez de cada uno calculado por separado. Sigue usando la
-  // duración fija del periodo de pago (22 sep) como divisor, así tampoco
-  // se infla solo porque pasen los días sin gastar.
-  const presupuestoTotal = presupuestoDiarioTotal(budgetParams)
-  const colchonPorDia = presupuestoTotal != null ? presupuestoTotal * (1 - porcentajeWhimms) : null
-  const whimmPorDia = presupuestoTotal != null ? presupuestoTotal * porcentajeWhimms : null
+  // Dos bolsillos REALMENTE independientes (trigésima segunda tanda, a
+  // pedido de Pame: comprar un Whimm nunca debe tocar el gasto del día, ni
+  // al revés) — `saldoWhimms` se acumula solo para tu wishlist, `saldoGastos`
+  // es tu presupuesto de gasto del día a día. Ya no es un % en vivo del mismo
+  // saldo compartido: son dos saldos persistidos en Firestore que se
+  // liquidan día por día (ver useBolsillos()/src/lib/budget.js).
+  const { saldoWhimms, saldoGastos, metaGastosHoy } = useBolsillos({
+    configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
+  })
+  const disponibleWhimms = saldoWhimms
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
-  const colchonBajo = colchonPorDia != null && colchonPorDia < gastoHormigaPromedioDiario
+  const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
   const activos = whimms
     .filter((w) => w.estado !== 'comprado')
     .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
@@ -336,6 +334,7 @@ export default function Compras() {
   async function setPorcentajeWhimms(p) {
     try {
       await setUserDoc(user.uid, 'config', 'presupuesto', { porcentajeWhimms: Math.max(0, Math.min(1, p)) })
+      show('Reparto actualizado')
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
@@ -448,9 +447,7 @@ export default function Compras() {
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
                 <div style={{ fontSize: 10, color: colchonBajo ? 'var(--red)' : 'var(--muted)', fontWeight: colchonBajo ? 600 : 400, marginTop: 2 }}>
-                  {presupuestoTotal != null
-                    ? `${fmt(presupuestoTotal)} hoy · ${fmt(whimmPorDia)} whimms · ${fmt(colchonPorDia)} gastos`
-                    : `${fmt(disponibleWhimms)} wishlist · ${fmt(colchonGastoHormiga)} gastos`} · {whimmsSimultaneos} a la vez
+                  {fmt(saldoWhimms)} whimms · {fmt(metaGastosHoy)}/día gastos · {whimmsSimultaneos} a la vez
                 </div>
               </div>
               <button
@@ -661,39 +658,50 @@ export default function Compras() {
 
               <div style={{ fontSize: 12, fontWeight: 600 }}>Whimms vs. gasto libre</div>
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, marginBottom: 10 }}>
-                {presupuestoTotal != null
-                  ? `${fmt(presupuestoTotal)} hoy · ${fmt(whimmPorDia)} whimms · ${fmt(colchonPorDia)} gastos`
-                  : `${fmt(disponibleWhimms)} wishlist · ${fmt(colchonGastoHormiga)} gastos`}
+                Ahora: {fmt(saldoWhimms)} acumulado para whimms · {fmt(metaGastosHoy)}/día para gastos ({fmt(saldoGastos)} acumulado)
               </div>
               <input
                 type="range"
                 min={0}
                 max={100}
                 step={5}
-                value={Math.round(porcentajeWhimms * 100)}
-                onChange={(e) => setPorcentajeWhimms(Number(e.target.value) / 100)}
+                value={Math.round(porcentajePreview * 100)}
+                onChange={(e) => setPorcentajePreview(Number(e.target.value) / 100)}
                 style={{ width: '100%', accentColor: 'var(--wine)' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                 <span style={{ fontSize: 9, color: 'var(--muted)' }}>0%</span>
-                <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine)' }}>{Math.round(porcentajeWhimms * 100)}% wishlist</span>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine)' }}>{Math.round(porcentajePreview * 100)}% wishlist</span>
                 <span style={{ fontSize: 9, color: 'var(--muted)' }}>100%</span>
               </div>
-              {presupuestoTotal != null && (
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, textAlign: 'center' }}>
-                  Hoy, de ese {fmt(presupuestoTotal)}: {fmt(whimmPorDia)} se junta para whimms · {fmt(colchonPorDia)} libre para gastar
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, textAlign: 'center' }}>
+                Vista previa de tu saldo acumulado con ese %: {fmt((saldoWhimms + saldoGastos) * porcentajePreview)} whimms · {fmt((saldoWhimms + saldoGastos) * (1 - porcentajePreview))} gastos
+              </div>
+              {porcentajePreview !== porcentajeWhimms && (
+                <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4, textAlign: 'center', fontStyle: 'italic' }}>
+                  Solo vista previa — no cambia nada hasta que le des Guardar. No toca lo ya acumulado, solo cómo se reparten los próximos ingresos y los días sin gastar.
                 </div>
               )}
 
               {colchonBajo && (
                 <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginTop: 16 }}>
-                  Bajo tu ritmo: {fmt(colchonPorDia)}/día (prom. {fmt(gastoHormigaPromedioDiario)}/día)
+                  Bajo tu ritmo: {fmt(metaGastosHoy)}/día (prom. {fmt(gastoHormigaPromedioDiario)}/día)
                 </div>
               )}
 
-              <button className="btn-primary" style={{ marginTop: 20 }} onClick={() => setShowConfig(false)}>
-                Listo
-              </button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+                <button className="pill" style={{ flex: 1, textAlign: 'center' }} onClick={() => setShowConfig(false)}>
+                  Listo
+                </button>
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1, opacity: porcentajePreview === porcentajeWhimms ? 0.5 : 1 }}
+                  disabled={porcentajePreview === porcentajeWhimms}
+                  onClick={() => setPorcentajeWhimms(porcentajePreview)}
+                >
+                  Guardar
+                </button>
+              </div>
             </div>
           </div>
         </>

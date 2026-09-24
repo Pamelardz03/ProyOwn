@@ -32,6 +32,18 @@ export function todayISO() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+// Días entre dos fechas ISO arbitrarias — a diferencia de `daysUntil`
+// (que siempre compara contra el día real de "ahora"), esto sirve para
+// simular una fecha pasada o futura sin depender del reloj real (usado
+// por el motor de bolsillos independientes al reprocesar días que ya
+// pasaron, ver `procesarDiasPendientes` en budget.js).
+export function diasEntreISO(desdeISO, hastaISO) {
+  const a = parseISODate(desdeISO)
+  const b = parseISODate(hastaISO)
+  if (!a || !b) return null
+  return Math.round((b - a) / 86400000)
+}
+
 // --- Rangos de periodo (para agrupar Gastos por día/semana/mes/año) ---
 
 function startOfDay(d) {
