@@ -480,7 +480,7 @@ export default function Compras() {
                   </div>
                 )}
                 {activosConFecha.map((w, i) => (
-                  <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                  <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 14, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                         <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
@@ -508,7 +508,7 @@ export default function Compras() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                       <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precio)}</div>
                       <button
                         aria-label="Notificaciones"
@@ -519,7 +519,7 @@ export default function Compras() {
                       </button>
                     </div>
 
-                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }}>
                         {estadoDisplay(w)}
                       </span>
@@ -535,7 +535,7 @@ export default function Compras() {
                       )}
                     </div>
 
-                    <WhimmProgressBar whimm={w} style={{ marginTop: 10 }} />
+                    <WhimmProgressBar whimm={w} style={{ marginTop: 8 }} />
                   </div>
                 ))}
                 {!loadingWhimms && !errorWhimms && activosConFecha.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
