@@ -495,16 +495,14 @@ export default function Compras() {
                           )}
                         </div>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
-                            <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '3px 9px', fontSize: 12, fontWeight: 700 }}>
-                              {scoreOutOf10(w._score ?? w.score)}
-                            </span>
-                          </div>
+                          <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                           <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
                           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
                         </div>
                       </div>
+                      <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '6px 14px', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                        {scoreOutOf10(w._score ?? w.score)}
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
