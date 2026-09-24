@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { monthlyEqPagoFijo, gastoNeto, disponibleParaWhimms, construirFlujoFuturo, proyectarColaWhimms } from '../lib/budget'
+import { cobradoMesPagoFijo, gastoNeto, disponibleParaWhimms, bufferGastoHormiga, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, fechasPagoVivas } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -95,9 +95,17 @@ export default function Inicio() {
   const gastosMes = gastos.filter((g) => isThisMonth(g.fecha) && !(g.categoria === 'Vitall' && g.vitallId))
   const gastoMensual = gastosMes.reduce((s, g) => s + gastoNeto(g), 0)
 
+  // Distribución del mes (vigésima novena tanda, corrección de Pame):
+  // "Pagos fijos" y "Vitall" deben mostrar lo que de verdad se ha COBRADO
+  // este mes (cada ocurrencia real ya pasada), no un promedio mensual
+  // parejo por frecuencia — antes usaban `monthlyEqPagoFijo`, que no
+  // reflejaba si de verdad ya se había cobrado ese mes. Un Vitall vive en
+  // la misma colección que Pago fijo (`pagosFijos`, ver Terminología) pero
+  // el filtro por `tipo` es mutuamente exclusivo, así que cada documento
+  // solo cuenta una vez, en su propia categoría.
   const pagosActivos = pagosFijos.filter((p) => p.activo !== false)
-  const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
-  const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
+  const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + cobradoMesPagoFijo(p), 0)
+  const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + cobradoMesPagoFijo(p), 0)
 
   const hoy = todayISO()
 
@@ -105,24 +113,16 @@ export default function Inicio() {
   // Gastos/Perfil) — se calcula aquí arriba porque "Saldo para compras"
   // (justo abajo) y "Próxima compra" (más abajo) lo comparten.
   const disponibleWhimmsInicio = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  const colchonGastoHormigaInicio = bufferGastoHormiga({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
 
-  // Saldo para compras (vigésima séptima tanda, corrección explícita de
-  // Pame: la versión anterior, "ingreso del mes - gastado del mes", daba
-  // un número muy por encima de lo que de verdad tenía en el banco (3677
-  // contra 2400 reales) porque es un cálculo de calendario que no resta
-  // los pagos fijos/Vitall reservados ni considera el saldo real
-  // acumulado (saldoInicial, lo ya comprado, etc.) — solo compara ingreso
-  // vs. gasto DENTRO del mes actual. Ahora usa exactamente el mismo
-  // número real y ya validado que el resto de la app (`disponibleParaWhimms`,
-  // calculado más abajo como `disponibleWhimmsInicio`): el dinero para
-  // Whimms que de verdad se tiene disponible AHORA, sin proyectar nada
-  // que todavía no haya llegado.
-  const saldoParaCompras = disponibleWhimmsInicio
-
-  // Racha de días sin ningún Gasto registrado (cualquier tipo) — la fecha
-  // del Gasto más reciente hasta hoy, cero si hay uno hoy mismo.
-  const fechaUltimoGasto = gastos.reduce((max, g) => (g.fecha && g.fecha > (max || '') ? g.fecha : max), null)
-  const diasSinGastar = fechaUltimoGasto ? Math.max(-daysUntil(fechaUltimoGasto), 0) : null
+  // Saldo para compras (vigésima séptima tanda, corrección de Pame sobre
+  // el cálculo de calendario que daba 3677 contra 2400 reales — ver
+  // detalle en esa tanda; vigésima novena tanda, ajuste de alcance: no es
+  // solo lo disponible para la wishlist, es TODO el dinero para "cosas
+  // que quiero comprar" — la wishlist Y el colchón de gasto sorpresa/
+  // impulso, los dos bolsillos en que se reparte el saldo libre según el
+  // % configurado).
+  const saldoParaCompras = disponibleWhimmsInicio + colchonGastoHormigaInicio
 
   // Próxima compra de la fila de Whimms (23 sep, a pedido de Pame, en vez
   // del tile de "Próximo pago"): mismo motor real que Compras.jsx/
@@ -138,9 +138,10 @@ export default function Inicio() {
   const ultimaCompraISOInicio = whimms
     .filter((w) => w.estado === 'comprado')
     .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
-  const proximaCompra = proyectarColaWhimms(activosParaProyeccion, eventosFlujoInicio, porcentajeWhimms, disponibleWhimmsInicio, whimmsSimultaneos, ultimaCompraISOInicio)
+  const colaProyectadaInicio = proyectarColaWhimms(activosParaProyeccion, eventosFlujoInicio, porcentajeWhimms, disponibleWhimmsInicio, whimmsSimultaneos, ultimaCompraISOInicio)
     .filter((w) => w.fechaProyectada)
-    .sort((a, b) => (a.fechaProyectada < b.fechaProyectada ? -1 : a.fechaProyectada > b.fechaProyectada ? 1 : 0))[0] || null
+    .sort((a, b) => (a.fechaProyectada < b.fechaProyectada ? -1 : a.fechaProyectada > b.fechaProyectada ? 1 : 0))
+  const proximaCompra = colaProyectadaInicio[0] || null
   const diasProximaCompra = proximaCompra ? daysUntil(proximaCompra.fechaProyectada) : null
 
   // Whimms comprados este mes — lo que realmente salió del banco (se resta
@@ -161,6 +162,18 @@ export default function Inicio() {
     { label: 'Vitall', color: 'var(--amber)', monto: vitallMensual },
   ].filter((d) => d.monto > 0)
   const totalDistribucion = distribucion.reduce((s, d) => s + d.monto, 0)
+
+  const accionesHoy = [
+    ...sueldosFijos
+      .filter((s) => fechasPagoVivas(s).includes(hoy))
+      .map((s) => ({ id: `sueldo-${s.id}`, title: s.name, sub: 'Sueldo', monto: Number(s.monto) || 0, positivo: true })),
+    ...pagosActivos
+      .filter((p) => fechasVencimientoVivas(p).includes(hoy))
+      .map((p) => ({ id: `pago-${p.id}`, title: p.name, sub: p.tipo === 'Vitall' ? 'Vitall' : 'Pago fijo', monto: montoOcurrenciaPagoFijo(p, hoy), positivo: false })),
+    ...colaProyectadaInicio
+      .filter((w) => w.fechaProyectada === hoy)
+      .map((w) => ({ id: `whimm-${w.id}`, title: w.name, sub: 'Whimm listo para comprar', monto: Number(w.precio) || 0, positivo: false })),
+  ]
 
   // Cola de Whimms ordenada por score (necesidad/deseo/precio) — el #1 es
   // el que está acumulando fondos activamente.
@@ -198,11 +211,6 @@ export default function Inicio() {
           <div className="eyebrow">{weekdayShort(todayISO())} · {formatShortDate(todayISO())}</div>
           <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>
             Hola, {primerNombre}
-            {diasSinGastar != null && diasSinGastar > 0 && (
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)' }}>
-                {' · '}{diasSinGastar} día{diasSinGastar === 1 ? '' : 's'} sin gastar
-              </span>
-            )}
           </div>
         </div>
 
@@ -215,7 +223,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
               <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Acumulado</div>
-              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(gastoMensual)}</div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(colchonGastoHormigaInicio)}</div>
             </div>
             {proximaCompra ? (
               <Link
@@ -263,6 +271,27 @@ export default function Inicio() {
             </>
           ) : (
             <div className="empty-state" style={{ padding: '8px 0' }}>Sin movimientos este mes todavía</div>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Acciones del día de hoy</div>
+          {accionesHoy.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {accionesHoy.map((a) => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{a.title}</div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{a.sub}</div>
+                  </div>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: a.positivo ? 'var(--green)' : 'var(--text)' }}>
+                    {fmtSigned(a.positivo ? a.monto : -a.monto)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: '8px 0' }}>Nada pendiente para hoy</div>
           )}
         </div>
 

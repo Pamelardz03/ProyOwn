@@ -7,9 +7,9 @@ import { useToast } from '../hooks/useToast'
 import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, useUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
-import { gastoNeto, disponibleParaWhimms, bufferGastoHormiga } from '../lib/budget'
+import { gastoNeto } from '../lib/budget'
 import { hayCambios } from '../lib/objectDiff'
 import { deriveWhimmCats } from '../lib/categorias'
 
@@ -119,9 +119,6 @@ export default function Gastos() {
   const { data: gastos, loading, error } = useUserCollection('gastos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
-  const { data: sueldosFijos } = useUserCollection('sueldosFijos')
-  const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
-  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
   const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
@@ -136,17 +133,6 @@ export default function Gastos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, gastos])
 
-  // Los dos "bolsillos" en que se reparte el saldo libre (misma lógica que
-  // Compras, ver src/lib/budget.js) — a pedido de Pame (vigésima sexta
-  // tanda): aquí en Gastos quería ver, uno al lado del otro, cuánto de ese
-  // dinero de Whimms está disponible para gastos del día a día (colchón de
-  // gasto hormiga) y cuánto está juntado para la wishlist, no cuánto ya se
-  // gastó por categoría (eso lo reemplaza).
-  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
-  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
-  const budgetParams = { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms }
-  const whimmsParaGastos = bufferGastoHormiga(budgetParams)
-  const whimmsParaWishlist = disponibleParaWhimms(budgetParams)
 
   // Al empatar en fecha (varios gastos el mismo día), el más recién creado
   // va primero — antes desempataba con el orden natural de la colección
@@ -194,9 +180,17 @@ export default function Gastos() {
     })
 
   const vitallGastado = items.filter((it) => it.tipoRaw === 'Vitall').reduce((s, it) => s + it.amount, 0)
-  const whimmGastado =
-    items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0) +
-    whimmCompras.reduce((s, it) => s + it.amount, 0)
+  // Desglose de lo gastado en Whimm dentro del periodo seleccionado (a
+  // pedido de Pame, vigésima novena tanda: "la suma no da lo que se ha
+  // gastado... ahí es el desglose de lo que se ha gastado en mes/semana/
+  // día/año" — antes estas dos tarjetas mostraban el saldo DISPONIBLE
+  // para whimms/gasto hormiga, un número que no tiene nada que ver con
+  // el periodo seleccionado ni con "Gastado en {periodo}" de arriba, lo
+  // que hacía parecer que no cuadraban. Ahora suman exacto: gasto Whimm
+  // de impulso + compra Whimm de la wishlist, dentro de ESTE periodo).
+  const gastoWhimmImpulso = items.filter((it) => it.tipoRaw === 'Whimm').reduce((s, it) => s + it.amount, 0)
+  const compraWhimmWishlist = whimmCompras.reduce((s, it) => s + it.amount, 0)
+  const whimmGastado = gastoWhimmImpulso + compraWhimmWishlist
 
   const listaCompleta = [
     ...items.map((it) => ({ ...it, _kind: 'gasto' })),
@@ -291,12 +285,12 @@ export default function Gastos() {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimms para gastos</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(whimmsParaGastos)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Gasto Whimm (impulso)</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(gastoWhimmImpulso)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Whimms de la wishlist</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(whimmsParaWishlist)}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Compra Whimm (wishlist)</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(compraWhimmWishlist)}</div>
           </div>
         </div>
 

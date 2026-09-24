@@ -114,13 +114,37 @@ export function monthlyEqPagoFijo(p) {
 // duración de ESTE ciclo (del vencimiento anterior al próximo); si no hay
 // vencimiento anterior (primer ciclo), se usa la fecha de alta del pago
 // fijo como inicio.
-export function reservasDiariasPagosFijos(pagosFijos, hoyISO) {
+// El sueldo fijo de mayor monto (típicamente el principal, ej. Kenet) —
+// usado como límite para decidir qué pagos fijos/Vitall deben empezar a
+// reservarse YA de tu saldo actual (ver reservasDiariasPagosFijos abajo).
+function sueldoDeMayorMonto(sueldosFijos) {
+  return (sueldosFijos || []).reduce((max, s) => (!max || (Number(s.monto) || 0) > (Number(max.monto) || 0) ? s : max), null)
+}
+
+// La próxima fecha en que cae ese sueldo más grande — el límite: un pago
+// fijo/Vitall que vence DESPUÉS de esta fecha todavía no se reserva de tu
+// saldo actual, porque ese mismo sueldo va a traer el dinero para cubrirlo
+// antes de que llegue su fecha.
+function proximoLimiteReserva(sueldosFijos, hoyISO) {
+  const mayor = sueldoDeMayorMonto(sueldosFijos)
+  return mayor ? proximaFechaSueldo(mayor, hoyISO || todayISO()) : null
+}
+
+export function reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
   const hoy = hoyISO || todayISO()
+  const limite = proximoLimiteReserva(sueldosFijos, hoy)
   return (pagosFijos || [])
     .filter((p) => p.activo !== false)
     .map((p) => {
       const vencimiento = proximoVencimientoPagoFijo(p, hoy)
       if (!vencimiento) return null
+      // A pedido de Pame (vigésima novena tanda): si el vencimiento cae
+      // después de tu próximo sueldo más grande, ese sueldo es el que va
+      // a traer el dinero para pagarlo — no hace falta apartarlo de lo
+      // que ya tienes ahora (ej. Vuelos vence el 1 de octubre pero Kenet
+      // paga el 30 de septiembre: el pago del 30 ya alcanza para el 1,
+      // así que no le quita nada a Whimms/gastos todavía).
+      if (limite && vencimiento > limite) return null
       const dias = Math.max(daysUntil(vencimiento), 1)
       const monto = montoOcurrenciaPagoFijo(p, vencimiento)
       const serieHastaVencimiento = fechasVencimientoVivas(p, vencimiento).sort(compareISOAsc)
@@ -145,7 +169,7 @@ export function presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes }) {
 // como se pidió para proyectar la cola de Whimms.
 export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
   const bruto = presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes })
-  const reservaTotal = reservasDiariasPagosFijos(pagosFijos).reduce((s, r) => s + r.reservaDiaria, 0)
+  const reservaTotal = reservasDiariasPagosFijos(pagosFijos, undefined, sueldosFijos).reduce((s, r) => s + r.reservaDiaria, 0)
   return Math.max(bruto - reservaTotal, 0)
 }
 
@@ -158,7 +182,7 @@ export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes,
 // "hay pagos pronto", sino cuánto exactamente falta por día.
 export function detectarRiesgosPagosFijos({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
   const bruto = presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes })
-  const ordenados = [...reservasDiariasPagosFijos(pagosFijos)].sort((a, b) => a.dias - b.dias)
+  const ordenados = [...reservasDiariasPagosFijos(pagosFijos, undefined, sueldosFijos)].sort((a, b) => a.dias - b.dias)
   let acumReserva = 0
   const riesgos = []
   ordenados.forEach((r) => {
@@ -269,8 +293,8 @@ export function saldoLibreAcumuladoReal({ sueldosFijos, sueldosRapidos, gastos, 
 // `reservasDiariasPagosFijos`, vigésima sexta tanda), así un pago grande
 // que ya está "cerca" pesa cada vez más, pero uno que se acaba de pagar
 // no vuelve a quitarle dinero a whimms de un jalón.
-export function reservaInmediataPagosFijos(pagosFijos, hoyISO) {
-  return reservasDiariasPagosFijos(pagosFijos, hoyISO).reduce((sum, r) => sum + r.reservaAcumulada, 0)
+export function reservaInmediataPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
+  return reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos).reduce((sum, r) => sum + r.reservaAcumulada, 0)
 }
 
 // Qué fracción del saldo libre (ya sin lo reservado a pagos fijos) se le
@@ -289,7 +313,7 @@ function porcentajeWhimmsDe(params) {
 // que son las dos mitades (según `porcentajeWhimms`) de este mismo número.
 export function disponibleBrutoParaWhimms(params) {
   const saldo = saldoLibreAcumuladoReal(params)
-  const reserva = reservaInmediataPagosFijos(params.pagosFijos, params.hoyISO)
+  const reserva = reservaInmediataPagosFijos(params.pagosFijos, params.hoyISO, params.sueldosFijos)
   return Math.max(saldo - reserva, 0)
 }
 
@@ -719,6 +743,20 @@ export function proximoVencimientoPagoFijo(pagoFijo, hoyISO) {
   const hoy = hoyISO || todayISO()
   const fechas = fechasVencimientoVivas(pagoFijo)
   return fechas.find((f) => f >= hoy) || null
+}
+
+// Cuánto se ha COBRADO de verdad este mes de un pago fijo/Vitall — a
+// diferencia de `monthlyEqPagoFijo` (un promedio mensual estimado según
+// la frecuencia, sin importar si de verdad ya se cobró), esto suma el
+// monto real de cada OCURRENCIA que ya cayó este mes calendario
+// (respetando `excepciones` de monto/omitida) — a pedido de Pame
+// (vigésima novena tanda): "Distribución del mes" en Inicio debe
+// reflejar lo que de verdad se ha cobrado, no un estimado parejo.
+export function cobradoMesPagoFijo(pagoFijo, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return fechasVencimientoVivas(pagoFijo)
+    .filter((f) => isThisMonth(f) && f <= hoy)
+    .reduce((s, f) => s + montoOcurrenciaPagoFijo(pagoFijo, f), 0)
 }
 
 // Monto real de UNA ocurrencia puntual — el monto guardado por default, o

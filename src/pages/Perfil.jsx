@@ -108,7 +108,7 @@ export default function Perfil() {
   // que sí está considerando el próximo vencimiento de TODOS sus pagos
   // fijos/Vitall activos (no solo Vitall) — mismo cálculo que ya resta
   // "Disponible para Whimms" de "Ahorro acumulado real".
-  const reservaPagosFijos = reservaInmediataPagosFijos(pagosFijos)
+  const reservaPagosFijos = reservaInmediataPagosFijos(pagosFijos, undefined, sueldosFijos)
 
   // Antes también había un aviso genérico de "pago fijo vence en los
   // próximos 8 días" — se quitó (treceava tanda, a pedido de Pame): un
@@ -129,12 +129,13 @@ export default function Perfil() {
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Ahorro acumulado real</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Total</div>
             <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(saldoAcumuladoReal)}</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para Whimms</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms)}</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(disponibleWhimms + colchonGastoHormiga)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Wishlist + gasto sorpresa</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
@@ -143,12 +144,12 @@ export default function Perfil() {
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>{fmt(colchonGastoHormiga)}</div>
-            {colchonPorDia != null && (
-              <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
-                {fmt(colchonPorDia)}/día fijo (de {fmt(presupuestoTotal)} totales){diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
-              </div>
-            )}
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>
+              {colchonPorDia != null ? fmt(colchonPorDia) : fmt(colchonGastoHormiga)}
+            </div>
+            <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
+              Hoy · {fmt(colchonGastoHormiga)} acumulado{diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
+            </div>
           </div>
         </div>
 
