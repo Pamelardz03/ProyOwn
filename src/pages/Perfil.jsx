@@ -200,15 +200,37 @@ export default function Perfil() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--wine)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600 }}>
-            {initial}
+        {/* Apartado de cuenta (a pedido de Pame, vigésima sexta tanda:
+            "que salga mi logo y correo... y en un futuro tarjetas
+            registradas y más datos de configuración") — foto/inicial y
+            correo reales de la cuenta de Google con la que inició
+            sesión (único método permitido, ver Login.jsx), con espacio
+            ya marcado para lo que se agregue después. */}
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Cuenta</div>
+          <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt=""
+                  style={{ width: 52, height: 52, borderRadius: 26, objectFit: 'cover', flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{ width: 52, height: 52, borderRadius: 26, background: 'var(--wine)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600, flexShrink: 0 }}>
+                  {initial}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 17, fontWeight: 600 }}>{displayName}</div>
+                {user?.email && <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{user.email}</div>}
+              </div>
+              <button onClick={() => logout()} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Cerrar sesión</button>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', borderTop: '1px solid var(--beige2)', paddingTop: 10 }}>
+              Próximamente aquí: tarjetas registradas y más ajustes de la cuenta.
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 600 }}>{displayName}</div>
-            {user?.email && <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{user.email}</div>}
-          </div>
-          <button onClick={() => logout()} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Cerrar sesión</button>
         </div>
 
         {riesgos.length > 0 && (

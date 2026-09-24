@@ -194,3 +194,13 @@ export function IconTrendUp({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
+
+export function IconInfo({ size = 15, color = 'var(--muted)' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="10" r="8" />
+      <path d="M10 9v5" />
+      <circle cx="10" cy="6.3" r=".2" />
+    </svg>
+  )
+}

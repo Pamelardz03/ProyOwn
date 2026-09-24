@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
+import { IconInfo } from '../components/Icons'
 
 export default function Login() {
   const { loginWithGoogle } = useAuth()
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
 
   async function handleLogin() {
     setError(null)
@@ -24,6 +26,14 @@ export default function Login() {
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 22 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 26, alignItems: 'center', textAlign: 'center' }}>
+        {/* Espacio reservado para el nombre de la persona (a pedido de
+            Pame, vigésima sexta tanda: "Deja arriba espacio para el
+            nombre, aún no tiene") — todavía no se captura ni se muestra
+            nada real aquí, es solo el lugar donde va a vivir cuando se
+            implemente (probablemente tomado del perfil de Google al
+            iniciar sesión por primera vez). */}
+        <div style={{ width: '100%', minHeight: 34 }} />
+
         <div className="hero" style={{ width: '100%', padding: '32px 22px' }}>
           <div style={{ fontSize: 13, opacity: 0.75, fontWeight: 500 }}>Organizador de</div>
           <div style={{ fontSize: 28, fontWeight: 600, marginTop: 2 }}>Gastos</div>
@@ -41,6 +51,23 @@ export default function Login() {
           <GoogleG />
           {loading ? 'Conectando…' : 'Continuar con Google'}
         </button>
+
+        <button
+          aria-label="Por qué solo Google"
+          onClick={() => setShowInfo((v) => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', padding: 0 }}
+        >
+          <IconInfo size={13} />
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>¿Por qué solo con Google?</span>
+        </button>
+        {showInfo && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, marginTop: -10 }}>
+            Solo se puede entrar con una cuenta de Google: así no se guarda ninguna
+            contraseña propia de la app (más seguro) y tu información financiera
+            queda ligada únicamente a tu cuenta de Google, no a un usuario/contraseña
+            que alguien más podría adivinar o reutilizar.
+          </div>
+        )}
 
         {error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{error}</div>}
       </div>
