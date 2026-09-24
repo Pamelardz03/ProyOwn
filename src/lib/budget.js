@@ -12,13 +12,6 @@ const HORIZONTE_DIAS_SUELDO = 730
 // `fechaFin`, ver removeFijo en Sueldos.jsx), no se generan ni se muestran
 // fechas después de esa fecha — pero las anteriores siguen contando para
 // el historial/ingresos ya ocurridos.
-// `excepciones` (vigésima sexta tanda, a pedido de Pame: "pregunta si
-// solo una frecuencia y activar a la siguiente frecuencia o desactivar
-// indefinido") — mismo mecanismo que ya tienen los pagos fijos: un mapa
-// { [fechaISO]: { omitida: true } } en el propio documento del sueldo
-// para saltarse UNA sola ocurrencia (ej. "esta quincena no me pagaron")
-// sin tocar `fechaFin` ni las demás fechas — la serie sigue viva y
-// retoma normal en la siguiente ocurrencia.
 export function fechasPagoVivas(sueldo, hastaISO) {
   const base = Array.isArray(sueldo.fechasPago) && sueldo.fechasPago.length
     ? sueldo.fechasPago
@@ -26,10 +19,8 @@ export function fechasPagoVivas(sueldo, hastaISO) {
   if (base.length === 0) return []
   let hasta = hastaISO || addDaysISO(todayISO(), HORIZONTE_DIAS_SUELDO)
   if (sueldo.fechaFin && sueldo.fechaFin < hasta) hasta = sueldo.fechaFin
-  let fechas = extenderFechasPago(sueldo.frecuencia, base, hasta)
-  if (sueldo.fechaFin) fechas = fechas.filter((f) => f <= sueldo.fechaFin)
-  const excepciones = sueldo.excepciones || {}
-  return fechas.filter((f) => !excepciones[f]?.omitida)
+  const fechas = extenderFechasPago(sueldo.frecuencia, base, hasta)
+  return sueldo.fechaFin ? fechas.filter((f) => f <= sueldo.fechaFin) : fechas
 }
 
 // La próxima fecha de pago real (hoy o después) de un sueldo fijo —

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { IconChevronLeft, IconEdit, IconClose } from '../components/Icons'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, updateUserDoc } from '../lib/firestoreCollections'
@@ -15,6 +15,7 @@ const FILTERS = [
 
 export default function HistorialCompleto() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [cat, setCat] = useState('todos')
   const [subcat, setSubcat] = useState('todos')
   const [sort, setSort] = useState('fecha')
@@ -34,6 +35,20 @@ export default function HistorialCompleto() {
   function openEditOcurrencia(it) {
     setOcurrenciaMontoValue(String(Math.abs(it.amount) || ''))
     setEditingOcurrencia({ pagoFijoId: it.pagoFijoId, fecha: it.ocurrenciaFecha, nombre: it.pagoFijoNombre })
+  }
+
+  // Editar CUALQUIER registro del historial desde aquí mismo (a pedido de
+  // Pame, vigésima séptima tanda: "agrega que se edite todos los
+  // registros de historial") — cada tipo de evento abre la edición real
+  // de su propio documento en la pantalla donde ya vive esa edición,
+  // salvo la ocurrencia puntual de un pago fijo (arriba), que se edita
+  // aquí mismo porque es una excepción por fecha, no un documento propio.
+  function handleEditClick(it) {
+    if (it.editable === 'pagoFijoOcurrencia') { openEditOcurrencia(it); return }
+    if (it.editable === 'whimm') { navigate('/compras', { state: { openWhimmId: it.whimmId } }); return }
+    if (it.editable === 'gasto') { navigate('/gastos', { state: { openGastoId: it.gastoId } }); return }
+    if (it.editable === 'sueldoRapido') { navigate('/perfil/sueldos', { state: { openRapidoId: it.sueldoRapidoId } }); return }
+    if (it.editable === 'pagoFijoDef') { navigate('/perfil/precios-fijos', { state: { openPagoId: it.pagoFijoId } }); return }
   }
 
   async function guardarExcepcion(patch) {
@@ -139,8 +154,8 @@ export default function HistorialCompleto() {
                 <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: it.amountColor }}>{it.amountText}</div>
                 <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{it.dateLabel}</div>
               </div>
-              {it.editable === 'pagoFijoOcurrencia' && (
-                <button aria-label="Editar este cobro" onClick={() => openEditOcurrencia(it)} style={{ flexShrink: 0 }}>
+              {it.editable && (
+                <button aria-label="Editar" onClick={() => handleEditClick(it)} style={{ flexShrink: 0 }}>
                   <IconEdit />
                 </button>
               )}

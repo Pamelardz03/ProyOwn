@@ -41,6 +41,8 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
       amount: -gastoNeto(g),
       dotColor: GASTO_DOT[g.categoria] || GASTO_DOT.Whimm,
       dateISO: g.fecha || '',
+      editable: 'gasto',
+      gastoId: g.id,
     })
   })
 
@@ -53,6 +55,8 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
       amount: Number(r.monto) || 0,
       dotColor: '#3a0f1f',
       dateISO: r.fecha || '',
+      editable: 'sueldoRapido',
+      sueldoRapidoId: r.id,
     })
   })
 
@@ -83,6 +87,8 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
       amount: null,
       dotColor: '#7a7156',
       dateISO: isoFromTimestamp(p.creadoEn),
+      editable: 'pagoFijoDef',
+      pagoFijoId: p.id,
     })
 
     // Una fila por cada ocurrencia YA vencida (vigésima sexta tanda, a
@@ -124,6 +130,8 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
       amount: null,
       dotColor: '#3f6b45',
       dateISO: isoFromTimestamp(w.creadoEn),
+      editable: 'whimm',
+      whimmId: w.id,
     })
 
     if (w.estado === 'comprado' && w.compradoEn) {
@@ -138,6 +146,8 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
         amount: -Math.max(precioFinal - yaApartado, 0),
         dotColor: GASTO_DOT.Whimm,
         dateISO: w.compradoEn,
+        editable: 'whimm',
+        whimmId: w.id,
       })
     }
   })

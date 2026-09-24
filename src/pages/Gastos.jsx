@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
 import { useSwipeX } from '../hooks/useSwipe'
 import Toast from '../components/Toast'
@@ -108,6 +108,7 @@ function WhimmCompraRow({ item, onGoToCompras }) {
 export default function Gastos() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { message, show } = useToast()
   const [periodo, setPeriodo] = useState('mes')
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
@@ -123,6 +124,16 @@ export default function Gastos() {
 
   const cats = deriveWhimmCats(whimms, gastos)
   const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
+
+  // Abrir directo la edición de un gasto al llegar desde Historial (a
+  // pedido de Pame, vigésima séptima tanda).
+  useEffect(() => {
+    if (location.state?.openGastoId) {
+      openEdit(location.state.openGastoId)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, gastos])
 
   // Los dos "bolsillos" en que se reparte el saldo libre (misma lógica que
   // Compras, ver src/lib/budget.js) — a pedido de Pame (vigésima sexta

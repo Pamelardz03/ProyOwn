@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
 import Toast from '../components/Toast'
 import Toggle from '../components/Toggle'
@@ -82,9 +83,26 @@ function siteLabelFromUrl(url) {
 export default function Compras() {
   const { user } = useAuth()
   const { message, show } = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('deseos')
   const [subTabDeseos, setSubTabDeseos] = useState('activos') // 'activos' | 'comprados' — historial de Whimms ya comprados, separado de la cola que se sigue recorriendo
   const [detailId, setDetailId] = useState(null)
+
+  // Abrir el detalle de un Whimm específico al llegar desde otra pantalla
+  // (Historial, Inicio, Gastos) con navigate('/compras', { state: {
+  // openWhimmId } }) — antes esa navegación no hacía nada porque aquí
+  // nunca se leía el state (a pedido de Pame, vigésima séptima tanda:
+  // "hacer click en el whimm te debe llevar al detalle de ese whimm en
+  // compras"). Se limpia el state después de abrirlo para no reabrirlo
+  // solo con un "atrás"/"adelante" del navegador.
+  useEffect(() => {
+    if (location.state?.openWhimmId) {
+      setDetailId(location.state.openWhimmId)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
   const [notifFor, setNotifFor] = useState(null) // { id, collection, name, notifFormal, notifMini }
   const [dismissed, setDismissed] = useState({})
   const [apartarFor, setApartarFor] = useState(null) // { id, name }

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSwipeX } from '../hooks/useSwipe'
 import { IconChevronLeft, IconCard, IconTrash, IconEdit } from '../components/Icons'
 import Toggle from '../components/Toggle'
@@ -129,14 +129,35 @@ function PagoFijoRow({ p, isSwipeOpen, onSwipeChange, onEdit, onDelete, onToggle
 
 export default function PreciosFijos() {
   const { user } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
   const { data: items, loading, error } = useUserCollection('pagosFijos')
   const [tipo, setTipo] = useState('todos')
   const { message, show } = useToast()
+
+  // Abrir directo la edición de un pago fijo/Vitall al llegar desde
+  // Historial (a pedido de Pame, vigésima séptima tanda).
+  useEffect(() => {
+    if (location.state?.openPagoId) {
+      const p = items.find((x) => x.id === location.state.openPagoId)
+      if (p) openEdit(p)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, items])
 
   const [swipeOpenId, setSwipeOpenId] = useState(null)
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(null)
   const [saving, setSaving] = useState(false)
+  // Diálogo al pausar un pago fijo/Vitall desde el switch (vigésima
+  // séptima tanda, a pedido de Pame: "si se desactiva debe de decir si
+  // solo uno o indefinido el desactivado") — pausar SIEMPRE pregunta si
+  // es solo la próxima ocurrencia (usa `excepciones`, igual que editar
+  // un día desde Historial) o indefinido (`activo: false`, como ya
+  // existía); reactivar (cuando ya estaba desactivado) no pregunta nada,
+  // solo tiene un sentido posible.
+  const [pauseDialogFor, setPauseDialogFor] = useState(null) // pago fijo pendiente de elegir alcance de pausa
   // Confirmación al eliminar el pago fijo COMPLETO (vigésima sexta tanda,
   // a pedido de Pame: "si elimina el pago en pagos fijos ahí ya es cuando
   // pregunta") — a diferencia de editar/omitir una sola ocurrencia desde
@@ -160,12 +181,47 @@ export default function PreciosFijos() {
     }
   }
 
-  async function toggleActivo(id, activo) {
+  async function reactivarPago(p) {
     try {
-      await updateUserDoc(user.uid, 'pagosFijos', id, { activo: !activo })
+      await updateUserDoc(user.uid, 'pagosFijos', p.id, { activo: true })
+      show('Pago fijo reactivado')
     } catch (err) {
       console.error(err)
       show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
+  async function pausarSoloProximaVez(p) {
+    try {
+      const hoy = todayISO()
+      const proxima = proximoVencimientoPagoFijo(p, hoy)
+      if (!proxima) { setPauseDialogFor(null); return }
+      const excepciones = { ...(p.excepciones || {}), [proxima]: { omitida: true } }
+      await updateUserDoc(user.uid, 'pagosFijos', p.id, { excepciones })
+      setPauseDialogFor(null)
+      show(`Se salta el cobro del ${formatShortDate(proxima)} — vuelve normal en el siguiente`)
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
+  async function pausarIndefinido(p) {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', p.id, { activo: false })
+      setPauseDialogFor(null)
+      show('Pago fijo desactivado')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
+  function handleToggleActivo(p) {
+    if (p.activo === false) {
+      reactivarPago(p)
+    } else {
+      setPauseDialogFor(p)
     }
   }
 
@@ -263,7 +319,7 @@ export default function PreciosFijos() {
               onSwipeChange={(open) => setSwipeOpenId(open ? p.id : null)}
               onEdit={() => openEdit(p)}
               onDelete={() => setConfirmDelete({ id: p.id, name: p.name })}
-              onToggleActivo={() => toggleActivo(p.id, p.activo)}
+              onToggleActivo={() => handleToggleActivo(p)}
               onSetFecha={(fecha) => setFecha(p.id, fecha)}
             />
           ))}
@@ -368,6 +424,44 @@ export default function PreciosFijos() {
                 Eliminar de todos modos
               </button>
               <button className="pill" style={{ textAlign: 'center' }} onClick={() => setConfirmDelete(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {pauseDialogFor && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setPauseDialogFor(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Pausar &quot;{pauseDialogFor.name}&quot;</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                No es lo mismo que eliminarlo — elige qué tan larga es la pausa:
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--beige2)', color: 'var(--text)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarSoloProximaVez(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Solo la próxima vez</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Se salta únicamente el próximo cobro y vuelve a activarse solo en el que sigue.
+                </div>
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--red)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarIndefinido(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Desactivar indefinido</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.85)', marginTop: 2 }}>
+                  Deja de cobrarse/reservarse hasta que tú lo reactives con el mismo switch. Su historial se conserva.
+                </div>
+              </button>
+              <button style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }} onClick={() => setPauseDialogFor(null)}>
                 Cancelar
               </button>
             </div>

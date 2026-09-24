@@ -1,14 +1,14 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AddSheet from '../components/AddSheet'
 import Onboarding from '../components/Onboarding'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
-import { IconProduct } from '../components/Icons'
+import { IconProduct, IconEdit } from '../components/Icons'
 import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { ingresosFijosDelMes, monthlyEqPagoFijo, gastoNeto, disponibleParaWhimms, construirFlujoFuturo, proyectarColaWhimms } from '../lib/budget'
+import { monthlyEqPagoFijo, gastoNeto, disponibleParaWhimms, construirFlujoFuturo, proyectarColaWhimms } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -67,6 +67,7 @@ function DonutChart({ items }) {
 
 export default function Inicio() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { message, show } = useToast()
 
   const { data: gastos } = useUserCollection('gastos')
@@ -94,25 +95,29 @@ export default function Inicio() {
   const gastosMes = gastos.filter((g) => isThisMonth(g.fecha) && !(g.categoria === 'Vitall' && g.vitallId))
   const gastoMensual = gastosMes.reduce((s, g) => s + gastoNeto(g), 0)
 
-  // Ingresos reales del mes: solo cuenta pagos de sueldos fijos que ya
-  // ocurrieron desde que cada uno se registró (fechaInicio) — antes se
-  // mensualizaba a ciegas y sobrestimaba el saldo apenas se agregaba un
-  // sueldo nuevo a mitad de mes.
-  const sueldosFijosMensual = ingresosFijosDelMes(sueldosFijos)
-  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
-  const ingresoMensual = sueldosFijosMensual + sueldosRapidosMes
-
   const pagosActivos = pagosFijos.filter((p) => p.activo !== false)
   const vitallMensual = pagosActivos.filter((p) => p.tipo === 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
   const otrosFijosMensual = pagosActivos.filter((p) => p.tipo !== 'Vitall').reduce((s, p) => s + monthlyEqPagoFijo(p), 0)
 
   const hoy = todayISO()
 
-  // Saldo para compras (23 sep, a pedido de Pame): ya no resta pagos fijos
-  // ni Vitall — esos ya se reservan aparte en el motor de ahorro de
-  // Compras/Perfil, así que restarlos también aquí hacía ver este número
-  // más bajo de lo que en realidad hay libre para gastar/comprar.
-  const saldoParaCompras = ingresoMensual - gastoMensual
+  // Dinero real disponible para Whimms AHORA (mismo cálculo que Compras/
+  // Gastos/Perfil) — se calcula aquí arriba porque "Saldo para compras"
+  // (justo abajo) y "Próxima compra" (más abajo) lo comparten.
+  const disponibleWhimmsInicio = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+
+  // Saldo para compras (vigésima séptima tanda, corrección explícita de
+  // Pame: la versión anterior, "ingreso del mes - gastado del mes", daba
+  // un número muy por encima de lo que de verdad tenía en el banco (3677
+  // contra 2400 reales) porque es un cálculo de calendario que no resta
+  // los pagos fijos/Vitall reservados ni considera el saldo real
+  // acumulado (saldoInicial, lo ya comprado, etc.) — solo compara ingreso
+  // vs. gasto DENTRO del mes actual. Ahora usa exactamente el mismo
+  // número real y ya validado que el resto de la app (`disponibleParaWhimms`,
+  // calculado más abajo como `disponibleWhimmsInicio`): el dinero para
+  // Whimms que de verdad se tiene disponible AHORA, sin proyectar nada
+  // que todavía no haya llegado.
+  const saldoParaCompras = disponibleWhimmsInicio
 
   // Racha de días sin ningún Gasto registrado (cualquier tipo) — la fecha
   // del Gasto más reciente hasta hoy, cero si hay uno hoy mismo.
@@ -130,7 +135,6 @@ export default function Inicio() {
     .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
   const eventosFlujoInicio = construirFlujoFuturo({ sueldosFijos, pagosFijos })
-  const disponibleWhimmsInicio = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
   const ultimaCompraISOInicio = whimms
     .filter((w) => w.estado === 'comprado')
     .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
@@ -174,6 +178,19 @@ export default function Inicio() {
     .sort((a, b) => (b.dateISO < a.dateISO ? -1 : b.dateISO > a.dateISO ? 1 : 0))
     .slice(0, 8)
 
+  // Igual que en Historial completo (a pedido de Pame, vigésima séptima
+  // tanda: "que se edite todos los registros de historial... también en
+  // historial de la página de inicio") — cada tipo navega a donde ya
+  // vive su edición real. La ocurrencia puntual de un pago fijo no tiene
+  // editor propio aquí (vive en Historial completo), así que manda ahí.
+  function handleHistorialEditClick(h) {
+    if (h.editable === 'whimm') { navigate('/compras', { state: { openWhimmId: h.whimmId } }); return }
+    if (h.editable === 'gasto') { navigate('/gastos', { state: { openGastoId: h.gastoId } }); return }
+    if (h.editable === 'sueldoRapido') { navigate('/perfil/sueldos', { state: { openRapidoId: h.sueldoRapidoId } }); return }
+    if (h.editable === 'pagoFijoDef') { navigate('/perfil/precios-fijos', { state: { openPagoId: h.pagoFijoId } }); return }
+    if (h.editable === 'pagoFijoOcurrencia') { navigate('/perfil/historial'); return }
+  }
+
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -181,9 +198,9 @@ export default function Inicio() {
           <div className="eyebrow">{weekdayShort(todayISO())} · {formatShortDate(todayISO())}</div>
           <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>
             Hola, {primerNombre}
-            {diasSinGastar != null && (
+            {diasSinGastar != null && diasSinGastar > 0 && (
               <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)' }}>
-                {' · '}{diasSinGastar === 0 ? 'gastaste hoy' : `${diasSinGastar} día${diasSinGastar === 1 ? '' : 's'} sin gastar`}
+                {' · '}{diasSinGastar} día{diasSinGastar === 1 ? '' : 's'} sin gastar
               </span>
             )}
           </div>
@@ -200,14 +217,25 @@ export default function Inicio() {
               <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Acumulado</div>
               <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(gastoMensual)}</div>
             </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
-              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {proximaCompra ? proximaCompra.name : 'Próxima compra'}
+            {proximaCompra ? (
+              <Link
+                to="/compras"
+                state={{ openWhimmId: proximaCompra.id }}
+                style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px', color: 'inherit' }}
+              >
+                <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {proximaCompra.name}
+                </div>
+                <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>
+                  {diasProximaCompra != null && diasProximaCompra <= 0 ? 'Hoy' : `${diasProximaCompra} días`}
+                </div>
+              </Link>
+            ) : (
+              <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
+                <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Próxima compra</div>
+                <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>—</div>
               </div>
-              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>
-                {proximaCompra ? (diasProximaCompra != null && diasProximaCompra <= 0 ? 'Hoy' : `${diasProximaCompra} días`) : '—'}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -251,7 +279,7 @@ export default function Inicio() {
               {whimmsTop.map((w, i) => {
                 const diasAcumulando = i === 0 && w.estado === 'apartando' ? daysSinceMillis(toMillis(w.creadoEn)) : null
                 return (
-                  <Link key={w.id} to="/compras" className="row-list-item">
+                  <Link key={w.id} to="/compras" state={{ openWhimmId: w.id }} className="row-list-item">
                     <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)', width: 16 }}>{i + 1}</div>
                     <div className="icon-tile" style={{ width: 36, height: 36 }}>
                       <IconProduct size={16} />
@@ -290,6 +318,11 @@ export default function Inicio() {
                   <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: h.amount == null ? 'var(--muted)' : h.amount > 0 ? 'var(--green)' : 'var(--text)' }}>
                     {h.amount == null ? '—' : fmtSigned(h.amount)}
                   </span>
+                  {h.editable && (
+                    <button aria-label="Editar" onClick={() => handleHistorialEditClick(h)} style={{ flexShrink: 0, padding: 2 }}>
+                      <IconEdit size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
