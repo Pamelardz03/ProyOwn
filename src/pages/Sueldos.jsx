@@ -145,7 +145,7 @@ function RapidoRow({ r, isSwipeOpen, onSwipeChange, onEdit, onDelete }) {
 // el lápiz abre el formulario de edición, y la única forma de eliminar
 // es swipe a la izquierda (revela el bote de basura), igual patrón que
 // ExpenseRow en Gastos.jsx.
-function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete }) {
+function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete, onTogglePause }) {
   const { x, dragging, handlers } = useSwipeX({
     isOpen: isSwipeOpen,
     onChange: onSwipeChange,
@@ -217,9 +217,12 @@ function FijoRow({ s, isSwipeOpen, onSwipeChange, onOpenDetail, onEdit, onDelete
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
           <div className="mono" style={{ fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(s.monto)}</div>
-          <button aria-label="Editar sueldo fijo" onClick={onEdit} style={{ padding: 2 }}>
-            <IconEdit size={14} color="var(--muted)" />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button aria-label="Editar sueldo fijo" onClick={onEdit} style={{ padding: 2 }}>
+              <IconEdit size={14} color="var(--muted)" />
+            </button>
+            <Toggle on={!s.fechaFin} onClick={onTogglePause} ariaLabel={`Pausar ${s.name}`} />
+          </div>
         </div>
       </div>
     </div>
@@ -255,6 +258,12 @@ export default function Sueldos() {
   // solo una a la vez, igual que swipeOpenKey en Gastos.jsx.
   const [swipeOpenFijoId, setSwipeOpenFijoId] = useState(null)
   const [deleteScopeFor, setDeleteScopeFor] = useState(null) // sueldo fijo pendiente de elegir alcance de borrado
+  // Diálogo al pausar un sueldo fijo desde el switch (vigésima sexta
+  // tanda, a pedido de Pame: "no es borrar o activar") — distinto del
+  // switch instantáneo: pausar SIEMPRE pregunta si es solo la próxima
+  // vez o indefinido; reactivar (cuando ya estaba detenido) no necesita
+  // preguntar nada, solo un sentido posible.
+  const [pauseDialogFor, setPauseDialogFor] = useState(null) // sueldo fijo pendiente de elegir alcance de pausa
 
   // Detalle de calendario (solo lectura) de un sueldo fijo ya guardado,
   // abierto al tocar su fila.
@@ -447,6 +456,44 @@ export default function Sueldos() {
     }
   }
 
+  async function reactivarFijo(s) {
+    try {
+      await updateUserDoc(user.uid, 'sueldosFijos', s.id, { fechaFin: null })
+      show('Sueldo reactivado')
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
+  async function pausarSoloProximaVez(s) {
+    try {
+      const hoy = todayISO()
+      const proxima = proximaFechaSueldo(s, hoy) || fechasPagoVivas(s).find((f) => f >= hoy)
+      if (!proxima) { setPauseDialogFor(null); return }
+      const excepciones = { ...(s.excepciones || {}), [proxima]: { omitida: true } }
+      await updateUserDoc(user.uid, 'sueldosFijos', s.id, { excepciones })
+      setPauseDialogFor(null)
+      show(`Se salta el pago del ${formatShortDate(proxima)} — vuelve normal en el siguiente`)
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${errMsg(err)}`)
+    }
+  }
+
+  async function pausarIndefinido(s) {
+    await stopFijoFromToday(s.id)
+    setPauseDialogFor(null)
+  }
+
+  function handleTogglePause(s) {
+    if (s.fechaFin) {
+      reactivarFijo(s)
+    } else {
+      setPauseDialogFor(s)
+    }
+  }
+
   async function removeFijo(id) {
     try {
       await deleteUserDoc(user.uid, 'sueldosFijos', id)
@@ -566,6 +613,7 @@ export default function Sueldos() {
                 onOpenDetail={() => openFijoDetail(s)}
                 onEdit={() => openFijoEdit(s)}
                 onDelete={() => setDeleteScopeFor(s)}
+                onTogglePause={() => handleTogglePause(s)}
               />
             ))}
             {!loadingFijos && !errorFijos && fijos.length === 0 && <div className="empty-state">Sin sueldos fijos todavía</div>}
@@ -919,6 +967,44 @@ export default function Sueldos() {
                 </div>
               </button>
               <button style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }} onClick={() => setDeleteScopeFor(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {pauseDialogFor && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setPauseDialogFor(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Pausar &quot;{pauseDialogFor.name}&quot;</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                No es lo mismo que eliminarlo — elige qué tan larga es la pausa:
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--beige2)', color: 'var(--text)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarSoloProximaVez(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Solo la próxima vez</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Se salta únicamente el próximo pago y vuelve a activarse solo en el que sigue.
+                </div>
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--red)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarIndefinido(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Desactivar indefinido</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.85)', marginTop: 2 }}>
+                  Deja de generar pagos hasta que tú lo reactives con el mismo switch. Su historial se conserva.
+                </div>
+              </button>
+              <button style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }} onClick={() => setPauseDialogFor(null)}>
                 Cancelar
               </button>
             </div>
