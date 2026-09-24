@@ -108,6 +108,7 @@ export default function Compras() {
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
   const [showConfig, setShowConfig] = useState(false) // submenu: "Financiar a la vez" + reparto
+  const [pauseDialogFor, setPauseDialogFor] = useState(null) // Vitall pendiente de elegir alcance de pausa
 
   const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
   const [editForm, setEditForm] = useState({ nombre: '', categoria: '', lugar: '', precio: '', imagenUrl: '' })
@@ -213,12 +214,49 @@ export default function Compras() {
   const detail = whimmsOrdenados.find((w) => w.id === detailId)
   const detailLinks = detail ? (detail.links && detail.links.length ? detail.links : detail.link ? [detail.link] : []) : []
 
-  async function toggleServicio(id, activo) {
+  // Pausar un Vitall desde aquí (a pedido de Pame, vigésima séptima
+  // tanda) — mismo mecanismo y mismos diálogos que Precios fijos: pausar
+  // SIEMPRE pregunta si es solo la próxima vez (excepciones) o
+  // indefinido (activo: false); reactivar no pregunta nada.
+  async function reactivarServicio(s) {
     try {
-      await updateUserDoc(user.uid, 'pagosFijos', id, { activo: !activo })
+      await updateUserDoc(user.uid, 'pagosFijos', s.id, { activo: true })
     } catch (err) {
       console.error(err)
       show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  async function pausarServicioSoloProximaVez(s) {
+    try {
+      const hoy = todayISO()
+      const proxima = proximoVencimientoPagoFijo(s, hoy)
+      if (!proxima) { setPauseDialogFor(null); return }
+      const excepciones = { ...(s.excepciones || {}), [proxima]: { omitida: true } }
+      await updateUserDoc(user.uid, 'pagosFijos', s.id, { excepciones })
+      setPauseDialogFor(null)
+      show(`Se salta el cobro del ${formatShortDate(proxima)} — vuelve normal en el siguiente`)
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  async function pausarServicioIndefinido(s) {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', s.id, { activo: false })
+      setPauseDialogFor(null)
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo actualizar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  function toggleServicio(s) {
+    if (s.activo === false) {
+      reactivarServicio(s)
+    } else {
+      setPauseDialogFor(s)
     }
   }
 
@@ -437,11 +475,11 @@ export default function Compras() {
                 )}
                 {activosConFecha.map((w, i) => (
                   <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                       <span className="mono" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 10, padding: '6px 14px', fontSize: 20, fontWeight: 800 }}>
                         {scoreOutOf10(w._score ?? w.score)}
                       </span>
-                      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--wine4)' }}>#{i + 1}</div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -575,7 +613,7 @@ export default function Compras() {
                     </button>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{fmt(s.monto)}</div>
-                      <Toggle on={s.activo} onClick={() => toggleServicio(s.id, s.activo)} ariaLabel={`Activar ${s.name}`} />
+                      <Toggle on={s.activo} onClick={() => toggleServicio(s)} ariaLabel={`Activar ${s.name}`} />
                     </div>
                   </div>
                 )
@@ -1039,6 +1077,44 @@ export default function Compras() {
             <div style={{ padding: '12px 20px', borderTop: '1px solid var(--beige3)' }}>
               <button className="btn-primary" style={{ opacity: editSaving ? 0.7 : 1 }} onClick={saveEditWhimm} disabled={editSaving}>
                 Guardar cambios
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {pauseDialogFor && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setPauseDialogFor(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Pausar &quot;{pauseDialogFor.name}&quot;</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                No es lo mismo que eliminarlo — elige qué tan larga es la pausa:
+              </div>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--beige2)', color: 'var(--text)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarServicioSoloProximaVez(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Solo la próxima vez</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Se salta únicamente el próximo cobro y vuelve a activarse solo en el que sigue.
+                </div>
+              </button>
+              <button
+                className="btn-primary"
+                style={{ background: 'var(--red)', textAlign: 'left', padding: 12 }}
+                onClick={() => pausarServicioIndefinido(pauseDialogFor)}
+              >
+                <div style={{ fontWeight: 600, fontSize: 13 }}>Desactivar indefinido</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.85)', marginTop: 2 }}>
+                  Deja de cobrarse/reservarse hasta que tú lo reactives con el mismo switch.
+                </div>
+              </button>
+              <button style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }} onClick={() => setPauseDialogFor(null)}>
+                Cancelar
               </button>
             </div>
           </div>
