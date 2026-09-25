@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { setUserDoc } from '../lib/firestoreCollections'
 import { todayISO } from '../lib/date'
-import { inicializarBolsillos, migrarPagosFijos, procesarDiasPendientes, bolsillosDeHoy } from '../lib/budget'
+import { inicializarBolsillos, migrarPagosFijos, procesarDiasPendientes, bolsillosDeHoy, aplicarCorreccionesManuales } from '../lib/budget'
 
 // Bolsillos independientes de Whimms/gastos/pagos fijos (trigésima
 // segunda y trigésima tercera tanda) — ver el comentario grande en
@@ -30,7 +30,7 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
   // tocaría tener a pagos fijos/Vitall, sin tocar ultimoProcesado.
   const necesitaMigracionPagosFijos = listo && !necesitaSemilla && configPresupuesto?.saldoPagosFijos == null
 
-  const base = necesitaSemilla
+  const baseSinCorregir = necesitaSemilla
     ? inicializarBolsillos(params, hoy)
     : necesitaMigracionPagosFijos
       ? migrarPagosFijos(
@@ -54,14 +54,28 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
           })
         : null
 
+  // Correcciones manuales de una sola vez (trigésima cuarta tanda) — solo
+  // sobre bolsillos que ya existían de antes (una semilla recién armada
+  // con los datos YA corregidos no necesita ajuste, ver el comentario
+  // grande en budget.js). Se aplican encima del resultado de arriba, sin
+  // pisar `ultimoProcesado`.
+  const base = baseSinCorregir && !necesitaSemilla
+    ? (() => {
+        const correccion = aplicarCorreccionesManuales({ ...baseSinCorregir, correccionesAplicadas: configPresupuesto?.correccionesAplicadas })
+        return { ...baseSinCorregir, saldoWhimms: correccion.saldoWhimms, saldoGastos: correccion.saldoGastos, saldoPagosFijos: correccion.saldoPagosFijos, correccionesAplicadas: correccion.correccionesAplicadas }
+      })()
+    : baseSinCorregir
+
   useEffect(() => {
     if (!user || !base) return
+    const correccionesKey = JSON.stringify(base.correccionesAplicadas || [])
     const yaGuardado = configPresupuesto?.ultimoProcesado === base.ultimoProcesado
       && configPresupuesto?.saldoWhimms === base.saldoWhimms
       && configPresupuesto?.saldoGastos === base.saldoGastos
       && configPresupuesto?.saldoPagosFijos === base.saldoPagosFijos
+      && JSON.stringify(configPresupuesto?.correccionesAplicadas || []) === correccionesKey
     if (yaGuardado) return
-    const key = `${base.ultimoProcesado}-${base.saldoWhimms}-${base.saldoGastos}-${base.saldoPagosFijos}`
+    const key = `${base.ultimoProcesado}-${base.saldoWhimms}-${base.saldoGastos}-${base.saldoPagosFijos}-${correccionesKey}`
     if (ultimaEscrituraRef.current === key) return
     ultimaEscrituraRef.current = key
     setUserDoc(user.uid, 'config', 'presupuesto', {
@@ -69,9 +83,10 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
       saldoGastos: base.saldoGastos,
       saldoPagosFijos: base.saldoPagosFijos,
       ultimoProcesado: base.ultimoProcesado,
+      ...(base.correccionesAplicadas ? { correccionesAplicadas: base.correccionesAplicadas } : {}),
     }).catch((e) => console.error('No se pudieron guardar los bolsillos', e))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, base?.ultimoProcesado, base?.saldoWhimms, base?.saldoGastos, base?.saldoPagosFijos])
+  }, [user, base?.ultimoProcesado, base?.saldoWhimms, base?.saldoGastos, base?.saldoPagosFijos, JSON.stringify(base?.correccionesAplicadas || [])])
 
   if (!base) return { saldoWhimms: 0, saldoGastos: 0, saldoPagosFijos: 0, metaGastosHoy: 0, loading: true }
   const hoyView = bolsillosDeHoy(base, params, hoy)

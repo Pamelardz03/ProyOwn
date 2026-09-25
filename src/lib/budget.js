@@ -980,6 +980,61 @@ export function migrarPagosFijos(bolsillos, params, hoyISO) {
   }
 }
 
+// --- Correcciones manuales de una sola vez (trigésima cuarta tanda) ---
+// Un bolsillo ya "asentado" (ultimoProcesado ya pasó esa fecha) no se
+// recalcula solo — corregir después un documento viejo (Whimm/Gasto/pago
+// fijo) en Firestore NO mueve `saldoWhimms`/`saldoGastos`/`saldoPagosFijos`
+// ya guardados, porque `procesarDiasPendientes` nunca vuelve a pasar por
+// un día que ya asentó (ver el comentario grande arriba). Para esos casos
+// (típicamente un error de captura, como anotar por accidente el mismo
+// número en "¿en cuánto lo compraste?" y en "¿cuánto ya tenías apartado
+// en efectivo/otra cuenta?" al marcar un Whimm "comprado" — eso hace que
+// `whimmsCompradosEnFecha` reste $0 de saldoWhimms ese día, en vez del
+// precio real que sí salió de su cuenta de banco) hace falta mover a mano
+// la diferencia exacta, UNA SOLA VEZ. Cada corrección tiene un `id` fijo;
+// una vez aplicada, su id queda guardado en
+// `config/presupuesto.correccionesAplicadas` y nunca se repite, aunque
+// esta lista cambie después (se puede seguir agregando entradas nuevas
+// para futuros errores de captura sin arriesgar aplicar dos veces las
+// que ya se corrigieron).
+export const CORRECCIONES_MANUALES = [
+  {
+    id: 'sep2026-leneda-patches-montoapartado',
+    bolsillo: 'saldoWhimms',
+    // Crema Leneda ($681) + Pimple patches ($99): Pame capturó el mismo
+    // monto en "ya apartado en efectivo/otra cuenta" que en el precio
+    // final al marcarlos "comprado", aunque en realidad los pagó con su
+    // tarjeta/cuenta Nu (confirmado con ella el 25 de sep, cruzando sus
+    // movimientos reales del banco). Ya se corrigieron ambos documentos
+    // en la app, pero esos días ya estaban asentados — faltaba restar
+    // aquí la diferencia real: -(681 + 99).
+    monto: -780,
+  },
+]
+
+// Aplica, una sola vez cada una, las correcciones manuales pendientes
+// (las que todavía no estén en `bolsillos.correccionesAplicadas`) sobre
+// los tres bolsillos ya asentados. Devuelve los saldos ajustados y la
+// lista actualizada de ids aplicados, para guardarla junto con los
+// saldos en `config/presupuesto`.
+export function aplicarCorreccionesManuales(bolsillos) {
+  const yaAplicadas = new Set(bolsillos.correccionesAplicadas || [])
+  let saldoWhimms = Number(bolsillos.saldoWhimms) || 0
+  let saldoGastos = Number(bolsillos.saldoGastos) || 0
+  let saldoPagosFijos = Number(bolsillos.saldoPagosFijos) || 0
+  const correccionesAplicadas = [...yaAplicadas]
+  let huboCambios = false
+  for (const c of CORRECCIONES_MANUALES) {
+    if (yaAplicadas.has(c.id)) continue
+    if (c.bolsillo === 'saldoGastos') saldoGastos += c.monto
+    else if (c.bolsillo === 'saldoPagosFijos') saldoPagosFijos += c.monto
+    else saldoWhimms += c.monto
+    correccionesAplicadas.push(c.id)
+    huboCambios = true
+  }
+  return { saldoWhimms, saldoGastos, saldoPagosFijos, correccionesAplicadas, huboCambios }
+}
+
 // Asienta uno por uno los días YA COMPLETAMENTE PASADOS entre
 // `bolsillos.ultimoProcesado` (exclusivo) y `hoyISO` (exclusivo — el día
 // de hoy todavía está en curso, lo asienta `bolsillosDeHoy` en vivo sin
