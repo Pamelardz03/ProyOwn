@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, reservaInmediataPagosFijos, diasHastaSueldoMayor, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, diasHastaSueldoMayor, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -95,19 +95,19 @@ export default function Perfil() {
   // ver src/lib/budget.js) — "Disponible para Whimms" y "Disponible para
   // gastos" ya no son una foto instantánea del mismo saldo compartido:
   // son dos cuentas reales, cada una con su propio acumulado.
-  const { saldoWhimms, saldoGastos, metaGastosHoy } = useBolsillos({
+  const { saldoWhimms, saldoGastos, saldoPagosFijos, metaGastosHoy } = useBolsillos({
     configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
   })
-  const saldoAcumuladoReal = saldoWhimms + saldoGastos
+  // Trigésima tercera tanda, a pedido de Pame ("todos los vitall son más
+  // importantes que whimms generales, no deben interferir con mis gastos
+  // del día"): pagos fijos/Vitall ahora es un TERCER bolsillo real y
+  // protegido (saldoPagosFijos), no solo un aviso de rampa restado de la
+  // vista — se fondea primero de cada sueldo, antes de whimms/gastos, y
+  // el Total ya lo incluye.
+  const saldoAcumuladoReal = saldoWhimms + saldoGastos + saldoPagosFijos
   const diasProximoIngreso = diasHastaSueldoMayor(sueldosFijos)
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
-  // Reserva completa para pagos fijos/Vitall (20 sep, onceava tanda, a
-  // pedido de Pame): tercer recuadro para poder confirmar de un vistazo
-  // que sí está considerando el próximo vencimiento de TODOS sus pagos
-  // fijos/Vitall activos (no solo Vitall) — mismo cálculo que ya resta
-  // "Disponible para Whimms" de "Ahorro acumulado real".
-  const reservaPagosFijos = reservaInmediataPagosFijos(pagosFijos, undefined, sueldosFijos)
 
   // Antes también había un aviso genérico de "pago fijo vence en los
   // próximos 8 días" — se quitó (treceava tanda, a pedido de Pame): un
@@ -138,8 +138,8 @@ export default function Perfil() {
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Para pagos fijos/Vitall</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(reservaPagosFijos)}</div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Solo tu próximo cobro de cada uno</div>
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(saldoPagosFijos)}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>Ya apartado, protegido de whimms y gastos</div>
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>

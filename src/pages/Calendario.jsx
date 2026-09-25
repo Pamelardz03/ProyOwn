@@ -4,9 +4,10 @@ import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { fmt } from '../lib/format'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
+import { useBolsillos } from '../hooks/useBolsillos'
 import { daysInMonth, formatShortDate, todayISO, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, disponibleParaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
@@ -68,7 +69,7 @@ export default function Calendario() {
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: gastos } = useUserCollection('gastos')
-  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
+  const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
 
@@ -83,7 +84,13 @@ export default function Calendario() {
   // sin esto, el Calendario proyectaría fechas más rápidas de lo real,
   // usando el 100% del ahorro diario en vez de solo la parte de Whimms.
   const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
-  const disponibleWhimms = disponibleParaWhimms({ sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms })
+  // Mismo bolsillo real de Whimms que usan Compras/Inicio/Perfil
+  // (trigésima segunda tanda) — antes esta pantalla calculaba su propia
+  // foto instantánea con `disponibleParaWhimms`, que podía no coincidir
+  // con lo que el resto de la app ya mostraba como disponible.
+  const { saldoWhimms: disponibleWhimms } = useBolsillos({
+    configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
+  })
   // Misma cadencia mínima que en Compras.jsx (veinticuatroava tanda): la
   // fecha de última compra real es la que activa el canal extra hacia el
   // más barato pendiente dentro de proyectarColaWhimms.

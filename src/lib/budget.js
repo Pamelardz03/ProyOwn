@@ -879,6 +879,29 @@ export function vencimientosEnFecha(pagosFijos, fechaISO) {
     .reduce((sum, p) => sum + (fechasVencimientoVivas(p).includes(fechaISO) ? montoOcurrenciaPagoFijo(p, fechaISO) : 0), 0)
 }
 
+// Cuánto debería tener ya apartado, COMPLETO (no rampa), el bolsillo de
+// pagos fijos/Vitall en `fechaISO` — la suma del monto completo de cada
+// pago fijo/Vitall activo cuyo próximo vencimiento cae antes de tu
+// próximo sueldo grande (mismo criterio de "ese sueldo ya lo cubre" que
+// usa `reservasDiariasPagosFijos` desde la tanda 29, pero como META real
+// a fondear con dinero de verdad, no solo un número para mostrar). Se usa
+// para decidir cuánto de cada sueldo que cae se aparta PRIMERO para
+// `saldoPagosFijos`, antes de repartir el resto entre whimms y gastos
+// (trigésima tercera tanda, a pedido de Pame: "todos los vitall son más
+// importantes que whimms generales, no deben interferir con mis gastos
+// del día").
+export function objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, fechaISO) {
+  const limite = proximoLimiteReserva(sueldosFijos, fechaISO)
+  return (pagosFijos || [])
+    .filter((p) => p.activo !== false)
+    .reduce((sum, p) => {
+      const vencimiento = proximoVencimientoPagoFijo(p, fechaISO)
+      if (!vencimiento) return sum
+      if (limite && vencimiento > limite) return sum
+      return sum + montoOcurrenciaPagoFijo(p, vencimiento)
+    }, 0)
+}
+
 // Cuánto se compró de Whimms de la wishlist EXACTAMENTE en `fechaISO`
 // (neto de lo ya apartado en efectivo/otra cuenta) — sale completo de la
 // cuenta de whimms ese mismo día.
@@ -922,11 +945,38 @@ export function inicializarBolsillos(params, hoyISO) {
   // cuando el motor de días la procese en su fecha real, restándola dos
   // veces del total.
   const whimmsHastaAyer = (params.whimms || []).filter((w) => !(w.estado === 'comprado' && w.compradoEn > ayer))
-  const total = Math.max(saldoLibreAcumuladoReal({ ...params, whimms: whimmsHastaAyer, hoyISO: ayer }), 0)
+  const totalReal = Math.max(saldoLibreAcumuladoReal({ ...params, whimms: whimmsHastaAyer, hoyISO: ayer }), 0)
+  // Aparta primero, completo, lo que ya le tocaría tener a pagos fijos/
+  // Vitall en este momento (trigésima tercera tanda) — ese dinero pasa a
+  // su propio bolsillo protegido en vez de quedar mezclado con whimms o
+  // gastos desde el arranque.
+  const saldoPagosFijos = Math.min(objetivoPagosFijosEnFecha(params.pagosFijos, params.sueldosFijos, ayer), totalReal)
+  const libre = totalReal - saldoPagosFijos
   return {
-    saldoWhimms: total * pct,
-    saldoGastos: total * (1 - pct),
+    saldoWhimms: libre * pct,
+    saldoGastos: libre * (1 - pct),
+    saldoPagosFijos,
     ultimoProcesado: ayer,
+  }
+}
+
+// Migración de una sola vez (trigésima tercera tanda): cuentas que ya
+// tenían saldoWhimms/saldoGastos (de la tanda 32) pero todavía no
+// saldoPagosFijos (el bolsillo no existía) — se separa de gastos lo que
+// ya le tocaría tener apartado a pagos fijos/Vitall en este momento, sin
+// tocar `ultimoProcesado` ni whimms. No es dinero nuevo: es el mismo
+// dinero que ya estaba adentro de gastos, ahora protegido aparte (a
+// pedido de Pame: "todos los vitall son más importantes que whimms
+// generales, no deben interferir con mis gastos del día").
+export function migrarPagosFijos(bolsillos, params, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const saldoGastosActual = Math.max(Number(bolsillos.saldoGastos) || 0, 0)
+  const saldoPagosFijos = Math.min(objetivoPagosFijosEnFecha(params.pagosFijos, params.sueldosFijos, hoy), saldoGastosActual)
+  return {
+    saldoWhimms: Number(bolsillos.saldoWhimms) || 0,
+    saldoGastos: saldoGastosActual - saldoPagosFijos,
+    saldoPagosFijos,
+    ultimoProcesado: bolsillos.ultimoProcesado,
   }
 }
 
@@ -941,10 +991,11 @@ export function procesarDiasPendientes(bolsillos) {
   const pct = porcentajeWhimmsDe(bolsillos)
   let saldoWhimms = Number(bolsillos.saldoWhimms) || 0
   let saldoGastos = Number(bolsillos.saldoGastos) || 0
+  let saldoPagosFijos = Number(bolsillos.saldoPagosFijos) || 0
   const ultimoProcesado = bolsillos.ultimoProcesado || addDaysISO(hoy, -1)
 
   if (ultimoProcesado >= addDaysISO(hoy, -1)) {
-    return { saldoWhimms, saldoGastos, ultimoProcesado }
+    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado }
   }
 
   const { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms } = bolsillos
@@ -952,10 +1003,26 @@ export function procesarDiasPendientes(bolsillos) {
   let guard = 0
   while (dia < hoy && guard < 3660) {
     saldoWhimms -= whimmsCompradosEnFecha(whimms, dia)
-    saldoGastos -= vencimientosEnFecha(pagosFijos, dia)
+
+    // Vencimiento de pago fijo/Vitall: sale de pagosFijos primero; si no
+    // alcanza, el faltante sale de gastos como último recurso (a pedido
+    // de Pame) — nunca de whimms, que siempre queda protegido.
+    const debePagosFijos = vencimientosEnFecha(pagosFijos, dia)
+    const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))
+    saldoPagosFijos -= dePagosFijos
+    saldoGastos -= (debePagosFijos - dePagosFijos)
+
     const ingresoDia = sueldosEnFecha(sueldosFijos, sueldosRapidos, dia)
-    saldoWhimms += ingresoDia * pct
-    saldoGastos += ingresoDia * (1 - pct)
+    // Del ingreso del día, primero se aparta lo que haga falta para
+    // pagosFijos (hasta el objetivo de ese día), y el resto se reparte
+    // por % entre whimms y gastos, como siempre.
+    const objetivo = objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, dia)
+    const necesitaPagosFijos = Math.max(objetivo - saldoPagosFijos, 0)
+    const aPagosFijos = Math.min(necesitaPagosFijos, ingresoDia)
+    saldoPagosFijos += aPagosFijos
+    const restante = ingresoDia - aPagosFijos
+    saldoWhimms += restante * pct
+    saldoGastos += restante * (1 - pct)
 
     const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(sueldosFijos, dia) || 1, 1)
     const meta = Math.max(saldoGastos, 0) / diasRestantes
@@ -978,7 +1045,7 @@ export function procesarDiasPendientes(bolsillos) {
     dia = addDaysISO(dia, 1)
     guard++
   }
-  return { saldoWhimms, saldoGastos, ultimoProcesado: addDaysISO(hoy, -1) }
+  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1) }
 }
 
 // Vista EN VIVO para mostrar en pantalla: parte de los bolsillos ya
@@ -993,11 +1060,24 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   const pct = porcentajeWhimmsDe(params)
   let saldoWhimms = Number(bolsillos.saldoWhimms) || 0
   let saldoGastos = Number(bolsillos.saldoGastos) || 0
+  let saldoPagosFijos = Number(bolsillos.saldoPagosFijos) || 0
 
   const ingresoHoy = sueldosEnFecha(params.sueldosFijos, params.sueldosRapidos, hoy)
-  saldoWhimms += ingresoHoy * pct
-  saldoGastos += ingresoHoy * (1 - pct)
-  saldoGastos -= vencimientosEnFecha(params.pagosFijos, hoy)
+  // Mismo orden de prioridad que en procesarDiasPendientes: pagosFijos
+  // primero, whimms/gastos con el resto.
+  const objetivo = objetivoPagosFijosEnFecha(params.pagosFijos, params.sueldosFijos, hoy)
+  const necesitaPagosFijos = Math.max(objetivo - saldoPagosFijos, 0)
+  const aPagosFijos = Math.min(necesitaPagosFijos, ingresoHoy)
+  saldoPagosFijos += aPagosFijos
+  const restante = ingresoHoy - aPagosFijos
+  saldoWhimms += restante * pct
+  saldoGastos += restante * (1 - pct)
+
+  const debePagosFijos = vencimientosEnFecha(params.pagosFijos, hoy)
+  const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))
+  saldoPagosFijos -= dePagosFijos
+  saldoGastos -= (debePagosFijos - dePagosFijos)
+
   saldoWhimms -= whimmsCompradosEnFecha(params.whimms, hoy)
   saldoGastos -= gastoHormigaEnFecha(params.gastos, hoy)
 
@@ -1005,6 +1085,7 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   return {
     saldoWhimms: Math.max(saldoWhimms, 0),
     saldoGastos: Math.max(saldoGastos, 0),
+    saldoPagosFijos: Math.max(saldoPagosFijos, 0),
     metaGastosHoy: Math.max(saldoGastos, 0) / diasRestantes,
   }
 }
