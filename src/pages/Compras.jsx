@@ -110,14 +110,6 @@ export default function Compras() {
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
   const [showConfig, setShowConfig] = useState(false) // submenu: "Financiar a la vez" + reparto
-  // Vista previa del % antes de confirmar (trigésima segunda tanda, a
-  // pedido de Pame: cambiar el % ya no es instantáneo — se puede ver cómo
-  // quedaría el reparto y solo se aplica al darle a "Guardar"). Se
-  // reinicia al valor confirmado cada vez que se abre la hoja.
-  const [porcentajePreview, setPorcentajePreview] = useState(porcentajeWhimms)
-  useEffect(() => {
-    if (showConfig) setPorcentajePreview(porcentajeWhimms)
-  }, [showConfig, porcentajeWhimms])
   const [pauseDialogFor, setPauseDialogFor] = useState(null) // Vitall pendiente de elegir alcance de pausa
 
   const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
@@ -156,6 +148,16 @@ export default function Compras() {
   // queda como colchón de gasto hormiga (doceava tanda, a pedido de
   // Pame). Default 50/50, ajustable con el stepper de abajo.
   const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+  // Vista previa del % antes de confirmar (trigésima segunda tanda, a
+  // pedido de Pame: cambiar el % ya no es instantáneo — se puede ver cómo
+  // quedaría el reparto y solo se aplica al darle a "Guardar"). Se
+  // reinicia al valor confirmado cada vez que se abre la hoja. (Movido
+  // aquí, DESPUÉS de declarar `porcentajeWhimms` arriba — declararlo antes
+  // rompía en producción con "Cannot access before initialization".)
+  const [porcentajePreview, setPorcentajePreview] = useState(porcentajeWhimms)
+  useEffect(() => {
+    if (showConfig) setPorcentajePreview(porcentajeWhimms)
+  }, [showConfig, porcentajeWhimms])
 
   // La cola: Whimms activos ordenados por score (necesidad/deseo/precio,
   // ver src/lib/score.js), con una fecha estimada de compra por EVENTOS
