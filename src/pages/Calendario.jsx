@@ -12,7 +12,6 @@ import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
 const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
-const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
 
 const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -38,16 +37,19 @@ function isoOf(year, month, day) {
   return `${year}-${pad(month + 1)}-${pad(day)}`
 }
 
-// (trigésima quinta tanda, a pedido de Pame: "quita lo de colorear las
-// notificaciones del calendario" -- un día que solo tiene un recordatorio,
-// sin ningún evento real ese mismo día, ya no se sombrea de ningún color.)
+// (trigésima quinta tanda, a pedido de Pame: primero "quita lo de
+// colorear las notificaciones del calendario" -- un día que solo tiene
+// un recordatorio, sin ningún evento real ese mismo día, ya no se
+// sombrea de ningún color; luego, al notar que un día con 2+ eventos
+// reales distintos SEGUÍA viendo un relleno de color -- "quitar el
+// relleno también" -- ningún día se rellena de fondo, sin importar
+// cuántos tipos de evento tenga: siempre solo el borde, con el color
+// del primer evento de ese día.)
 function styleForDay(cats, isToday) {
   if (isToday) return TODAY_STYLE
   if (cats.length === 0) return {}
   const main = cats[0]
-  return cats.length > 1
-    ? { border: `2px solid ${CAT_COLOR[main]}`, background: CAT_BG[main], color: '#1a1208', fontWeight: 600 }
-    : { border: `2px solid ${CAT_COLOR[main]}`, color: CAT_COLOR[main], fontWeight: 600 }
+  return { border: `2px solid ${CAT_COLOR[main]}`, color: CAT_COLOR[main], fontWeight: 600 }
 }
 
 export default function Calendario() {

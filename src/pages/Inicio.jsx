@@ -115,7 +115,7 @@ export default function Inicio() {
   // disponibleParaWhimms/bufferGastoHormiga: ahora son dos cuentas reales
   // que se calculan aquí arriba porque "Saldo para compras" (justo abajo)
   // y "Próxima compra" (más abajo) lo comparten.
-  const { saldoWhimms: disponibleWhimmsInicio, saldoGastos: colchonGastoHormigaInicio } = useBolsillos({
+  const { saldoWhimms: disponibleWhimmsInicio, saldoGastos: colchonGastoHormigaInicio, metaGastosHoy: paraGastarHoy } = useBolsillos({
     configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
   })
 
@@ -226,8 +226,8 @@ export default function Inicio() {
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
-              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Acumulado</div>
-              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(colchonGastoHormigaInicio)}</div>
+              <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Para gastar hoy</div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(paraGastarHoy)}</div>
             </div>
             {proximaCompra ? (
               <Link
