@@ -1010,6 +1010,20 @@ export const CORRECCIONES_MANUALES = [
     // aquí la diferencia real: -(681 + 99).
     monto: -780,
   },
+  {
+    id: 'sep2026-domingo-350-vs-209',
+    bolsillo: 'saldoGastos',
+    // "Domingo depositado" del 20 de sep se registró con el monto fijo
+    // configurado ($350), pero el depósito real de ese día fue solo $209
+    // -- su papá le dedujo una deuda que Pame ya le debía antes de
+    // depositarle el resto (confirmado con ella: "le debía dinero, esa es
+    // la diferencia, ese domingo fueron 209"). Simplificación a propósito:
+    // el excedente mal contado ($141) se resta completo de saldoGastos en
+    // vez de tratar de reconstruir cómo se habría repartido de verdad
+    // entre whimms/gastos ese día -- no cambia el "Total" (la suma de los
+    // 3 bolsillos), solo en cuál de los 2 aparece restado.
+    monto: -141,
+  },
 ]
 
 // Aplica, una sola vez cada una, las correcciones manuales pendientes
