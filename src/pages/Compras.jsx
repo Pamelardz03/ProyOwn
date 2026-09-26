@@ -9,6 +9,7 @@ import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
+import { useBackableSheet } from '../hooks/useBackableSheet'
 import { formatShortDate, daysUntil, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
 import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario } from '../lib/budget'
@@ -90,6 +91,10 @@ export default function Compras() {
   const [tab, setTab] = useState('deseos')
   const [subTabDeseos, setSubTabDeseos] = useState('activos') // 'activos' | 'comprados' — historial de Whimms ya comprados, separado de la cola que se sigue recorriendo
   const [detailId, setDetailId] = useState(null)
+  // El botón/gesto de atrás del teléfono debe cerrar este sheet, no
+  // saltarse toda la página hasta la ruta anterior (trigésima quinta
+  // tanda, ver src/hooks/useBackableSheet.js).
+  useBackableSheet(!!detailId, () => setDetailId(null))
 
   // Abrir el detalle de un Whimm específico al llegar desde otra pantalla
   // (Historial, Inicio, Gastos) con navigate('/compras', { state: {
@@ -1174,6 +1179,8 @@ function ScalePicker({ value, onChange }) {
 // la app) + lo que ya acumuló del presupuesto diario real (novena tanda,
 // ver src/lib/budget.js) contra su precio — el bloque que pedía el diseño
 // original desde el principio y nunca se había construido de verdad.
+// (trigésima quinta tanda, a pedido de Pame: además del %, mostrar el
+// dinero recaudado en pesos como detalle junto a la barra)
 function WhimmProgressBar({ whimm, height = 6, style }) {
   const precio = Number(whimm.precio) || 0
   const progreso = (Number(whimm.montoApartado) || 0) + (Number(whimm.acumuladoAutomatico) || 0)
@@ -1186,7 +1193,10 @@ function WhimmProgressBar({ whimm, height = 6, style }) {
       <div style={{ height, background: 'var(--beige2)', borderRadius: height / 2, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: height / 2, transition: 'width .3s ease' }} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>
+          {progreso > 0 ? `${fmt(progreso)} de ${fmt(precio)}` : `De ${fmt(precio)}`}
+        </span>
         <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct > 0 ? `${pct}%` : 'En cola'}</span>
       </div>
     </div>

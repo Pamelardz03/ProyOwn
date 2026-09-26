@@ -13,12 +13,6 @@ import { deriveWhimmCats } from '../lib/categorias'
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
 const CAT_COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
 const CAT_BG = { nomina: '#f3d9c8', servicio: '#dde3c8', compra: '#ecdfc7' }
-// Sombreado de recordatorio (2 días antes de un vencimiento con "Recordatorio
-// formal" activado) — opacidad baja, pero del MISMO tono que el evento al
-// que pertenece (sueldo/pago fijo/Whimm), no un solo color genérico para
-// los 3 — así se distingue de qué es el recordatorio sin abrir el detalle.
-const NOTI_BG_BY_CAT = { nomina: 'rgba(58,15,31,.18)', servicio: 'rgba(124,140,90,.18)', compra: 'rgba(184,120,63,.18)' }
-const NOTI_BG = NOTI_BG_BY_CAT.servicio // usado solo como muestra representativa en la leyenda
 
 const MES_FULL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -44,13 +38,12 @@ function isoOf(year, month, day) {
   return `${year}-${pad(month + 1)}-${pad(day)}`
 }
 
-function styleForDay(cats, isToday, notiCats) {
+// (trigésima quinta tanda, a pedido de Pame: "quita lo de colorear las
+// notificaciones del calendario" -- un día que solo tiene un recordatorio,
+// sin ningún evento real ese mismo día, ya no se sombrea de ningún color.)
+function styleForDay(cats, isToday) {
   if (isToday) return TODAY_STYLE
-  if (cats.length === 0) {
-    if (!notiCats || notiCats.size === 0) return {}
-    const notiMain = notiCats.values().next().value
-    return { background: NOTI_BG_BY_CAT[notiMain] || NOTI_BG, color: '#1a1208', fontWeight: 600 }
-  }
+  if (cats.length === 0) return {}
   const main = cats[0]
   return cats.length > 1
     ? { border: `2px solid ${CAT_COLOR[main]}`, background: CAT_BG[main], color: '#1a1208', fontWeight: 600 }
@@ -141,27 +134,18 @@ export default function Calendario() {
 
   const meta = monthMeta(monthOffset)
   const specialByDay = {}
-  const notisByDay = {}
   allEvents.forEach((e) => {
     const [y, m, d] = e.dateISO.split('-').map(Number)
     if (y === meta.year && m - 1 === meta.month) {
       specialByDay[d] = specialByDay[d] || []
       specialByDay[d].push(e.cat)
     }
-    if (e.notifFormal) {
-      const noti = addDaysISO(e.dateISO, -2)
-      const [ny, nm, nd] = noti.split('-').map(Number)
-      if (ny === meta.year && nm - 1 === meta.month) {
-        notisByDay[nd] = notisByDay[nd] || new Set()
-        notisByDay[nd].add(e.cat)
-      }
-    }
   })
   const days = []
   for (let i = 0; i < meta.leading; i++) days.push(null)
   for (let d = 1; d <= meta.total; d++) {
     const iso = isoOf(meta.year, meta.month, d)
-    days.push({ day: d, style: styleForDay(specialByDay[d] || [], iso === hoy, notisByDay[d]) })
+    days.push({ day: d, style: styleForDay(specialByDay[d] || [], iso === hoy) })
   }
   while (days.length % 7 !== 0) days.push(null)
 
@@ -207,7 +191,6 @@ export default function Calendario() {
             <LegendItem color="var(--wine)" label="Sueldos" />
             <LegendItem color="var(--wine4)" label="Pagos fijos" />
             <LegendItem color="var(--amber)" label="Whimm" />
-            <LegendItem color={NOTI_BG} solid label="Recordatorio (2 días antes, tono del tipo)" />
           </div>
         </div>
 

@@ -7,7 +7,7 @@ import { useToast } from '../hooks/useToast'
 import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, deleteUserDoc, updateUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
 import { gastoNeto } from '../lib/budget'
 import { hayCambios } from '../lib/objectDiff'
@@ -119,6 +119,7 @@ export default function Gastos() {
   const { data: gastos, loading, error } = useUserCollection('gastos')
   const { data: whimms } = useUserCollection('whimms')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   const cats = deriveWhimmCats(whimms, gastos)
   const vitalls = pagosFijos.filter((p) => p.tipo === 'Vitall')
@@ -249,8 +250,30 @@ export default function Gastos() {
     }
   }
 
+  // Al borrar un gasto que ya quedó "asentado" en un día pasado
+  // (fecha <= ultimoProcesado, ver el comentario grande de bolsillos en
+  // src/lib/budget.js), el saldo persistido de config/presupuesto NUNCA
+  // se recalcula solo -- si no se regresa el dinero a mano aquí, se
+  // queda restado para siempre aunque el gasto ya no exista (trigésima
+  // quinta tanda, a pedido de Pame: "si se elimina, se debe agregar tal
+  // dinero, por si hay error en crear gasto y se quiere volver a
+  // registrar"). Un gasto de HOY (todavía no asentado) no necesita nada
+  // de esto -- bolsillosDeHoy ya recalcula en vivo con el arreglo actual
+  // de gastos cada vez que renderiza, así que simplemente desaparece del
+  // cálculo en cuanto se borra el documento. Un gasto tipo Vitall
+  // vinculado tampoco resta nada de saldoGastos (gastoHormigaEnFecha lo
+  // excluye a propósito, es solo un registro informativo), así que
+  // tampoco hace falta regresarle nada.
   async function deleteItem(id) {
+    const g = gastos.find((x) => x.id === id)
     try {
+      const yaAsentado = g && configPresupuesto?.ultimoProcesado && g.fecha <= configPresupuesto.ultimoProcesado
+      const esVitallVinculado = g?.categoria === 'Vitall' && g?.vitallId
+      if (g && yaAsentado && !esVitallVinculado) {
+        const monto = gastoNeto(g)
+        const saldoGastosActual = Number(configPresupuesto?.saldoGastos) || 0
+        await setUserDoc(user.uid, 'config', 'presupuesto', { saldoGastos: saldoGastosActual + monto })
+      }
       await deleteUserDoc(user.uid, 'gastos', id)
       setSwipeOpenKey(null)
       show('Gasto eliminado')
