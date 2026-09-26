@@ -171,8 +171,13 @@ export function reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
       // a traer el dinero para pagarlo — no hace falta apartarlo de lo
       // que ya tienes ahora (ej. Vuelos vence el 1 de octubre pero Kenet
       // paga el 30 de septiembre: el pago del 30 ya alcanza para el 1,
-      // así que no le quita nada a Whimms/gastos todavía).
-      if (limite && vencimiento > limite) return null
+      // así que no le quita nada a Whimms/gastos todavía). Desde la
+      // trigésima séptima tanda esto también incluye el vencimiento que
+      // cae EL MISMO día que ese sueldo (antes se apartaba igual, ej.
+      // Estacionamiento Udem venciendo el mismo 30 sep que paga Kenet):
+      // a pedido de Pame, ahora se confía en que ese sueldo cubre también
+      // los vencimientos de su propio día.
+      if (limite && vencimiento >= limite) return null
       const dias = Math.max(daysUntil(vencimiento), 1)
       const monto = montoOcurrenciaPagoFijo(p, vencimiento)
       const serieHastaVencimiento = fechasVencimientoVivas(p, vencimiento).sort(compareISOAsc)
@@ -889,7 +894,9 @@ export function vencimientosEnFecha(pagosFijos, fechaISO) {
 // `saldoPagosFijos`, antes de repartir el resto entre whimms y gastos
 // (trigésima tercera tanda, a pedido de Pame: "todos los vitall son más
 // importantes que whimms generales, no deben interferir con mis gastos
-// del día").
+// del día"). Desde la trigésima séptima tanda, un vencimiento el MISMO
+// día que ese sueldo grande tampoco cuenta en el objetivo (ver
+// `reservasDiariasPagosFijos` arriba para el detalle del cambio).
 export function objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, fechaISO) {
   const limite = proximoLimiteReserva(sueldosFijos, fechaISO)
   return (pagosFijos || [])
@@ -897,7 +904,7 @@ export function objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, fechaISO) {
     .reduce((sum, p) => {
       const vencimiento = proximoVencimientoPagoFijo(p, fechaISO)
       if (!vencimiento) return sum
-      if (limite && vencimiento > limite) return sum
+      if (limite && vencimiento >= limite) return sum
       return sum + montoOcurrenciaPagoFijo(p, vencimiento)
     }, 0)
 }
