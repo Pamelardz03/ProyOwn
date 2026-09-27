@@ -4,11 +4,11 @@ import AddSheet from '../components/AddSheet'
 import { useSwipeX } from '../hooks/useSwipe'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
-import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose } from '../components/Icons'
+import { IconProduct, IconReceipt, IconTrash, IconEdit, IconClose, IconChevronLeft, IconChevronRight } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, deleteUserDoc, updateUserDoc, setUserDoc } from '../lib/firestoreCollections'
-import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO } from '../lib/date'
+import { formatShortDate, isToday, isThisWeek, isThisMonth, isThisYear, compareISODesc, todayISO, addDaysISO, addMonthsISO, addYearsISO, startOfWeekISO, parseISODate } from '../lib/date'
 import { gastoNeto } from '../lib/budget'
 import { hayCambios } from '../lib/objectDiff'
 import { deriveWhimmCats } from '../lib/categorias'
@@ -27,11 +27,40 @@ function toMillis(ts) {
 }
 
 const PERIODO_FILTER = { dia: isToday, semana: isThisWeek, mes: isThisMonth, anio: isThisYear }
-const PERIODO_LABEL_TEXT = {
-  dia: 'hoy',
-  semana: 'esta semana',
-  mes: MES_FULL[new Date().getMonth()],
-  anio: String(new Date().getFullYear()),
+
+// Texto de "Gastado en {...}" — depende de qué tan lejos se haya
+// navegado con las flechas < > (trigésima séptima tanda, a pedido de
+// Pame: "agregale unas < > para moverte en cada uno"). Si `fechaRef`
+// sigue siendo el periodo actual real, muestra el mismo texto corto de
+// siempre ("hoy", "esta semana", "septiembre"); si ya se navegó a otro
+// periodo, muestra la fecha/rango exacto para que quede claro cuál se
+// está viendo.
+function periodoLabelTexto(periodo, fechaRef) {
+  const hoy = todayISO()
+  if (periodo === 'dia') {
+    return isToday(fechaRef) ? 'hoy' : formatShortDate(fechaRef)
+  }
+  if (periodo === 'semana') {
+    if (isThisWeek(hoy, fechaRef)) return 'esta semana'
+    const inicio = startOfWeekISO(fechaRef)
+    const fin = addDaysISO(inicio, 6)
+    return `del ${formatShortDate(inicio)} al ${formatShortDate(fin)}`
+  }
+  const ref = parseISODate(fechaRef)
+  if (periodo === 'mes') {
+    const mesTexto = MES_FULL[ref.getMonth()]
+    return isThisMonth(hoy, fechaRef) ? mesTexto : `${mesTexto} ${ref.getFullYear()}`
+  }
+  // anio
+  return String(ref.getFullYear())
+}
+
+// Retrocede/avanza `fechaRef` un paso del periodo seleccionado.
+function moverPeriodo(periodo, fechaRef, delta) {
+  if (periodo === 'dia') return addDaysISO(fechaRef, delta)
+  if (periodo === 'semana') return addDaysISO(fechaRef, delta * 7)
+  if (periodo === 'mes') return addMonthsISO(fechaRef, delta)
+  return addYearsISO(fechaRef, delta)
 }
 
 function ExpenseRow({ item, isOpen, onSwipe, onDelete, onEdit }) {
@@ -112,6 +141,18 @@ export default function Gastos() {
   const location = useLocation()
   const { message, show } = useToast()
   const [periodo, setPeriodo] = useState('mes')
+  // Fecha de referencia del periodo que se está viendo -- por default el
+  // periodo actual real (hoy). Cambiar de pestaña (día/semana/mes/año) la
+  // reinicia a "ahora" en ESE periodo; las flechas < > la mueven un paso
+  // hacia atrás/adelante sin cambiar de pestaña (trigésima séptima tanda).
+  const [fechaRef, setFechaRef] = useState(todayISO())
+  function cambiarPeriodo(p) {
+    setPeriodo(p)
+    setFechaRef(todayISO())
+  }
+  function navegarPeriodo(delta) {
+    setFechaRef((f) => moverPeriodo(periodo, f, delta))
+  }
   const [swipeOpenKey, setSwipeOpenKey] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState(null)
@@ -139,7 +180,7 @@ export default function Gastos() {
   // va primero — antes desempataba con el orden natural de la colección
   // (creadoEn ascendente), así que un gasto nuevo del mismo día se veía
   // hasta abajo de su grupo en vez de arriba.
-  const filterFn = PERIODO_FILTER[periodo]
+  const filterFn = (iso) => PERIODO_FILTER[periodo](iso, fechaRef)
   const items = gastos
     .filter((g) => filterFn(g.fecha))
     .sort((a, b) => compareISODesc(a.fecha, b.fecha) || toMillis(b.creadoEn) - toMillis(a.creadoEn))
@@ -293,7 +334,7 @@ export default function Gastos() {
             <button
               key={p}
               className="segbtn"
-              onClick={() => setPeriodo(p)}
+              onClick={() => cambiarPeriodo(p)}
               style={{ background: periodo === p ? 'var(--wine)' : 'transparent', color: periodo === p ? '#fff' : 'var(--muted)' }}
             >
               {PERIODO_LABEL[p]}
@@ -302,8 +343,32 @@ export default function Gastos() {
         </div>
 
         <div className="hero" style={{ padding: '16px 18px' }}>
-          <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>Gastado en {PERIODO_LABEL_TEXT[periodo]}</div>
-          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3 }}>{fmt(vitallGastado + whimmGastado)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <button
+              aria-label="Periodo anterior"
+              onClick={() => navegarPeriodo(-1)}
+              style={{ width: 26, height: 26, borderRadius: 13, background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              <IconChevronLeft size={14} color="#fff" />
+            </button>
+            <div style={{ fontSize: 11, opacity: 0.75, fontWeight: 500, textAlign: 'center' }}>Gastado en {periodoLabelTexto(periodo, fechaRef)}</div>
+            <button
+              aria-label="Periodo siguiente"
+              onClick={() => navegarPeriodo(1)}
+              style={{ width: 26, height: 26, borderRadius: 13, background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              <IconChevronRight size={14} color="#fff" />
+            </button>
+          </div>
+          <div className="mono" style={{ fontSize: 28, fontWeight: 500, marginTop: 3, textAlign: 'center' }}>{fmt(vitallGastado + whimmGastado)}</div>
+          {fechaRef !== todayISO() && (
+            <button
+              onClick={() => setFechaRef(todayISO())}
+              style={{ display: 'block', margin: '6px auto 0', fontSize: 10, opacity: 0.8, color: '#fff', textDecoration: 'underline' }}
+            >
+              Volver a hoy
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>

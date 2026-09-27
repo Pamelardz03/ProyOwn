@@ -424,6 +424,34 @@ export default function Compras() {
     }
     setEditSaving(true)
     try {
+      // Revertir un Whimm de "comprado" a cualquier otro estado debe
+      // regresar el dinero que se le restó a saldoWhimms cuando se marcó
+      // comprado, y volverlo a poner en la cola de espera (trigésima
+      // séptima tanda, a pedido de Pame: "si edito un articulo que ya
+      // estaba comprado a no comprado, debe de regresarse esa suma de
+      // nuevo y agregarlo a la lista de nuevo"). Volver a la cola no
+      // necesita código aparte: en cuanto `estado` deja de ser "comprado"
+      // el propio filtro de `activos` (arriba, `estado !== 'comprado'`) ya
+      // lo vuelve a mostrar. Regresar el dinero sí necesita código: si la
+      // fecha de compra (`compradoEn`) ya quedó "asentada" en un día
+      // pasado (`<= ultimoProcesado`, mismo criterio que el refund de
+      // Gastos.jsx en la tanda 35), el saldo persistido no se recalcula
+      // solo. Una compra de HOY no necesita nada de esto: bolsillosDeHoy
+      // ya recalcula en vivo con el arreglo de whimms actual, así que
+      // simplemente deja de restarse en cuanto cambia el estado.
+      const eraComprado = editingWhimm.estado === 'comprado'
+      const yaNoEsComprado = editEstado !== 'comprado'
+      const fechaCompraPrevia = editingWhimm.compradoEn
+      const yaAsentado = fechaCompraPrevia && configPresupuesto?.ultimoProcesado && fechaCompraPrevia <= configPresupuesto.ultimoProcesado
+      if (eraComprado && yaNoEsComprado && yaAsentado) {
+        const precioFinalPrevio = Number(editingWhimm.precioComprado ?? editingWhimm.precio) || 0
+        const montoApartadoPrevio = Number(editingWhimm.montoApartado) || 0
+        const monto = Math.max(precioFinalPrevio - montoApartadoPrevio, 0)
+        if (monto > 0) {
+          const saldoWhimmsActual = Number(configPresupuesto?.saldoWhimms) || 0
+          await setUserDoc(user.uid, 'config', 'presupuesto', { saldoWhimms: saldoWhimmsActual + monto })
+        }
+      }
       await updateUserDoc(user.uid, 'whimms', editingWhimm.id, payload)
       setEditingWhimm(null)
       if (detailId === editingWhimm.id) setDetailId(null)

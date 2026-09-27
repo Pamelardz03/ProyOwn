@@ -1155,13 +1155,28 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   saldoGastos -= (debePagosFijos - dePagosFijos)
 
   saldoWhimms -= whimmsCompradosEnFecha(params.whimms, hoy)
-  saldoGastos -= gastoHormigaEnFecha(params.gastos, hoy)
 
+  // "Para gastar hoy" (trigésima séptima tanda, cont. — a pedido de Pame:
+  // "el numero de gasto del dia... debe ir viendo cunto me queda en el
+  // dia segun gasto", tras notar que gastar $130 en un día casi no movía
+  // el número): la meta del día se calcula con el colchón TAL COMO queda
+  // tras los sueldos/vencimientos de hoy, pero ANTES de restar lo que ya
+  // se gastó hoy mismo -- y luego sí se le resta completo, peso por peso,
+  // en vez de repartir ese gasto entre todos los días que faltan para el
+  // próximo sueldo grande (que es lo que hacía dividir el saldo YA
+  // reducido entre `diasRestantes`). Puede quedar negativo a propósito:
+  // eso es exactamente lo que `procesarDiasPendientes` cubre de Whimms al
+  // cerrar el día (ver el bloque `diferencia < 0` más abajo en este mismo
+  // archivo) -- aquí solo se muestra en vivo antes de que ese cierre pase.
   const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(params.sueldosFijos, hoy) || 1, 1)
+  const metaDelDiaCompleto = Math.max(saldoGastos, 0) / diasRestantes
+  const gastoHoy = gastoHormigaEnFecha(params.gastos, hoy)
+  saldoGastos -= gastoHoy
+
   return {
     saldoWhimms: Math.max(saldoWhimms, 0),
     saldoGastos: Math.max(saldoGastos, 0),
     saldoPagosFijos: Math.max(saldoPagosFijos, 0),
-    metaGastosHoy: Math.max(saldoGastos, 0) / diasRestantes,
+    metaGastosHoy: metaDelDiaCompleto - gastoHoy,
   }
 }

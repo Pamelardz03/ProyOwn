@@ -61,33 +61,74 @@ function startOfWeek(d) {
   return c
 }
 
-export function isToday(iso) {
+// Los 4 siguientes aceptan un segundo argumento opcional `refISO` — la
+// fecha contra la que comparar en vez de "hoy" real (trigésima séptima
+// tanda, cont.: Gastos.jsx ahora puede navegar a otro día/semana/mes/año
+// con flechas < >, así que estos filtros necesitan compararse contra ESE
+// periodo, no siempre el actual). Sin `refISO` se comportan exactamente
+// igual que antes (todos los demás llamados en la app solo pasan 1
+// argumento y siguen comparando contra "hoy" real).
+export function isToday(iso, refISO) {
   const date = parseISODate(iso)
   if (!date) return false
-  return startOfDay(date).getTime() === startOfDay(new Date()).getTime()
+  const ref = refISO ? parseISODate(refISO) : new Date()
+  return startOfDay(date).getTime() === startOfDay(ref).getTime()
 }
 
-export function isThisWeek(iso) {
+export function isThisWeek(iso, refISO) {
   const date = parseISODate(iso)
   if (!date) return false
-  const start = startOfWeek(new Date())
+  const ref = refISO ? parseISODate(refISO) : new Date()
+  const start = startOfWeek(ref)
   const end = new Date(start)
   end.setDate(end.getDate() + 7)
   const d = startOfDay(date)
   return d >= start && d < end
 }
 
-export function isThisMonth(iso) {
+export function isThisMonth(iso, refISO) {
   const date = parseISODate(iso)
   if (!date) return false
-  const now = new Date()
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
+  const ref = refISO ? parseISODate(refISO) : new Date()
+  return date.getFullYear() === ref.getFullYear() && date.getMonth() === ref.getMonth()
 }
 
-export function isThisYear(iso) {
+export function isThisYear(iso, refISO) {
   const date = parseISODate(iso)
   if (!date) return false
-  return date.getFullYear() === new Date().getFullYear()
+  const ref = refISO ? parseISODate(refISO) : new Date()
+  return date.getFullYear() === ref.getFullYear()
+}
+
+// Fecha ISO del lunes que empieza la semana de `iso` — usada para
+// etiquetar el rango de la semana seleccionada en Gastos.jsx.
+export function startOfWeekISO(iso) {
+  const date = parseISODate(iso)
+  if (!date) return iso
+  return toISO(startOfWeek(date))
+}
+
+// Avanza/retrocede `n` meses desde `iso`, recortando el día si el mes de
+// destino es más corto (ej. 31 ene + 1 mes -> 28/29 feb, no "3 de marzo").
+export function addMonthsISO(iso, n) {
+  const date = parseISODate(iso)
+  if (!date) return iso
+  const dia = date.getDate()
+  let y = date.getFullYear()
+  let m = date.getMonth() + n
+  while (m > 11) { m -= 12; y += 1 }
+  while (m < 0) { m += 12; y -= 1 }
+  return toISO(new Date(y, m, Math.min(dia, daysInMonth(y, m))))
+}
+
+// Avanza/retrocede `n` años desde `iso`, recortando 29 feb en años no
+// bisiestos.
+export function addYearsISO(iso, n) {
+  const date = parseISODate(iso)
+  if (!date) return iso
+  const y = date.getFullYear() + n
+  const m = date.getMonth()
+  return toISO(new Date(y, m, Math.min(date.getDate(), daysInMonth(y, m))))
 }
 
 // Ordena fechas ISO de más reciente a más antigua (para listas de historial).

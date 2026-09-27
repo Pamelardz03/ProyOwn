@@ -108,6 +108,12 @@ export default function Perfil() {
   const diasProximoIngreso = diasHastaSueldoMayor(sueldosFijos)
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
+  // A pedido de Pame (trigésima séptima tanda, cont.): si ya te pasaste
+  // del presupuesto de HOY, mostrarlo en negativo con una leyenda que
+  // explique que ese excedente es justo lo que la lógica de sobregasto ya
+  // existente (`procesarDiasPendientes`, bloque `diferencia < 0`) va a
+  // cubrir de Whimms al cerrar el día de hoy.
+  const gastosEnNegativo = metaGastosHoy < 0
 
   // Antes también había un aviso genérico de "pago fijo vence en los
   // próximos 8 días" — se quitó (treceava tanda, a pedido de Pame): un
@@ -143,11 +149,13 @@ export default function Perfil() {
           </div>
           <div className="card" style={{ flex: 1, padding: 14, minWidth: 140 }}>
             <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Disponible para gastos</div>
-            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: colchonBajo ? 'var(--red)' : 'var(--green)' }}>
-              {fmt(metaGastosHoy)}
+            <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: (colchonBajo || gastosEnNegativo) ? 'var(--red)' : 'var(--green)' }}>
+              {gastosEnNegativo ? '-' + fmt(Math.abs(metaGastosHoy)) : fmt(metaGastosHoy)}
             </div>
-            <div style={{ fontSize: 9, color: colchonBajo ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
-              Hoy · {fmt(saldoGastos)} acumulado{diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}
+            <div style={{ fontSize: 9, color: (colchonBajo || gastosEnNegativo) ? 'var(--red)' : 'var(--muted)', marginTop: 2 }}>
+              {gastosEnNegativo
+                ? 'Te pasaste del presupuesto de hoy — se resta de Whimms al cerrar el día'
+                : `Hoy · ${fmt(saldoGastos)} acumulado${diasProximoIngreso ? ` · próximo pago en ${diasProximoIngreso}d` : ''}`}
             </div>
           </div>
         </div>

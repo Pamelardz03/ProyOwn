@@ -45,11 +45,35 @@ function isoOf(year, month, day) {
 // relleno también" -- ningún día se rellena de fondo, sin importar
 // cuántos tipos de evento tenga: siempre solo el borde, con el color
 // del primer evento de ese día.)
+//
+// Trigésima séptima tanda, cont. -- 2 correcciones más a pedido de Pame:
+// (1) un día con 2+ categorías distintas ahora muestra TODOS esos colores
+// en el borde, repartidos en partes iguales alrededor (antes solo se veía
+// el color de la primera categoría, perdiendo la otra por completo); (2)
+// el día de HOY ya no oculta el color de categoría si además tiene un
+// evento real -- se ve sólido como siempre (para no perderse de un
+// vistazo) pero con el borde de categoría encima, en vez de un cuadro rojo
+// sin ninguna otra información.
+function bordeParaCategorias(catsUnicas) {
+  if (catsUnicas.length === 0) return {}
+  if (catsUnicas.length === 1) {
+    return { border: `2px solid ${CAT_COLOR[catsUnicas[0]]}` }
+  }
+  const colores = catsUnicas.map((c) => CAT_COLOR[c])
+  const paso = 360 / colores.length
+  const stops = colores.map((color, i) => `${color} ${i * paso}deg ${(i + 1) * paso}deg`).join(', ')
+  return { border: '2px solid transparent', borderImage: `conic-gradient(${stops}) 1` }
+}
+
 function styleForDay(cats, isToday) {
-  if (isToday) return TODAY_STYLE
-  if (cats.length === 0) return {}
-  const main = cats[0]
-  return { border: `2px solid ${CAT_COLOR[main]}`, color: CAT_COLOR[main], fontWeight: 600 }
+  const catsUnicas = [...new Set(cats)]
+  const borde = bordeParaCategorias(catsUnicas)
+  if (isToday) {
+    return catsUnicas.length ? { ...TODAY_STYLE, ...borde } : TODAY_STYLE
+  }
+  if (catsUnicas.length === 0) return {}
+  if (catsUnicas.length === 1) return { ...borde, color: CAT_COLOR[catsUnicas[0]], fontWeight: 600 }
+  return { ...borde, fontWeight: 600 }
 }
 
 export default function Calendario() {

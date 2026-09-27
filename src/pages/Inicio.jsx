@@ -227,7 +227,12 @@ export default function Inicio() {
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
               <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Para gastar hoy</div>
-              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3 }}>{fmt(paraGastarHoy)}</div>
+              <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3, color: paraGastarHoy < 0 ? '#ffb4b4' : 'inherit' }}>
+                {paraGastarHoy < 0 ? '-' + fmt(Math.abs(paraGastarHoy)) : fmt(paraGastarHoy)}
+              </div>
+              {paraGastarHoy < 0 && (
+                <div style={{ fontSize: 8.5, opacity: 0.85, marginTop: 2, color: '#ffb4b4' }}>Se resta de Whimms al cerrar el día</div>
+              )}
             </div>
             {proximaCompra ? (
               <Link
