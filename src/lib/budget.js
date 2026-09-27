@@ -914,7 +914,15 @@ function sueldosRapidosEnFecha(sueldosRapidos, fechaISO) {
 function repartirIngresoDia(ingresoFijo, rapidos, objetivoPagosFijos, saldoPagosFijosActual, pct) {
   let aPagosFijos = 0
   let aWhimms = 0
-  let aGastos = 0
+  // `aGastosFijo` (el resto de un sueldo FIJO, o de un rápido legado sin
+  // `destino`) es dinero "de siempre" que sigue suavizándose entre los
+  // días que faltan para el próximo sueldo grande (ver `bolsillosDeHoy`).
+  // `aGastosRapido` (un rápido con `destino: 'gastos'` elegido a propósito)
+  // se mantiene aparte porque a HOY se le suma completo al acumulado del
+  // día en que se registró, sin ese suavizado -- ver el comentario grande
+  // en `bolsillosDeHoy` (trigésima novena tanda, cont.).
+  let aGastosFijo = 0
+  let aGastosRapido = 0
   let necesitaPagosFijos = Math.max(objetivoPagosFijos - saldoPagosFijosActual, 0)
 
   const deFijo = Math.min(necesitaPagosFijos, ingresoFijo)
@@ -922,7 +930,7 @@ function repartirIngresoDia(ingresoFijo, rapidos, objetivoPagosFijos, saldoPagos
   necesitaPagosFijos -= deFijo
   const restanteFijo = ingresoFijo - deFijo
   aWhimms += restanteFijo * pct
-  aGastos += restanteFijo * (1 - pct)
+  aGastosFijo += restanteFijo * (1 - pct)
 
   ;(rapidos || []).forEach(({ monto, destino }) => {
     const deEsteRapido = Math.min(necesitaPagosFijos, monto)
@@ -930,14 +938,14 @@ function repartirIngresoDia(ingresoFijo, rapidos, objetivoPagosFijos, saldoPagos
     necesitaPagosFijos -= deEsteRapido
     const restante = monto - deEsteRapido
     if (destino === 'whimms') aWhimms += restante
-    else if (destino === 'gastos') aGastos += restante
+    else if (destino === 'gastos') aGastosRapido += restante
     else {
       aWhimms += restante * pct
-      aGastos += restante * (1 - pct)
+      aGastosFijo += restante * (1 - pct)
     }
   })
 
-  return { aPagosFijos, aWhimms, aGastos }
+  return { aPagosFijos, aWhimms, aGastosFijo, aGastosRapido, aGastos: aGastosFijo + aGastosRapido }
 }
 
 // Cuánto de pagos fijos/Vitall activos vence EXACTAMENTE en `fechaISO`
@@ -1223,7 +1231,11 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   )
   saldoPagosFijos += repartoHoy.aPagosFijos
   saldoWhimms += repartoHoy.aWhimms
-  saldoGastos += repartoHoy.aGastos
+  // Solo la parte "de siempre" (sueldo fijo, o un rápido legado sin
+  // destino elegido) entra aquí, ANTES del cálculo de la meta suavizada
+  // de abajo -- la de un rápido con destino "gastos" registrado HOY se
+  // suma después, completa, sin suavizar (ver el bloque de más abajo).
+  saldoGastos += repartoHoy.aGastosFijo
 
   const debePagosFijos = vencimientosEnFecha(params.pagosFijos, hoy)
   const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))
@@ -1247,12 +1259,20 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(params.sueldosFijos, hoy) || 1, 1)
   const metaDelDiaCompleto = Math.max(saldoGastos, 0) / diasRestantes
   const gastoHoy = gastoHormigaEnFecha(params.gastos, hoy)
-  saldoGastos -= gastoHoy
+  // Un sueldo rápido de HOY con destino "gastos" se suma COMPLETO al
+  // acumulado del día en que se registró -- no se reparte entre los días
+  // que faltan para el próximo sueldo grande, a pedido explícito de Pame
+  // ("los sueldos rapidos deben de poder escoger a que cartera entrar,
+  // whimms o gastos, en ambos se agregan al acumulado del dia en el que
+  // se registro") y tras reportar que un rápido a Gastos registrado hoy
+  // no se veía reflejado. Por eso se suma DESPUÉS de la meta suavizada de
+  // arriba, igual que el gasto de hoy se resta después (mismo patrón).
+  saldoGastos += repartoHoy.aGastosRapido - gastoHoy
 
   return {
     saldoWhimms: Math.max(saldoWhimms, 0),
     saldoGastos: Math.max(saldoGastos, 0),
     saldoPagosFijos: Math.max(saldoPagosFijos, 0),
-    metaGastosHoy: metaDelDiaCompleto - gastoHoy,
+    metaGastosHoy: metaDelDiaCompleto + repartoHoy.aGastosRapido - gastoHoy,
   }
 }

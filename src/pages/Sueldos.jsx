@@ -660,9 +660,6 @@ export default function Sueldos() {
                     Whimms
                   </button>
                 </div>
-                <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 4 }}>
-                  Entra completo a esa cartera el día que lo registres (hoy, si no cambias la fecha) — salvo lo que haga falta primero para pagos fijos/Vitall, si ese día aplica.
-                </div>
               </div>
               <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveRapido} disabled={saving}>
                 {editingRapidoId ? 'Guardar cambios' : 'Guardar sueldo rápido'}
