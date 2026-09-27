@@ -84,11 +84,20 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
       saldoPagosFijos: base.saldoPagosFijos,
       ultimoProcesado: base.ultimoProcesado,
       ...(base.correccionesAplicadas ? { correccionesAplicadas: base.correccionesAplicadas } : {}),
+      // Última foto de premio/castigo (cuarentava tanda) — solo se manda
+      // cuando ya existe (procesarDiasPendientes la trae, aunque no haya
+      // cerrado un día nuevo esta vez); así Métricas siempre tiene el
+      // último cierre disponible sin depender de que hoy se cierre otro.
+      ...(base.ultimoCierre ? { ultimoCierre: base.ultimoCierre } : {}),
     }).catch((e) => console.error('No se pudieron guardar los bolsillos', e))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, base?.ultimoProcesado, base?.saldoWhimms, base?.saldoGastos, base?.saldoPagosFijos, JSON.stringify(base?.correccionesAplicadas || [])])
 
-  if (!base) return { saldoWhimms: 0, saldoGastos: 0, saldoPagosFijos: 0, metaGastosHoy: 0, loading: true }
+  if (!base) return { saldoWhimms: 0, saldoGastos: 0, saldoPagosFijos: 0, metaGastosHoy: 0, ultimoCierre: null, loading: true }
   const hoyView = bolsillosDeHoy(base, params, hoy)
-  return { ...hoyView, loading: false }
+  // `ultimoCierre` no lo calcula bolsillosDeHoy (es la vista en vivo de
+  // HOY, que todavía no cierra) -- viene siempre de `base`, que lo trae
+  // de procesarDiasPendientes (o null si la cuenta es nueva y ningún día
+  // se ha cerrado todavía).
+  return { ...hoyView, ultimoCierre: base.ultimoCierre || null, loading: false }
 }

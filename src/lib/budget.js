@@ -1144,9 +1144,15 @@ export function procesarDiasPendientes(bolsillos) {
   let saldoGastos = Number(bolsillos.saldoGastos) || 0
   let saldoPagosFijos = Number(bolsillos.saldoPagosFijos) || 0
   const ultimoProcesado = bolsillos.ultimoProcesado || addDaysISO(hoy, -1)
+  // Foto del ultimo dia que se cerro con premio/castigo (cuarentava tanda,
+  // a pedido de Pame: "ocupo dato de que tanto aumento de un dia a otro
+  // con eso de recompensas") -- se pasa igual si hoy no se cierra ningun
+  // dia nuevo, y se sobreescribe con el ultimo dia del bucle de abajo si
+  // si se cierra alguno. Asi Metricas siempre tiene algo que mostrar.
+  let ultimoCierre = bolsillos.ultimoCierre || null
 
   if (ultimoProcesado >= addDaysISO(hoy, -1)) {
-    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado }
+    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado, ultimoCierre }
   }
 
   const { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms } = bolsillos
@@ -1203,23 +1209,34 @@ export function procesarDiasPendientes(bolsillos) {
     const gastoReal = gastoHormigaEnFecha(gastos, dia)
     saldoGastos -= gastoReal
     const diferencia = meta - gastoReal
+    let cambioWhimms = 0
+    let cambioGastos = 0
     if (diferencia > 0) {
       const aWhimms = diferencia * pct
       saldoGastos -= aWhimms
       saldoWhimms += aWhimms
+      cambioWhimms = aWhimms
+      cambioGastos = -aWhimms
     } else if (diferencia < 0) {
       const deficit = -diferencia
       const deWhimms = Math.min(deficit, Math.max(saldoWhimms, 0))
       saldoWhimms -= deWhimms
       saldoGastos += deWhimms
+      cambioWhimms = -deWhimms
+      cambioGastos = deWhimms
       // Lo que no cubra whimms se queda absorbido en gastos (ya restado
       // arriba vía gastoReal) — la meta del día siguiente sale más baja
       // sola, sin necesidad de "cobrarlo" aparte.
     }
+    // Guarda la foto de este dia como el ultimo cierre -- si quedan mas
+    // dias pendientes en el bucle, la siguiente vuelta la vuelve a
+    // sobreescribir, asi que al salir queda la del dia mas reciente
+    // (cuarentava tanda, para el dato de recompensa/castigo en Metricas).
+    ultimoCierre = { fecha: dia, meta, gastoReal, diferencia, pct, cambioWhimms, cambioGastos }
     dia = addDaysISO(dia, 1)
     guard++
   }
-  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1) }
+  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1), ultimoCierre }
 }
 
 // Vista EN VIVO para mostrar en pantalla: parte de los bolsillos ya

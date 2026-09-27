@@ -1,14 +1,23 @@
 import { Link } from 'react-router-dom'
 import { IconChevronLeft } from '../components/Icons'
-import { fmt } from '../lib/format'
-import { useUserCollection } from '../lib/firestoreCollections'
+import { fmt, fmtSigned } from '../lib/format'
+import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, isThisMonth, isThisWeek, addDaysISO, todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
+import { useBolsillos } from '../hooks/useBolsillos'
 
 export default function MetricasStats() {
   const { data: whimms } = useUserCollection('whimms')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: gastos } = useUserCollection('gastos')
+  const { data: sueldosFijos } = useUserCollection('sueldosFijos')
+  const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
+  const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
+  const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
+  const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+  const { metaGastosHoy, ultimoCierre } = useBolsillos({
+    configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
+  })
 
   const categorias = new Set(whimms.map((w) => w.categoria).filter(Boolean)).size
   const apartando = whimms.filter((w) => w.estado === 'apartando').length
@@ -72,6 +81,18 @@ export default function MetricasStats() {
     },
   ]
 
+  // Tarjeta de recompensa/castigo (cuarentava tanda, a pedido de Pame:
+  // "ocupo dato de que tanto aumento de un dia a otro con eso de
+  // recompensas") -- una sola tarjeta con 2 columnas adentro (whimms /
+  // gastos), no dos tarjetas sueltas del grid. Muestra en grande el
+  // total que se acumuló en cada cartera el último día que se cerró, y
+  // abajo la fórmula completa (lo que tenía - lo que gastó = lo que
+  // sobró/faltó), el reparto 50/50 (o el que Pame tenga configurado) y
+  // cómo ya se refleja en el número de hoy.
+  const cierre = ultimoCierre
+  const esRecompensa = cierre && cierre.diferencia >= 0
+  const pctWhimms = cierre ? Math.round(cierre.pct * 100) : 50
+
   return (
     <div className="screen" style={{ paddingBottom: 40 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -81,6 +102,31 @@ export default function MetricasStats() {
           </Link>
           <h1>Métricas</h1>
         </div>
+
+        {cierre && (
+          <div className="card" style={{ padding: 16 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>
+              {esRecompensa ? 'Recompensa' : 'Penalización'} · {formatShortDate(cierre.fecha)}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>Whimms</div>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: cierre.cambioWhimms >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                  {fmtSigned(cierre.cambioWhimms)}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>Gastos</div>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: cierre.cambioGastos >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                  {fmtSigned(cierre.cambioGastos)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>
+              {fmt(cierre.meta)} (lo que tenías ese día) − {fmt(cierre.gastoReal)} (lo que gastaste) = {fmtSigned(cierre.diferencia)} que {esRecompensa ? 'sobró' : 'faltó'}, repartido {pctWhimms}/{100 - pctWhimms} entre whimms y gastos. Ya está incluido en el número de hoy ({fmt(metaGastosHoy)}).
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {STATS.map((s) => (
