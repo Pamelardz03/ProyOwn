@@ -1180,6 +1180,24 @@ export function procesarDiasPendientes(bolsillos) {
     saldoWhimms += repartoDia.aWhimms
     saldoGastos += repartoDia.aGastos
 
+    // Libera cualquier EXCESO ya apartado en pagosFijos que el objetivo
+    // de HOY ya no pide (trigésima novena tanda, cont. — encontrado tras
+    // el reporte de Pame de que seguía viendo $45 de "Estacionamiento
+    // Udem (mié)" en Perfil aunque ya se excluyó ese vencimiento del
+    // objetivo por caer el mismo día que Kenet, tanda 37): `saldoPagosFijos`
+    // es un saldo PERSISTIDO que solo avanza hacia adelante, así que un
+    // objetivo que baja (por esta regla, por desactivar/borrar un pago
+    // fijo, por correr su fecha, etc.) nunca se reflejaba solo -- el
+    // dinero de más se quedaba atrapado ahí para siempre en vez de volver
+    // a estar disponible para whimms/gastos. Se reparte por % igual que
+    // el resto de un ingreso cualquiera.
+    const excesoPagosFijos = Math.max(saldoPagosFijos - objetivo, 0)
+    if (excesoPagosFijos > 0) {
+      saldoPagosFijos -= excesoPagosFijos
+      saldoWhimms += excesoPagosFijos * pct
+      saldoGastos += excesoPagosFijos * (1 - pct)
+    }
+
     const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(sueldosFijos, dia) || 1, 1)
     const meta = Math.max(saldoGastos, 0) / diasRestantes
     const gastoReal = gastoHormigaEnFecha(gastos, dia)
@@ -1236,6 +1254,20 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   // de abajo -- la de un rápido con destino "gastos" registrado HOY se
   // suma después, completa, sin suavizar (ver el bloque de más abajo).
   saldoGastos += repartoHoy.aGastosFijo
+
+  // Libera cualquier EXCESO ya apartado en pagosFijos que el objetivo de
+  // HOY ya no pide -- mismo mecanismo que en `procesarDiasPendientes`
+  // (ver el comentario grande ahí), necesario para que la vista en vivo
+  // de HOY también refleje el dinero liberado sin esperar a que pase la
+  // medianoche. Se reparte por % y sí se suaviza como el resto del
+  // colchón general (no es dinero "nuevo" de hoy, es dinero que ya
+  // estaba ahí y deja de hacer falta reservado).
+  const excesoPagosFijos = Math.max(saldoPagosFijos - objetivo, 0)
+  if (excesoPagosFijos > 0) {
+    saldoPagosFijos -= excesoPagosFijos
+    saldoWhimms += excesoPagosFijos * pct
+    saldoGastos += excesoPagosFijos * (1 - pct)
+  }
 
   const debePagosFijos = vencimientosEnFecha(params.pagosFijos, hoy)
   const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))
