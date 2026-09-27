@@ -15,7 +15,7 @@ export default function MetricasStats() {
   const { data: configPresupuesto, loading: loadingConfig } = useUserDoc('config', 'presupuesto')
   const saldoInicial = Number(configPresupuesto?.saldoInicial) || 0
   const porcentajeWhimms = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
-  const { metaGastosHoy, ultimoCierre } = useBolsillos({
+  const { ultimoCierre } = useBolsillos({
     configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
   })
 
@@ -81,17 +81,22 @@ export default function MetricasStats() {
     },
   ]
 
-  // Tarjeta de recompensa/castigo (cuarentava tanda, a pedido de Pame:
-  // "ocupo dato de que tanto aumento de un dia a otro con eso de
-  // recompensas") -- una sola tarjeta con 2 columnas adentro (whimms /
-  // gastos), no dos tarjetas sueltas del grid. Muestra en grande el
-  // total que se acumuló en cada cartera el último día que se cerró, y
-  // abajo la fórmula completa (lo que tenía - lo que gastó = lo que
-  // sobró/faltó), el reparto 50/50 (o el que Pame tenga configurado) y
-  // cómo ya se refleja en el número de hoy.
+  // Tarjeta de recompensa/castigo (cuarentava tanda, cont. -- a pedido
+  // de Pame: "quiero un recuadro de 2 columnas y 1 fila, donde se vea el
+  // valor que se le sumo a lo que tocaba hoy, y como llego a ese
+  // resultado... no uses palabras solo numeros y muestra si es + o -").
+  // Columna 1: el premio/castigo del último día que cerró (cuánto se
+  // movió a whimms, con signo). Columna 2: la fórmula que llega a ese
+  // número, en dos líneas de solo números -- (meta − gastoReal =
+  // diferencia) y (diferencia × proporción real = lo que se movió).
   const cierre = ultimoCierre
-  const esRecompensa = cierre && cierre.diferencia >= 0
-  const pctWhimms = cierre ? Math.round(cierre.pct * 100) : 50
+  // Proporción REAL de la diferencia que de verdad se movió a whimms --
+  // no siempre es `pct` tal cual: un día de recompensa sí reparte
+  // exacto por `pct`, pero un día de castigo puede tomar de whimms
+  // menos del 100% del faltante si no había suficiente saldo ahí. Se
+  // calcula al revés (cambioWhimms / diferencia) para que la fórmula
+  // mostrada cuadre siempre con el número real que se movió.
+  const ratioReal = cierre && cierre.diferencia !== 0 ? cierre.cambioWhimms / cierre.diferencia : 0
 
   return (
     <div className="screen" style={{ paddingBottom: 40 }}>
@@ -105,25 +110,17 @@ export default function MetricasStats() {
 
         {cierre && (
           <div className="card" style={{ padding: 16 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>
-              {esRecompensa ? 'Recompensa' : 'Penalización'} · {formatShortDate(cierre.fecha)}
+            <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>
+              {cierre.fecha.slice(8, 10)}/{cierre.fecha.slice(5, 7)}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-              <div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>Whimms</div>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: cierre.cambioWhimms >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                  {fmtSigned(cierre.cambioWhimms)}
-                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6, alignItems: 'center' }}>
+              <div className="mono" style={{ fontSize: 26, fontWeight: 700, color: cierre.cambioWhimms >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {fmtSigned(cierre.cambioWhimms)}
               </div>
-              <div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>Gastos</div>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: cierre.cambioGastos >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                  {fmtSigned(cierre.cambioGastos)}
-                </div>
+              <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+                <div>{fmt(cierre.meta)} − {fmt(cierre.gastoReal)} = {fmtSigned(cierre.diferencia)}</div>
+                <div>{fmtSigned(cierre.diferencia)} × {ratioReal.toFixed(2)} = {fmtSigned(cierre.cambioWhimms)}</div>
               </div>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>
-              {fmt(cierre.meta)} (lo que tenías ese día) − {fmt(cierre.gastoReal)} (lo que gastaste) = {fmtSigned(cierre.diferencia)} que {esRecompensa ? 'sobró' : 'faltó'}, repartido {pctWhimms}/{100 - pctWhimms} entre whimms y gastos. Ya está incluido en el número de hoy ({fmt(metaGastosHoy)}).
             </div>
           </div>
         )}
