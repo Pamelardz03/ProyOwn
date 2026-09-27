@@ -873,6 +873,73 @@ export function sueldosEnFecha(sueldosFijos, sueldosRapidos, fechaISO) {
   return fijos + rapidos
 }
 
+// Igual que la parte "fijos" de `sueldosEnFecha` de arriba, por separado
+// -- necesario desde que un sueldo rápido puede tener su propia cartera
+// de destino (ver `sueldosRapidosEnFecha`/`repartirIngresoDia` abajo,
+// trigésima novena tanda) y ya no se puede sumar en un solo total plano
+// junto con los fijos antes de repartirlo.
+function sueldosFijosEnFecha(sueldosFijos, fechaISO) {
+  return (sueldosFijos || []).reduce(
+    (sum, s) => sum + (fechasPagoVivas(s).includes(fechaISO) ? Number(s.monto) || 0 : 0),
+    0
+  )
+}
+
+// Cada sueldo rápido que cae EXACTO en `fechaISO`, con su monto y la
+// cartera que Pame eligió para él al registrarlo (`destino: 'whimms' |
+// 'gastos'`) -- a diferencia de `sueldosEnFecha`, que solo daba un total
+// plano, esto se necesita entero (uno por uno) para poder aplicar la
+// cartera de cada quien por separado en `repartirIngresoDia`. Uno sin
+// `destino` guardado (creado antes de la trigésima novena tanda) sigue
+// repartiéndose por % como cualquier ingreso de siempre -- ver
+// `repartirIngresoDia`.
+function sueldosRapidosEnFecha(sueldosRapidos, fechaISO) {
+  return (sueldosRapidos || [])
+    .filter((r) => r.fecha === fechaISO)
+    .map((r) => ({ monto: Number(r.monto) || 0, destino: r.destino || null }))
+}
+
+// Reparte el ingreso de UN día (sueldos fijos + sueldos rápidos que caen
+// ese mismo día) entre los 3 bolsillos -- misma lógica compartida por
+// `procesarDiasPendientes` (días ya pasados) y `bolsillosDeHoy` (vista en
+// vivo de hoy), para que nunca diverjan. Prioridad (trigésima tercera
+// tanda, reafirmada en la trigésima novena): PRIMERO se cubre lo que
+// haga falta de pagos fijos/Vitall, de cualquier ingreso del día (fijo o
+// rápido, en ese orden) -- lo que sobra de un sueldo FIJO se reparte por
+// % entre whimms/gastos como siempre; lo que sobra de CADA sueldo RÁPIDO
+// va COMPLETO a la cartera que Pame eligió para ese sueldo en particular
+// (o se reparte por % si no eligió ninguna), a pedido explícito de Pame:
+// "los sueldos rapidos deben de poder escoger a que cartera entrar,
+// whimms o gastos".
+function repartirIngresoDia(ingresoFijo, rapidos, objetivoPagosFijos, saldoPagosFijosActual, pct) {
+  let aPagosFijos = 0
+  let aWhimms = 0
+  let aGastos = 0
+  let necesitaPagosFijos = Math.max(objetivoPagosFijos - saldoPagosFijosActual, 0)
+
+  const deFijo = Math.min(necesitaPagosFijos, ingresoFijo)
+  aPagosFijos += deFijo
+  necesitaPagosFijos -= deFijo
+  const restanteFijo = ingresoFijo - deFijo
+  aWhimms += restanteFijo * pct
+  aGastos += restanteFijo * (1 - pct)
+
+  ;(rapidos || []).forEach(({ monto, destino }) => {
+    const deEsteRapido = Math.min(necesitaPagosFijos, monto)
+    aPagosFijos += deEsteRapido
+    necesitaPagosFijos -= deEsteRapido
+    const restante = monto - deEsteRapido
+    if (destino === 'whimms') aWhimms += restante
+    else if (destino === 'gastos') aGastos += restante
+    else {
+      aWhimms += restante * pct
+      aGastos += restante * (1 - pct)
+    }
+  })
+
+  return { aPagosFijos, aWhimms, aGastos }
+}
+
 // Cuánto de pagos fijos/Vitall activos vence EXACTAMENTE en `fechaISO`
 // (respetando excepciones/monto por ocurrencia) — este monto sale
 // completo de la cuenta de gastos ese mismo día, sin rampa (a diferencia
@@ -1088,17 +1155,22 @@ export function procesarDiasPendientes(bolsillos) {
     saldoPagosFijos -= dePagosFijos
     saldoGastos -= (debePagosFijos - dePagosFijos)
 
-    const ingresoDia = sueldosEnFecha(sueldosFijos, sueldosRapidos, dia)
     // Del ingreso del día, primero se aparta lo que haga falta para
-    // pagosFijos (hasta el objetivo de ese día), y el resto se reparte
-    // por % entre whimms y gastos, como siempre.
+    // pagosFijos (hasta el objetivo de ese día); el resto de un sueldo
+    // FIJO se reparte por % entre whimms y gastos como siempre, y el
+    // resto de cada sueldo RÁPIDO va completo a la cartera que Pame
+    // eligió para él (ver `repartirIngresoDia` arriba).
     const objetivo = objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, dia)
-    const necesitaPagosFijos = Math.max(objetivo - saldoPagosFijos, 0)
-    const aPagosFijos = Math.min(necesitaPagosFijos, ingresoDia)
-    saldoPagosFijos += aPagosFijos
-    const restante = ingresoDia - aPagosFijos
-    saldoWhimms += restante * pct
-    saldoGastos += restante * (1 - pct)
+    const repartoDia = repartirIngresoDia(
+      sueldosFijosEnFecha(sueldosFijos, dia),
+      sueldosRapidosEnFecha(sueldosRapidos, dia),
+      objetivo,
+      saldoPagosFijos,
+      pct
+    )
+    saldoPagosFijos += repartoDia.aPagosFijos
+    saldoWhimms += repartoDia.aWhimms
+    saldoGastos += repartoDia.aGastos
 
     const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(sueldosFijos, dia) || 1, 1)
     const meta = Math.max(saldoGastos, 0) / diasRestantes
@@ -1138,16 +1210,20 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   let saldoGastos = Number(bolsillos.saldoGastos) || 0
   let saldoPagosFijos = Number(bolsillos.saldoPagosFijos) || 0
 
-  const ingresoHoy = sueldosEnFecha(params.sueldosFijos, params.sueldosRapidos, hoy)
   // Mismo orden de prioridad que en procesarDiasPendientes: pagosFijos
-  // primero, whimms/gastos con el resto.
+  // primero (de fijo y luego de cada rápido), whimms/gastos con el resto
+  // -- cada rápido a su propia cartera elegida (ver `repartirIngresoDia`).
   const objetivo = objetivoPagosFijosEnFecha(params.pagosFijos, params.sueldosFijos, hoy)
-  const necesitaPagosFijos = Math.max(objetivo - saldoPagosFijos, 0)
-  const aPagosFijos = Math.min(necesitaPagosFijos, ingresoHoy)
-  saldoPagosFijos += aPagosFijos
-  const restante = ingresoHoy - aPagosFijos
-  saldoWhimms += restante * pct
-  saldoGastos += restante * (1 - pct)
+  const repartoHoy = repartirIngresoDia(
+    sueldosFijosEnFecha(params.sueldosFijos, hoy),
+    sueldosRapidosEnFecha(params.sueldosRapidos, hoy),
+    objetivo,
+    saldoPagosFijos,
+    pct
+  )
+  saldoPagosFijos += repartoHoy.aPagosFijos
+  saldoWhimms += repartoHoy.aWhimms
+  saldoGastos += repartoHoy.aGastos
 
   const debePagosFijos = vencimientosEnFecha(params.pagosFijos, hoy)
   const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))

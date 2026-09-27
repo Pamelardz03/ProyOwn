@@ -67,7 +67,12 @@ function emptyFijo() {
   return { name: '', monto: '', fecha: todayISO() }
 }
 function emptyRapido() {
-  return { desc: '', monto: '', fecha: todayISO() }
+  // `destino` (trigésima novena tanda, a pedido de Pame: "los sueldos
+  // rapidos deben de poder escoger a que cartera entrar, whimms o
+  // gastos") -- 'gastos' como default razonable para uno nuevo; uno ya
+  // guardado sin este campo (de antes de esta tanda) sigue repartiéndose
+  // por % como siempre, ver `repartirIngresoDia` en budget.js.
+  return { desc: '', monto: '', fecha: todayISO(), destino: 'gastos' }
 }
 
 function ToggleRow({ label, hint, on, onClick }) {
@@ -129,7 +134,14 @@ function RapidoRow({ r, isSwipeOpen, onSwipeChange, onEdit, onDelete }) {
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 13, minWidth: 0 }}>{r.desc}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13 }}>{r.desc}</div>
+          {r.destino && (
+            <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 1 }}>
+              {r.destino === 'whimms' ? 'A Whimms' : 'A Gastos'}
+            </div>
+          )}
+        </div>
         <div style={{ textAlign: 'right' }}>
           <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>{fmtSigned(r.monto)}</div>
           <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{formatShortDate(r.fecha)}</div>
@@ -422,7 +434,7 @@ export default function Sueldos() {
   }
 
   function openRapidoEdit(r) {
-    setRapidoForm({ desc: r.desc, monto: String(r.monto), fecha: r.fecha || todayISO() })
+    setRapidoForm({ desc: r.desc, monto: String(r.monto), fecha: r.fecha || todayISO(), destino: r.destino || 'gastos' })
     setEditingRapidoId(r.id)
     setSwipeOpenRapidoId(null)
     setAddRapidoOpen(true)
@@ -437,6 +449,7 @@ export default function Sueldos() {
         desc: rapidoForm.desc.trim(),
         monto,
         fecha: rapidoForm.fecha || todayISO(),
+        destino: rapidoForm.destino === 'whimms' ? 'whimms' : 'gastos',
       }
       if (editingRapidoId) {
         if (!hayCambios(rapidos.find((r) => r.id === editingRapidoId), payload)) {
@@ -627,6 +640,30 @@ export default function Sueldos() {
                 value={rapidoForm.fecha}
                 onChange={(e) => setRapidoForm((f) => ({ ...f, fecha: e.target.value }))}
               />
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 4 }}>¿A qué cartera entra?</div>
+                <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
+                  <button
+                    type="button"
+                    className="segbtn"
+                    onClick={() => setRapidoForm((f) => ({ ...f, destino: 'gastos' }))}
+                    style={{ background: rapidoForm.destino !== 'whimms' ? 'var(--wine)' : 'transparent', color: rapidoForm.destino !== 'whimms' ? '#fff' : 'var(--muted)' }}
+                  >
+                    Gastos
+                  </button>
+                  <button
+                    type="button"
+                    className="segbtn"
+                    onClick={() => setRapidoForm((f) => ({ ...f, destino: 'whimms' }))}
+                    style={{ background: rapidoForm.destino === 'whimms' ? 'var(--wine)' : 'transparent', color: rapidoForm.destino === 'whimms' ? '#fff' : 'var(--muted)' }}
+                  >
+                    Whimms
+                  </button>
+                </div>
+                <div style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 4 }}>
+                  Entra completo a esa cartera el día que lo registres (hoy, si no cambias la fecha) — salvo lo que haga falta primero para pagos fijos/Vitall, si ese día aplica.
+                </div>
+              </div>
               <button className="btn-primary" style={{ marginTop: 4, opacity: saving ? 0.7 : 1 }} onClick={saveRapido} disabled={saving}>
                 {editingRapidoId ? 'Guardar cambios' : 'Guardar sueldo rápido'}
               </button>
