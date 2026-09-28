@@ -44,6 +44,14 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
             saldoGastos: configPresupuesto.saldoGastos,
             saldoPagosFijos: configPresupuesto.saldoPagosFijos,
             ultimoProcesado: configPresupuesto.ultimoProcesado,
+            // Bug real (cuarentava tanda, cont. -- la tarjeta de Métricas
+            // nunca aparecía): faltaba pasarle el `ultimoCierre` YA
+            // GUARDADO en Firestore como punto de partida. Sin esto, en
+            // CUALQUIER render donde no hay un día nuevo que cerrar (la
+            // gran mayoría del día), `procesarDiasPendientes` no tenía de
+            // dónde traerlo y lo devolvía en `null` -- borrando en la
+            // vista el cierre real que sí se había guardado una vez.
+            ultimoCierre: configPresupuesto.ultimoCierre,
             sueldosFijos,
             sueldosRapidos,
             gastos,
