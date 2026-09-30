@@ -254,30 +254,65 @@ export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes,
   return Math.max(bruto - reservaTotal, 0)
 }
 
-// Riesgos reales de flujo (novena tanda): ¿el presupuesto diario bruto
-// alcanza para juntar a tiempo TODAS las reservas diarias activas? Se
-// ordenan por fecha más próxima primero (el más urgente reserva primero
-// del presupuesto disponible); si en algún punto la reserva acumulada ya
-// supera el bruto, ese pago (y los que sigan en la fila) quedan en riesgo
-// real de no juntarse a tiempo al ritmo actual — no un aviso genérico de
-// "hay pagos pronto", sino cuánto exactamente falta por día.
-export function detectarRiesgosPagosFijos({ sueldosFijos, sueldosRapidosMes, pagosFijos }) {
-  const bruto = presupuestoDiarioBruto({ sueldosFijos, sueldosRapidosMes })
-  const ordenados = [...reservasDiariasPagosFijos(pagosFijos, undefined, sueldosFijos)].sort((a, b) => a.dias - b.dias)
-  let acumReserva = 0
+// Riesgos reales de flujo (novena tanda; reescrito cuadragésima segunda
+// tanda a pedido de Pame: "no entiendo estos riesgos si ya se registro el
+// pago de kenet hoy... de que dinero habla estos warnings"). La versión
+// anterior comparaba un ingreso diario PROMEDIO de todo el mes
+// (`presupuestoDiarioBruto`) contra las reservas diarias de cada pago —
+// pero desde la trigésima tercera tanda existe `saldoPagosFijos`, un
+// bolsillo REAL y protegido que ya aparta ese dinero por adelantado en
+// cada sueldo grande (ver `objetivoPagosFijosEnFecha`/`bolsillosDeHoy`).
+// La versión vieja no sabía nada de ese bolsillo, así que el mismo día
+// que un sueldo grande depositaba y dejaba TODO apartado, seguía
+// avisando "riesgo" con números de un promedio teórico que ya no
+// aplicaba — un falso positivo. Ahora el riesgo real es mucho más
+// simple y siempre cierto: de lo que falta por vencer antes del próximo
+// sueldo grande, SIN contar lo que vence justo hoy (eso ya se resuelve
+// hoy mismo, para bien o mal, dentro de `bolsillosDeHoy` — pagado de
+// este bolsillo o, si no alcanza, de gastos como último recurso; volver
+// a contarlo aquí generaba un falso "riesgo" del monto exacto recién
+// pagado, todos los días que algo vence), ¿alcanza lo que ya está
+// apartado y protegido? Si
+// alcanza, no hay riesgo. Si no, el faltante real se reparte entre los
+// pagos más próximos primero (los que de verdad se quedarían sin pagar
+// si el dinero no llega a tiempo).
+export function detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagosFijos, hoyISO }) {
+  const hoy = hoyISO || todayISO()
+  const limite = proximoLimiteReserva(sueldosFijos, hoy)
+  const pendientes = (pagosFijos || [])
+    .filter((p) => p.activo !== false)
+    .map((p) => {
+      const vencimiento = proximoVencimientoPagoFijo(p, hoy)
+      // El que vence justo HOY ya se resuelve hoy mismo dentro de
+      // `bolsillosDeHoy` (se paga de este mismo bolsillo, o si no
+      // alcanza, sale de gastos como último recurso) — incluirlo aquí
+      // de nuevo lo contaría dos veces y generaba un falso "riesgo" del
+      // monto exacto que ya se acaba de pagar, todos los días que algo
+      // vence. Solo cuenta como pendiente lo que vence DESPUÉS de hoy.
+      if (!vencimiento || vencimiento === hoy) return null
+      if (limite && vencimiento >= limite) return null
+      const dias = Math.max(daysUntil(vencimiento), 1)
+      return { pago: p, vencimiento, monto: montoOcurrenciaPagoFijo(p, vencimiento), dias }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dias - b.dias)
+
+  let faltante = Math.max(pendientes.reduce((s, r) => s + r.monto, 0) - (Number(saldoPagosFijos) || 0), 0)
+  if (faltante <= 0) return []
+
   const riesgos = []
-  ordenados.forEach((r) => {
-    acumReserva += r.reservaDiaria
-    if (acumReserva > bruto) {
-      riesgos.push({
-        nombre: r.pago.name,
-        monto: r.monto,
-        vencimiento: r.vencimiento,
-        dias: r.dias,
-        reservaDiaria: r.reservaDiaria,
-        faltante: Math.round((acumReserva - bruto) * r.dias),
-      })
-    }
+  pendientes.forEach((r) => {
+    if (faltante <= 0) return
+    const faltanteEste = Math.min(r.monto, faltante)
+    faltante -= faltanteEste
+    riesgos.push({
+      nombre: r.pago.name,
+      monto: r.monto,
+      vencimiento: r.vencimiento,
+      dias: r.dias,
+      reservaDiaria: faltanteEste / r.dias,
+      faltante: Math.round(faltanteEste),
+    })
   })
   return riesgos
 }

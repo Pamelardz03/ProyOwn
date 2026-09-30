@@ -8,7 +8,7 @@ import { fmt, fmtSigned } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
-import { daysUntil, formatShortDate, isThisMonth, todayISO } from '../lib/date'
+import { daysUntil, formatShortDate, todayISO } from '../lib/date'
 import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, diasHastaSueldoMayor, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
@@ -75,16 +75,6 @@ export default function Perfil() {
     .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
     .slice(0, 4)
 
-  const sueldosRapidosMes = sueldosRapidos.filter((r) => isThisMonth(r.fecha)).reduce((s, r) => s + (Number(r.monto) || 0), 0)
-
-  // Riesgo real de flujo (novena tanda): compara el presupuesto diario
-  // bruto contra lo que hay que reservar CADA día para llegar completo a
-  // cada vencimiento — no un aviso genérico, sino cuánto exactamente
-  // faltaría por día si nada cambia. Reemplaza el aviso genérico de "ya no
-  // deja presupuesto diario libre" por uno con el pago, la fecha y el
-  // monto exactos.
-  const riesgosFlujo = detectarRiesgosPagosFijos({ sueldosFijos, sueldosRapidosMes, pagosFijos })
-
   // Saldo libre acumulado real y cuánto de eso está de verdad disponible
   // para financiar Whimms sin tocar lo reservado para pagos fijos próximos
   // — mismo cálculo que usa Compras.jsx para las barras de progreso.
@@ -105,6 +95,13 @@ export default function Perfil() {
   // vista — se fondea primero de cada sueldo, antes de whimms/gastos, y
   // el Total ya lo incluye.
   const saldoAcumuladoReal = saldoWhimms + saldoGastos + saldoPagosFijos
+
+  // Riesgo real de flujo (novena tanda; reescrito cuadragésima segunda
+  // tanda — ver el comentario grande en `detectarRiesgosPagosFijos`,
+  // src/lib/budget.js): ya no compara contra un promedio diario teórico,
+  // sino contra lo que de verdad está apartado y protegido ahora mismo
+  // en "Para pagos fijos/Vitall" (`saldoPagosFijos`, calculado arriba).
+  const riesgosFlujo = detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagosFijos, hoyISO: hoy })
   const diasProximoIngreso = diasHastaSueldoMayor(sueldosFijos)
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
@@ -124,7 +121,7 @@ export default function Perfil() {
   // ritmo de ahorro actual no alcanza para juntar a tiempo lo reservado.
   const riesgos = []
   riesgosFlujo.forEach((r) => {
-    riesgos.push(`${r.nombre}: necesitas juntar ${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'} para los ${fmt(r.monto)} de ${formatShortDate(r.vencimiento)} — a tu ritmo actual te faltarían ~${fmt(r.faltante)}.`)
+    riesgos.push(`${r.nombre}: de los ${fmt(r.monto)} que vencen ${formatShortDate(r.vencimiento)} todavía faltan ${fmt(r.faltante)} sin apartar — necesitarías juntar ~${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'}.`)
   })
 
   return (
