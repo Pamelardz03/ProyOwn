@@ -533,18 +533,25 @@ export function promedioGastoHormigaDiario(gastos, hoyISO, ventanaDias = 30) {
 }
 
 // Reparte el saldo disponible entre los primeros `n` Whimms activos (ya
-// ordenados por prioridad/score), proporcional al score de cada uno — a
-// pedido de Pame, para que varios avancen a la vez en vez de que todo el
-// excedente vaya solo al #1 hasta completarlo. Cuando el #1 se completa (o
-// se marca comprado), su lugar lo toma el siguiente de la fila la próxima
-// vez que se calcule esto — no hace falta ningún ajuste manual.
+// ordenados por prioridad/score) EN CASCADA (cuadragésima tercera tanda, a
+// pedido de Pame, revirtiendo el reparto proporcional de antes: "no son
+// simultaneos sino en cola... si ya se completo [el #1] aunque aun no lo
+// compre debe de pasar el restante a el siguiente whimm"). El #1 recibe
+// hasta lo que le falta para su precio completo (tope, ya no puede
+// mostrar más del 100%); lo que sobra pasa completo al #2, lo que sobra
+// de ese al #3, y así con los `n` de la ventana — ya no varios avanzando
+// a la vez proporcional por score, sino uno lleno primero y el resto en
+// fila. Cuando el #1 se completa (o se marca comprado), su lugar lo toma
+// el siguiente de la fila la próxima vez que se calcule esto — no hace
+// falta ningún ajuste manual.
 export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible, n) {
   const top = (whimmsActivosOrdenados || []).slice(0, Math.max(Number(n) || 1, 1))
-  const disponible = Math.max(Number(saldoDisponible) || 0, 0)
-  const scoreTotal = top.reduce((s, w) => s + Math.max(w.score ?? w._score ?? 0, 0.01), 0)
+  let disponible = Math.max(Number(saldoDisponible) || 0, 0)
   return top.map((w) => {
-    const score = Math.max(w.score ?? w._score ?? 0, 0.01)
-    const acumuladoAutomatico = scoreTotal > 0 ? (disponible * score) / scoreTotal : 0
+    const yaApartado = Number(w.montoApartado) || 0
+    const falta = Math.max((Number(w.precio) || 0) - yaApartado, 0)
+    const acumuladoAutomatico = Math.min(falta, disponible)
+    disponible -= acumuladoAutomatico
     return { ...w, acumuladoAutomatico }
   })
 }
