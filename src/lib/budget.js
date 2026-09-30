@@ -125,9 +125,31 @@ function sueldoDeMayorMonto(sueldosFijos) {
 // fijo/Vitall que vence DESPUÉS de esta fecha todavía no se reserva de tu
 // saldo actual, porque ese mismo sueldo va a traer el dinero para cubrirlo
 // antes de que llegue su fecha.
+//
+// Bug real encontrado (cuarentava tanda, cont. cont. -- Pame: "si ya se
+// agrego el sueldo de kenet, tmb deberia ya ir descontando lo de la
+// quincena de pagos fijos"): `proximaFechaSueldo` devuelve HOY MISMO si
+// hoy es justo el día de pago (`f >= hoy`) -- correcto para casi todo lo
+// demás, pero AQUÍ el límite necesita ser el sueldo grande que sigue
+// DESPUÉS de este, no éste mismo que se está repartiendo justo ahora. Si
+// el límite queda en hoy, CUALQUIER pago fijo/Vitall futuro (todos caen
+// después de hoy) se excluye del objetivo por la regla `vencimiento >=
+// limite` (tanda 37) -- el sueldo de hoy no reserva nada para pagosFijos
+// y además `diasHastaSueldoMayorEnFecha` da 0 días, que `Math.max(0||1,1)`
+// vuelve 1 (0 es falsy) -- todo el colchón de gastos se muestra
+// disponible hoy sin ningún suavizado. Mismo patrón que ya existía en
+// Perfil.jsx (`proximaFechaSueldoNoHoy`, para no mostrar "en 0 días" en
+// Próximos sueldos) pero nunca se aplicó aquí, donde de verdad mueve
+// dinero real.
 export function proximoLimiteReserva(sueldosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
   const mayor = sueldoDeMayorMonto(sueldosFijos)
-  return mayor ? proximaFechaSueldo(mayor, hoyISO || todayISO()) : null
+  if (!mayor) return null
+  const fecha = proximaFechaSueldo(mayor, hoy)
+  if (fecha === hoy) {
+    return fechasPagoVivas(mayor).find((f) => f > hoy) || null
+  }
+  return fecha
 }
 
 // Cuántos días faltan hasta ese sueldo más grande — mismo criterio que
