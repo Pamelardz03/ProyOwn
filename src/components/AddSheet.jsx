@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { IconPlus, IconClose, IconChevronLeft, IconReceipt, IconHeart, IconVitall, IconCard } from './Icons'
 import Toggle from './Toggle'
 import { useAuth } from '../lib/AuthContext'
-import { addUserDoc } from '../lib/firestoreCollections'
+import { addUserDoc, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { todayISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
+import { gastoNeto } from '../lib/budget'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
 const GASTO_TIPOS = ['Whimm', 'Vitall']
@@ -25,6 +26,12 @@ const emptyPago = { nombre: '', monto: '' }
 // punto de entrada; Vitall preselecciona tipo="Vitall").
 export default function AddSheet({ onToast, cats, pagosFijos }) {
   const { user } = useAuth()
+  // Necesario para saber si un gasto que se registra HOY con una fecha
+  // pasada ya quedó "asentado" (cuarentava tanda, cont. cont. cont. cont.,
+  // a pedido de Pame: "si cambio algo del pasado o registro hoy un
+  // evento del pasado... debe de editar todo por si olvido registrar
+  // gastos o compras") -- ver el comentario grande en `saveGasto` abajo.
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
   const [step, setStep] = useState('closed') // closed | picker | gasto | objeto | servicio | pago
   const [saving, setSaving] = useState(false)
 
@@ -102,7 +109,8 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
     setSaving(true)
     try {
       const vitallDoc = gastoTipo === 'Vitall' ? vitalls.find((v) => v.id === gastoVitallId) : null
-      await addUserDoc(user.uid, 'gastos', {
+      const fecha = gastoFecha || todayISO()
+      const payload = {
         concepto: gastoForm.concepto.trim(),
         monto,
         lugar: gastoForm.lugar.trim(),
@@ -110,13 +118,38 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
         categoriaWhimm: gastoTipo === 'Whimm' ? gastoCatSel : '',
         vitallId: gastoTipo === 'Vitall' ? gastoVitallId : '',
         vitallNombre: vitallDoc ? vitallDoc.name : '',
-        fecha: gastoFecha || todayISO(),
+        fecha,
         // reembolso (treceava tanda): cuando alguien te regresa parte de
         // este gasto (ej. pagaste algo por todos) — se resta del monto en
         // Gastos y en tu saldo real, sin necesidad de un sueldo rápido
         // aparte para esto.
         reembolso: Number(gastoReembolso) || 0,
-      })
+      }
+      // Registrar HOY un gasto con una fecha YA asentada (fecha <=
+      // ultimoProcesado) -- ej. "olvidé registrar esto de hace 3 días" --
+      // no se ve solo en tus saldos: `procesarDiasPendientes` nunca
+      // vuelve a pasar por un día que ya cerró (ver el comentario grande
+      // de bolsillos en budget.js), así que ese día se cerró SIN este
+      // gasto. Sin este ajuste, el gasto aparece en Historial/Gastos
+      // (esas listas se recalculan frescas cada vez) pero "Para gastar
+      // hoy"/"Disponible para gastos" nunca bajan -- exactamente el
+      // hueco que reportó Pame (cuarentava tanda, cont. cont. cont.
+      // cont.: "si... registro hoy un evento del pasado todo se mueve?
+      // debe de editar todo por si olvido registrar gastos o compras").
+      // Mismo criterio ya usado para el refund al eliminar un gasto
+      // asentado (tanda 35) y al revertir un Whimm comprado (tanda 38),
+      // pero en dirección contraria: aquí se RESTA en vez de regresar.
+      // Un gasto tipo Vitall vinculado tampoco resta nada de saldoGastos
+      // (gastoHormigaEnFecha lo excluye a propósito, es solo un registro
+      // informativo) — mismo criterio que el borrado.
+      const esVitallVinculado = gastoTipo === 'Vitall' && !!gastoVitallId
+      const yaAsentado = configPresupuesto?.ultimoProcesado && fecha <= configPresupuesto.ultimoProcesado
+      if (yaAsentado && !esVitallVinculado) {
+        const montoNeto = gastoNeto(payload)
+        const saldoGastosActual = Number(configPresupuesto?.saldoGastos) || 0
+        await setUserDoc(user.uid, 'config', 'presupuesto', { saldoGastos: saldoGastosActual - montoNeto })
+      }
+      await addUserDoc(user.uid, 'gastos', payload)
       setGastoForm(emptyGasto)
       setGastoTipo('Whimm')
       setGastoVitallId('')

@@ -442,14 +442,38 @@ export default function Compras() {
       const eraComprado = editingWhimm.estado === 'comprado'
       const yaNoEsComprado = editEstado !== 'comprado'
       const fechaCompraPrevia = editingWhimm.compradoEn
-      const yaAsentado = fechaCompraPrevia && configPresupuesto?.ultimoProcesado && fechaCompraPrevia <= configPresupuesto.ultimoProcesado
-      if (eraComprado && yaNoEsComprado && yaAsentado) {
+      const yaAsentadoPrevia = fechaCompraPrevia && configPresupuesto?.ultimoProcesado && fechaCompraPrevia <= configPresupuesto.ultimoProcesado
+      if (eraComprado && yaNoEsComprado && yaAsentadoPrevia) {
         const precioFinalPrevio = Number(editingWhimm.precioComprado ?? editingWhimm.precio) || 0
         const montoApartadoPrevio = Number(editingWhimm.montoApartado) || 0
         const monto = Math.max(precioFinalPrevio - montoApartadoPrevio, 0)
         if (monto > 0) {
           const saldoWhimmsActual = Number(configPresupuesto?.saldoWhimms) || 0
           await setUserDoc(user.uid, 'config', 'presupuesto', { saldoWhimms: saldoWhimmsActual + monto })
+        }
+      }
+      // Caso simétrico al de arriba (cuarentava tanda, cont. cont. cont.
+      // cont., a pedido de Pame: "si... registro hoy un evento del
+      // pasado todo se mueve? debe de editar todo por si olvido
+      // registrar gastos o compras"): marcar AHORA como "comprado" un
+      // Whimm con una fecha de compra que YA quedó asentada (ej. "se me
+      // olvidó marcar que compré esto la semana pasada") no resta nada
+      // solo -- `procesarDiasPendientes` ya cerró ese día sin este
+      // Whimm, así que hay que restar el dinero a mano, igual que el
+      // refund de arriba pero al revés. Un Whimm marcado comprado con
+      // fecha de HOY (todavía no asentada) no necesita nada de esto --
+      // `bolsillosDeHoy` ya lo resta en vivo con el arreglo actual.
+      const yaEsComprado = editEstado === 'comprado'
+      const noEraComprado = editingWhimm.estado !== 'comprado'
+      const fechaCompraNueva = payload.compradoEn
+      const yaAsentadoNueva = fechaCompraNueva && configPresupuesto?.ultimoProcesado && fechaCompraNueva <= configPresupuesto.ultimoProcesado
+      if (noEraComprado && yaEsComprado && yaAsentadoNueva) {
+        const precioFinalNuevo = Number(payload.precioComprado ?? payload.precio) || 0
+        const montoApartadoNuevo = Number(payload.montoApartado) || 0
+        const monto = Math.max(precioFinalNuevo - montoApartadoNuevo, 0)
+        if (monto > 0) {
+          const saldoWhimmsActual = Number(configPresupuesto?.saldoWhimms) || 0
+          await setUserDoc(user.uid, 'config', 'presupuesto', { saldoWhimms: saldoWhimmsActual - monto })
         }
       }
       await updateUserDoc(user.uid, 'whimms', editingWhimm.id, payload)
