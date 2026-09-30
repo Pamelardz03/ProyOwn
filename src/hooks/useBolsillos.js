@@ -52,11 +52,6 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
             // dónde traerlo y lo devolvía en `null` -- borrando en la
             // vista el cierre real que sí se había guardado una vez.
             ultimoCierre: configPresupuesto.ultimoCierre,
-            // Bono de gastos pendiente de un día específico (cuarentava
-            // tanda, cont.) -- mismo motivo que ultimoCierre arriba: si no
-            // se pasa aquí, se pierde en cuanto ya no hay días pendientes
-            // que cerrar (la gran mayoría de los renders).
-            bonoGastosPendiente: configPresupuesto.bonoGastosPendiente,
             sueldosFijos,
             sueldosRapidos,
             gastos,
@@ -102,13 +97,6 @@ export function useBolsillos({ configPresupuesto, loadingConfig, sueldosFijos, s
       // cerrado un día nuevo esta vez); así Métricas siempre tiene el
       // último cierre disponible sin depender de que hoy se cierre otro.
       ...(base.ultimoCierre ? { ultimoCierre: base.ultimoCierre } : {}),
-      // Bono de gastos pendiente (cuarentava tanda, cont.) -- a diferencia
-      // de ultimoCierre, ESTE campo sí puede pasar de tener algo a null
-      // (en cuanto se consume, si ese mismo cierre no genera uno nuevo), y
-      // ese null se debe guardar de verdad para no dejar en Firestore un
-      // bono viejo que ya se aplicó -- por eso va siempre en el payload,
-      // nunca detrás de un `if` como los demás campos opcionales de aquí.
-      bonoGastosPendiente: base.bonoGastosPendiente || null,
     }).catch((e) => console.error('No se pudieron guardar los bolsillos', e))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, base?.ultimoProcesado, base?.saldoWhimms, base?.saldoGastos, base?.saldoPagosFijos, JSON.stringify(base?.correccionesAplicadas || [])])

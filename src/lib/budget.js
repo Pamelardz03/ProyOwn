@@ -1150,18 +1150,9 @@ export function procesarDiasPendientes(bolsillos) {
   // dia nuevo, y se sobreescribe con el ultimo dia del bucle de abajo si
   // si se cierra alguno. Asi Metricas siempre tiene algo que mostrar.
   let ultimoCierre = bolsillos.ultimoCierre || null
-  // Bono de gastos pendiente para UN día específico (cuarentava tanda,
-  // cont. -- Pame: "esos 224 de ayer se separaban a la mitad... y se
-  // suman a los gastos del dia de hoy, no que se reparta equitativamente
-  // por los dias restantes"). Es la mitad de una recompensa (lo que NO
-  // se manda a whimms) o el faltante que whimms cubre en un castigo --
-  // en ambos casos, dinero que se gana/repone AL CERRAR un día y que se
-  // debe ver completo en el día siguiente, no diluido entre todos los
-  // días que quedan hasta el próximo sueldo grande.
-  let bonoGastosPendiente = bolsillos.bonoGastosPendiente || null
 
   if (ultimoProcesado >= addDaysISO(hoy, -1)) {
-    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado, ultimoCierre, bonoGastosPendiente }
+    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado, ultimoCierre }
   }
 
   const { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms } = bolsillos
@@ -1213,19 +1204,8 @@ export function procesarDiasPendientes(bolsillos) {
       saldoGastos += excesoPagosFijos * (1 - pct)
     }
 
-    // Si hay un bono de gastos ganado el día anterior Y es justo para
-    // este día, se aplica COMPLETO aquí (sin dividirlo entre diasRestantes)
-    // -- mismo patrón que un sueldo rápido a gastos, que también se suma
-    // entero al día en que le toca en vez de suavizarse.
-    let bonoHoy = 0
-    if (bonoGastosPendiente && bonoGastosPendiente.fecha === dia) {
-      bonoHoy = bonoGastosPendiente.monto
-      bonoGastosPendiente = null
-    }
-
     const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(sueldosFijos, dia) || 1, 1)
-    const meta = Math.max(saldoGastos, 0) / diasRestantes + bonoHoy
-    if (bonoHoy > 0) saldoGastos += bonoHoy
+    const meta = Math.max(saldoGastos, 0) / diasRestantes
     const gastoReal = gastoHormigaEnFecha(gastos, dia)
     saldoGastos -= gastoReal
     const diferencia = meta - gastoReal
@@ -1233,26 +1213,17 @@ export function procesarDiasPendientes(bolsillos) {
     let cambioGastos = 0
     if (diferencia > 0) {
       const aWhimms = diferencia * pct
-      const aBonoSiguiente = diferencia - aWhimms
       saldoGastos -= aWhimms
-      saldoGastos -= aBonoSiguiente
       saldoWhimms += aWhimms
       cambioWhimms = aWhimms
       cambioGastos = -aWhimms
-      bonoGastosPendiente = { fecha: addDaysISO(dia, 1), monto: aBonoSiguiente }
     } else if (diferencia < 0) {
       const deficit = -diferencia
       const deWhimms = Math.min(deficit, Math.max(saldoWhimms, 0))
       saldoWhimms -= deWhimms
+      saldoGastos += deWhimms
       cambioWhimms = -deWhimms
       cambioGastos = deWhimms
-      // Lo que whimms cubre del faltante se ve COMPLETO hasta el día
-      // siguiente (como bono), en vez de agregarse ya al colchón general
-      // donde se diluiría entre diasRestantes.
-      if (deWhimms > 0) bonoGastosPendiente = { fecha: addDaysISO(dia, 1), monto: deWhimms }
-      // Lo que no cubra whimms se queda absorbido en gastos (ya restado
-      // arriba vía gastoReal) — la meta del día siguiente sale más baja
-      // sola, sin necesidad de "cobrarlo" aparte.
     }
     // Guarda la foto de este dia como el ultimo cierre -- si quedan mas
     // dias pendientes en el bucle, la siguiente vuelta la vuelve a
@@ -1262,7 +1233,7 @@ export function procesarDiasPendientes(bolsillos) {
     dia = addDaysISO(dia, 1)
     guard++
   }
-  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1), ultimoCierre, bonoGastosPendiente }
+  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1), ultimoCierre }
 }
 
 // Vista EN VIVO para mostrar en pantalla: parte de los bolsillos ya
@@ -1331,19 +1302,8 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   // eso es exactamente lo que `procesarDiasPendientes` cubre de Whimms al
   // cerrar el día (ver el bloque `diferencia < 0` más abajo en este mismo
   // archivo) -- aquí solo se muestra en vivo antes de que ese cierre pase.
-  // Bono de gastos ganado AYER al cerrar el día (mitad de una recompensa,
-  // o lo que whimms repuso de un castigo -- ver procesarDiasPendientes),
-  // si le toca justo a HOY: se aplica COMPLETO, sin diluir entre
-  // diasRestantes (cuarentava tanda, cont. -- Pame: "esos 224 de ayer se
-  // separaban a la mitad... y se suman a los gastos del dia de hoy, no
-  // que se reparta equitativamente por los dias restantes").
-  let bonoHoy = 0
-  const bonoPendiente = bolsillos.bonoGastosPendiente
-  if (bonoPendiente && bonoPendiente.fecha === hoy) bonoHoy = bonoPendiente.monto
-
   const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(params.sueldosFijos, hoy) || 1, 1)
-  const metaDelDiaCompleto = Math.max(saldoGastos, 0) / diasRestantes + bonoHoy
-  if (bonoHoy > 0) saldoGastos += bonoHoy
+  const metaDelDiaCompleto = Math.max(saldoGastos, 0) / diasRestantes
   const gastoHoy = gastoHormigaEnFecha(params.gastos, hoy)
   // Un sueldo rápido de HOY con destino "gastos" se suma COMPLETO al
   // acumulado del día en que se registró -- no se reparte entre los días
