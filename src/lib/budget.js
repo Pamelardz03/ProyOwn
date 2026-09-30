@@ -23,6 +23,21 @@ export function fechasPagoVivas(sueldo, hastaISO) {
   return sueldo.fechaFin ? fechas.filter((f) => f <= sueldo.fechaFin) : fechas
 }
 
+// Monto real de UNA ocurrencia puntual de un sueldo fijo -- el monto
+// configurado por default, o el que se haya corregido solo para esa
+// fecha exacta (cuarentava tanda, cont. cont. cont., a pedido de Pame:
+// "hay veces que me descuentan cosas con poco dinero y quiero poder
+// editar ese sueldo" -- solo esa quincena, sin cambiar el monto fijo
+// configurado para las demás). Mismo patrón que `montoOcurrenciaPagoFijo`
+// para pagos fijos/Vitall (`excepciones`, tanda 26), pero sin `omitida`
+// -- no se pidió poder saltarse un depósito completo, solo corregir su
+// monto real.
+export function montoOcurrenciaSueldo(sueldo, fechaISO) {
+  const ex = (sueldo.excepciones || {})[fechaISO]
+  if (ex && ex.monto != null) return Number(ex.monto) || 0
+  return Number(sueldo.monto) || 0
+}
+
 // La próxima fecha de pago real (hoy o después) de un sueldo fijo —
 // reemplaza leer el campo `fecha` guardado en el documento, que se calculó
 // una sola vez al dar de alta el sueldo y se queda obsoleto con el tiempo.
@@ -54,7 +69,7 @@ export function ingresoDelMesSueldo(s) {
   const fechas = fechasPagoVivas(s)
   if (!fechas.length) return monthlyEqSueldoLegacy(s)
   const ocurridos = fechas.filter((f) => isThisMonth(f) && f <= hoy)
-  return ocurridos.length * (Number(s.monto) || 0)
+  return ocurridos.reduce((sum, f) => sum + montoOcurrenciaSueldo(s, f), 0)
 }
 
 export function ingresosFijosDelMes(sueldosFijos) {
@@ -834,6 +849,38 @@ export function montoOcurrenciaPagoFijo(pagoFijo, fechaISO) {
   return Number(pagoFijo.monto) || 0
 }
 
+// Cómo se reparte (o se revierte) la DIFERENCIA cuando se corrige el
+// monto de una ocurrencia de sueldo FIJO ya asentada (fecha <=
+// ultimoProcesado) -- el dinero de esa quincena ya se había repartido
+// entre los 3 bolsillos ese día, así que cambiar solo el documento
+// (`excepciones`, ver `montoOcurrenciaSueldo`) no mueve nada en
+// `config/presupuesto` -- hay que aplicar la diferencia a mano, con la
+// MISMA prioridad de siempre (a pedido explícito de Pame, cuarentava
+// tanda cont. cont. cont.): no hay forma de reconstruir con exactitud
+// cómo estaba `saldoPagosFijos` aquel día exacto, así que se usa tu
+// situación ACTUAL (mismo criterio ya usado por el "exceso de pagos
+// fijos" liberado en `procesarDiasPendientes`/`bolsillosDeHoy`).
+//
+// Si llegó MÁS de lo que pensabas (delta > 0): se reparte como
+// cualquier ingreso nuevo -- primero cubre lo que le falte a pagos
+// fijos/Vitall, el resto por tu % entre whimms y gastos.
+// Si llegó MENOS (delta < 0, el caso real que reportó Pame): pagos
+// fijos queda protegido -- ya tiene prioridad para RECIBIR, así que
+// nunca se le quita -- y la diferencia completa se resta del % de
+// whimms/gastos, mismo criterio de protección que ya usa el resto de
+// la app (ej. whimms nunca se toca para cubrir un faltante de pagos
+// fijos, tanda 33).
+export function repartoAjusteSueldoOcurrencia(delta, objetivoPagosFijos, saldoPagosFijosActual, pct) {
+  if (delta >= 0) {
+    const necesitaPagosFijos = Math.max(objetivoPagosFijos - saldoPagosFijosActual, 0)
+    const aPagosFijos = Math.min(necesitaPagosFijos, delta)
+    const restante = delta - aPagosFijos
+    return { aPagosFijos, aWhimms: restante * pct, aGastos: restante * (1 - pct) }
+  }
+  const monto = -delta
+  return { aPagosFijos: 0, aWhimms: -(monto * pct), aGastos: -(monto * (1 - pct)) }
+}
+
 // --- Bolsillos independientes: Whimms vs. gastos del día (trigésima ---
 // --- segunda tanda, a pedido extenso de Pame) ---
 // Hasta la tanda 31, "disponible para Whimms" y "disponible para gastos"
@@ -902,7 +949,7 @@ export function sueldosEnFecha(sueldosFijos, sueldosRapidos, fechaISO) {
 // junto con los fijos antes de repartirlo.
 function sueldosFijosEnFecha(sueldosFijos, fechaISO) {
   return (sueldosFijos || []).reduce(
-    (sum, s) => sum + (fechasPagoVivas(s).includes(fechaISO) ? Number(s.monto) || 0 : 0),
+    (sum, s) => sum + (fechasPagoVivas(s).includes(fechaISO) ? montoOcurrenciaSueldo(s, fechaISO) : 0),
     0
   )
 }

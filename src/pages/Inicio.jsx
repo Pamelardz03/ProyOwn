@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { cobradoMesPagoFijo, gastoNeto, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, fechasPagoVivas } from '../lib/budget'
+import { cobradoMesPagoFijo, gastoNeto, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo, fechasPagoVivas } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -170,7 +170,7 @@ export default function Inicio() {
   const accionesHoy = [
     ...sueldosFijos
       .filter((s) => fechasPagoVivas(s).includes(hoy))
-      .map((s) => ({ id: `sueldo-${s.id}`, title: s.name, sub: 'Sueldo', monto: Number(s.monto) || 0, positivo: true })),
+      .map((s) => ({ id: `sueldo-${s.id}`, title: s.name, sub: 'Sueldo', monto: montoOcurrenciaSueldo(s, hoy), positivo: true })),
     ...pagosActivos
       .filter((p) => fechasVencimientoVivas(p).includes(hoy))
       .map((p) => ({ id: `pago-${p.id}`, title: p.name, sub: p.tipo === 'Vitall' ? 'Vitall' : 'Pago fijo', monto: montoOcurrenciaPagoFijo(p, hoy), positivo: false })),

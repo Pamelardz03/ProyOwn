@@ -4,7 +4,7 @@
 // completo y sin filtro (antes Inicio armaba su propia lista reducida,
 // solo con gastos/sueldos rápidos/Whimms comprados — sin sueldos fijos ni
 // los eventos de "Cambios" como crear un Whimm o un Vitall).
-import { gastoNeto, fechasVencimientoVivas, montoOcurrenciaPagoFijo } from './budget'
+import { gastoNeto, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo } from './budget'
 
 const GASTO_DOT = { Whimm: '#8c5a6e', Vitall: '#5c2536' }
 
@@ -70,9 +70,19 @@ export function buildHistorialEvents({ gastos, sueldosRapidos, sueldosFijos, pag
           cat: 'nomina',
           badge: 'Sueldos',
           title: `${s.name || 'Sueldo fijo'} depositado`,
-          amount: Number(s.monto) || 0,
+          amount: montoOcurrenciaSueldo(s, f),
           dotColor: '#3a0f1f',
           dateISO: f,
+          // Editable por ocurrencia (cuarentava tanda, cont. cont. cont.,
+          // a pedido de Pame: "a veces me descuentan cosas... quiero
+          // poder editar ese sueldo") -- mismo patrón que
+          // `pagoFijoOcurrencia` (tanda 26), pero para sueldos fijos: solo
+          // corrige el monto de ESTA fecha exacta, sin tocar el monto
+          // configurado para las demás quincenas.
+          editable: 'sueldoFijoOcurrencia',
+          sueldoFijoId: s.id,
+          sueldoFijoNombre: s.name || 'Sueldo fijo',
+          ocurrenciaFecha: f,
         })
       })
   })

@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { IconChevronLeft, IconEdit, IconClose } from '../components/Icons'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, updateUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { formatShortDate, todayISO } from '../lib/date'
 import { buildHistorialEvents } from '../lib/historial'
+import { objetivoPagosFijosEnFecha, repartoAjusteSueldoOcurrencia } from '../lib/budget'
 
 const FILTERS = [
   { key: 'todos', label: 'Todos' },
@@ -25,12 +26,23 @@ export default function HistorialCompleto() {
   const [editingOcurrencia, setEditingOcurrencia] = useState(null) // { pagoFijoId, fecha, nombre, montoActual }
   const [ocurrenciaMontoValue, setOcurrenciaMontoValue] = useState('')
   const [savingOcurrencia, setSavingOcurrencia] = useState(false)
+  // Edición puntual de UNA ocurrencia de sueldo FIJO (cuarentava tanda,
+  // cont. cont. cont., a pedido de Pame: "a veces me descuentan cosas...
+  // quiero poder editar ese sueldo") -- mismo patrón que arriba, pero si
+  // esa quincena ya quedó "asentada" (fecha <= ultimoProcesado) también
+  // hay que mover la diferencia en config/presupuesto (ver
+  // `repartoAjusteSueldoOcurrencia` en budget.js), porque ese dinero ya
+  // se había repartido entre pagos fijos/whimms/gastos ese día.
+  const [editingSueldoOcurrencia, setEditingSueldoOcurrencia] = useState(null) // { sueldoFijoId, fecha, nombre, montoActual }
+  const [sueldoOcurrenciaMontoValue, setSueldoOcurrenciaMontoValue] = useState('')
+  const [savingSueldoOcurrencia, setSavingSueldoOcurrencia] = useState(false)
 
   const { data: gastos } = useUserCollection('gastos')
   const { data: sueldosRapidos } = useUserCollection('sueldosRapidos')
   const { data: sueldosFijos } = useUserCollection('sueldosFijos')
   const { data: pagosFijos } = useUserCollection('pagosFijos')
   const { data: whimms } = useUserCollection('whimms')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   function openEditOcurrencia(it) {
     const montoActual = Math.abs(it.amount) || 0
@@ -38,14 +50,22 @@ export default function HistorialCompleto() {
     setEditingOcurrencia({ pagoFijoId: it.pagoFijoId, fecha: it.ocurrenciaFecha, nombre: it.pagoFijoNombre, montoActual })
   }
 
+  function openEditOcurrenciaSueldo(it) {
+    const montoActual = Math.abs(it.amount) || 0
+    setSueldoOcurrenciaMontoValue(String(montoActual))
+    setEditingSueldoOcurrencia({ sueldoFijoId: it.sueldoFijoId, fecha: it.ocurrenciaFecha, nombre: it.sueldoFijoNombre, montoActual })
+  }
+
   // Editar CUALQUIER registro del historial desde aquí mismo (a pedido de
   // Pame, vigésima séptima tanda: "agrega que se edite todos los
   // registros de historial") — cada tipo de evento abre la edición real
   // de su propio documento en la pantalla donde ya vive esa edición,
-  // salvo la ocurrencia puntual de un pago fijo (arriba), que se edita
-  // aquí mismo porque es una excepción por fecha, no un documento propio.
+  // salvo la ocurrencia puntual de un pago fijo o de un sueldo fijo
+  // (arriba), que se editan aquí mismo porque son una excepción por
+  // fecha, no un documento propio.
   function handleEditClick(it) {
     if (it.editable === 'pagoFijoOcurrencia') { openEditOcurrencia(it); return }
+    if (it.editable === 'sueldoFijoOcurrencia') { openEditOcurrenciaSueldo(it); return }
     if (it.editable === 'whimm') { navigate('/compras', { state: { openWhimmId: it.whimmId } }); return }
     if (it.editable === 'gasto') { navigate('/gastos', { state: { openGastoId: it.gastoId } }); return }
     if (it.editable === 'sueldoRapido') { navigate('/perfil/sueldos', { state: { openRapidoId: it.sueldoRapidoId } }); return }
@@ -72,6 +92,54 @@ export default function HistorialCompleto() {
       console.error(err)
     } finally {
       setSavingOcurrencia(false)
+    }
+  }
+
+  // Guarda la corrección de UNA quincena de un sueldo fijo. Si esa fecha
+  // ya quedó "asentada" (ya pasó por `procesarDiasPendientes`, que solo
+  // avanza hacia adelante y nunca se recalcula solo -- ver el comentario
+  // grande de bolsillos en budget.js), el dinero de esa quincena ya se
+  // había repartido entre pagos fijos/whimms/gastos ese día: no basta con
+  // guardar la excepción en el documento del sueldo, hay que mover la
+  // diferencia también en config/presupuesto, con la misma prioridad de
+  // siempre (a pedido explícito de Pame) -- ver
+  // `repartoAjusteSueldoOcurrencia`. Una fecha que todavía no se asienta
+  // (hoy, si aún no cerró el día, o rarísimo caso de una fecha futura) no
+  // necesita nada de esto: `bolsillosDeHoy`/`procesarDiasPendientes` van
+  // a leer el monto corregido solos la próxima vez que la procesen.
+  async function guardarExcepcionSueldo(monto) {
+    if (!editingSueldoOcurrencia) return
+    if (monto === editingSueldoOcurrencia.montoActual) {
+      setEditingSueldoOcurrencia(null)
+      return
+    }
+    const s = sueldosFijos.find((x) => x.id === editingSueldoOcurrencia.sueldoFijoId)
+    if (!s) return
+    setSavingSueldoOcurrencia(true)
+    try {
+      const excepciones = { ...(s.excepciones || {}), [editingSueldoOcurrencia.fecha]: { monto } }
+      const writes = [updateUserDoc(user.uid, 'sueldosFijos', s.id, { excepciones })]
+
+      const yaAsentada = configPresupuesto?.ultimoProcesado && editingSueldoOcurrencia.fecha <= configPresupuesto.ultimoProcesado
+      if (yaAsentada) {
+        const delta = monto - editingSueldoOcurrencia.montoActual
+        const pct = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+        const saldoPagosFijosActual = Number(configPresupuesto?.saldoPagosFijos) || 0
+        const objetivo = objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, todayISO())
+        const ajuste = repartoAjusteSueldoOcurrencia(delta, objetivo, saldoPagosFijosActual, pct)
+        writes.push(setUserDoc(user.uid, 'config', 'presupuesto', {
+          saldoPagosFijos: saldoPagosFijosActual + ajuste.aPagosFijos,
+          saldoWhimms: (Number(configPresupuesto?.saldoWhimms) || 0) + ajuste.aWhimms,
+          saldoGastos: (Number(configPresupuesto?.saldoGastos) || 0) + ajuste.aGastos,
+        }))
+      }
+
+      await Promise.all(writes)
+      setEditingSueldoOcurrencia(null)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSavingSueldoOcurrencia(false)
     }
   }
 
@@ -211,6 +279,43 @@ export default function HistorialCompleto() {
                   onClick={() => guardarExcepcion({ omitida: true })}
                 >
                   No se cobró este día
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {editingSueldoOcurrencia && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setEditingSueldoOcurrencia(null)} />
+          <div className="sheet">
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
+                <button aria-label="Cerrar" onClick={() => setEditingSueldoOcurrencia(null)}>
+                  <IconClose />
+                </button>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Editar depósito: {editingSueldoOcurrencia.nombre}</div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12 }}>
+                Solo cambia esta quincena ({formatShortDate(editingSueldoOcurrencia.fecha)}) — el sueldo configurado y las demás fechas siguen igual. Si esta ya se reflejó en tus saldos, la diferencia se reparte ahora con tu prioridad de siempre (pagos fijos primero, el resto por tu %).
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  className="fld"
+                  placeholder="Monto real de este depósito"
+                  inputMode="decimal"
+                  value={sueldoOcurrenciaMontoValue}
+                  onChange={(e) => setSueldoOcurrenciaMontoValue(e.target.value)}
+                />
+                <button
+                  className="btn-primary"
+                  disabled={savingSueldoOcurrencia || !Number(sueldoOcurrenciaMontoValue)}
+                  style={{ opacity: savingSueldoOcurrencia ? 0.7 : 1 }}
+                  onClick={() => guardarExcepcionSueldo(Number(sueldoOcurrenciaMontoValue))}
+                >
+                  Guardar monto de este depósito
                 </button>
               </div>
             </div>
