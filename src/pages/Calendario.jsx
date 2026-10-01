@@ -7,7 +7,7 @@ import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysInMonth, formatShortDate, todayISO, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo, reservaProximoPagoMSI } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
@@ -107,9 +107,14 @@ export default function Calendario() {
   // (trigésima segunda tanda) — antes esta pantalla calculaba su propia
   // foto instantánea con `disponibleParaWhimms`, que podía no coincidir
   // con lo que el resto de la app ya mostraba como disponible.
-  const { saldoWhimms: disponibleWhimms } = useBolsillos({
+  const { saldoWhimms: disponibleWhimmsTotal } = useBolsillos({
     configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
   })
+  // El próximo cobro de un plan MSI nunca se aparta por adelantado en
+  // ningún otro bolsillo -- ver `reservaProximoPagoMSI`, src/lib/budget.js
+  // (a pedido explícito de Pame: ese dinero no debe verse libre para
+  // financiar el resto de la fila).
+  const disponibleWhimms = disponibleWhimmsTotal - reservaProximoPagoMSI(pagosFijos, todayISO())
   // Misma cadencia mínima que en Compras.jsx (veinticuatroava tanda): la
   // fecha de última compra real es la que activa el canal extra hacia el
   // más barato pendiente dentro de proyectarColaWhimms.

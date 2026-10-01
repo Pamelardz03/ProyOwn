@@ -20,6 +20,16 @@ const TIPO_COLORS = {
   Vivienda: { color: 'var(--wine)', bg: 'var(--beige2)' },
   Transporte: { color: 'var(--amber)', bg: '#ecdfc7' },
   Deuda: { color: 'var(--red)', bg: 'var(--red-bg)' },
+  // Un MSI (cuadragésima tanda) caía en el fallback de Vitall más abajo
+  // (`TIPO_COLORS[p.tipo] || TIPO_COLORS.Vitall`) y se pintaba con el
+  // mismo color -- confundía a Pame haciéndole pensar que el dinero se
+  // estaba tratando como Vitall (pagosFijos/gastos) cuando en realidad
+  // siempre sale de saldoWhimms (ver `vencimientosWhimmsEnFecha`,
+  // src/lib/budget.js). Es solo un color propio, no afecta el filtro
+  // por tipo (`TIPOS` abajo sigue siendo solo las 4 categorías normales
+  // -- un MSI no se crea ni edita desde este formulario genérico, solo
+  // desde "Pagar a meses" en Compras.jsx).
+  MSI: { color: 'var(--green)', bg: 'var(--green-bg)' },
 }
 
 function monthlyEq(p) {

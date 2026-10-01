@@ -374,6 +374,43 @@ export function detectarRiesgosWhimmsMSI({ pagosFijos, saldoWhimms, hoyISO }) {
   return riesgos
 }
 
+// Cuánto de `saldoWhimms` ya está COMPROMETIDO con el próximo cobro de
+// cada plan MSI (cuadragésima tanda cont., a pedido explícito de Pame:
+// "cuando sea nov 5... ya debería guardar los 600 aprox del pago de
+// nov... ese extra guardado debe quedar en cuenta de whimms completa
+// pero para whimms comprar así de contado debe ser menos"). A
+// diferencia de un pago fijo/Vitall normal (cuyo próximo vencimiento ya
+// se excluye de `construirFlujoFuturo` porque esa plata se reserva por
+// adelantado en `saldoPagosFijos`, un bolsillo aparte), un MSI nunca se
+// aparta por adelantado en ningún lado -- sigue siendo parte de
+// `saldoWhimms` hasta el día exacto que se cobra. Eso dejaba un hueco:
+// la fila de Whimms (`asignarSaldoWhimms`/`proyectarColaWhimms`) veía
+// TODO `saldoWhimms` como libre para financiar otros Whimms, como si el
+// próximo pago del MSI no existiera.
+//
+// Esta función es lo que se le resta a `saldoWhimms` ANTES de dárselo a
+// la fila (no toca `saldoWhimms` en sí, que sigue mostrando el total
+// real completo en Perfil) -- a propósito, SOLO el próximo cobro de
+// cada plan (no los demás meses futuros: esos ya se restan solos del
+// flujo futuro dentro de `construirFlujoFuturo`, que excluye justo el
+// próximo porque asumía que ya estaba "reservado" en otro lado -- para
+// MSI ese "otro lado" es esta función). El día que ese próximo cobro se
+// cobra de verdad (`vencimientosWhimmsEnFecha`), la fecha siguiente el
+// "próximo" pasa a ser el SIGUIENTE pago, y esta función se ajusta sola.
+export function reservaProximoPagoMSI(pagosFijos, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  return (pagosFijos || [])
+    .filter((p) => p.activo !== false && p.tipo === 'MSI')
+    .reduce((sum, p) => {
+      const vencimiento = proximoVencimientoPagoFijo(p, hoy)
+      // El que vence justo hoy ya se resta de verdad de `saldoWhimms`
+      // dentro de `bolsillosDeHoy`/`procesarDiasPendientes` -- no se
+      // reserva aparte, o se restaría dos veces.
+      if (!vencimiento || vencimiento === hoy) return sum
+      return sum + montoOcurrenciaPagoFijo(p, vencimiento)
+    }, 0)
+}
+
 // --- Saldo libre acumulado real (novena tanda) ---
 // A diferencia de "Saldo del mes" (que se reinicia cada mes), este es
 // histórico: todo lo que se ha recibido (sueldos fijos + rápidos) menos

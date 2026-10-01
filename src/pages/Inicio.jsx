@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysUntil, formatShortDate, isThisMonth, todayISO, weekdayShort } from '../lib/date'
-import { cobradoMesPagoFijo, gastoNeto, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo, fechasPagoVivas } from '../lib/budget'
+import { cobradoMesPagoFijo, gastoNeto, construirFlujoFuturo, proyectarColaWhimms, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo, fechasPagoVivas, reservaProximoPagoMSI } from '../lib/budget'
 import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
@@ -142,7 +142,13 @@ export default function Inicio() {
   const ultimaCompraISOInicio = whimms
     .filter((w) => w.estado === 'comprado')
     .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
-  const colaProyectadaInicio = proyectarColaWhimms(activosParaProyeccion, eventosFlujoInicio, porcentajeWhimms, disponibleWhimmsInicio, whimmsSimultaneos, ultimaCompraISOInicio)
+  // El próximo cobro de un plan MSI nunca se aparta por adelantado en
+  // ningún otro bolsillo -- ver `reservaProximoPagoMSI`, src/lib/budget.js
+  // (a pedido explícito de Pame). Solo se resta aquí, para la fila --
+  // "Saldo para compras" arriba sigue mostrando `disponibleWhimmsInicio`
+  // completo, sin reducir.
+  const disponibleWhimmsParaFila = disponibleWhimmsInicio - reservaProximoPagoMSI(pagosFijos, hoy)
+  const colaProyectadaInicio = proyectarColaWhimms(activosParaProyeccion, eventosFlujoInicio, porcentajeWhimms, disponibleWhimmsParaFila, whimmsSimultaneos, ultimaCompraISOInicio)
     .filter((w) => w.fechaProyectada)
     .sort((a, b) => (a.fechaProyectada < b.fechaProyectada ? -1 : a.fechaProyectada > b.fechaProyectada ? 1 : 0))
   const proximaCompra = colaProyectadaInicio[0] || null

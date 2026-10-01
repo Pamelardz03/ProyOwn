@@ -12,7 +12,7 @@ import { useBolsillos } from '../hooks/useBolsillos'
 import { useBackableSheet } from '../hooks/useBackableSheet'
 import { formatShortDate, daysUntil, todayISO, addMonthsISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario, calcularPlanMSI, montoOcurrenciaPagoFijo, fechasVencimientoVivas } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario, calcularPlanMSI, montoOcurrenciaPagoFijo, fechasVencimientoVivas, reservaProximoPagoMSI } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 import { hayCambios } from '../lib/objectDiff'
 
@@ -187,7 +187,16 @@ export default function Compras() {
   const { saldoWhimms, saldoGastos, metaGastosHoy } = useBolsillos({
     configPresupuesto, loadingConfig, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, saldoInicial, porcentajeWhimms,
   })
-  const disponibleWhimms = saldoWhimms
+  // El próximo cobro de un plan MSI (ej. el pago de nov del Reloj) nunca
+  // se aparta por adelantado en ningún otro bolsillo -- sigue siendo
+  // parte de `saldoWhimms` hasta su fecha exacta. Sin esto, la fila vería
+  // TODO `saldoWhimms` como libre para financiar otros Whimms, como si
+  // ese próximo pago no existiera (a pedido explícito de Pame: "ese extra
+  // guardado debe quedar en cuenta de whimms completa pero para whimms
+  // comprar así de contado debe ser menos" — ver `reservaProximoPagoMSI`,
+  // src/lib/budget.js). `saldoWhimms` en sí NO se toca — Perfil sigue
+  // mostrando el total real completo.
+  const disponibleWhimms = saldoWhimms - reservaProximoPagoMSI(pagosFijos, todayISO())
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
   // Un Whimm "pagando a meses" (MSI, trigésima octava tanda) ya salió de
