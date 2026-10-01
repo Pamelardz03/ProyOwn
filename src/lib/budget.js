@@ -1150,6 +1150,7 @@ export function inicializarBolsillos(params, hoyISO) {
     saldoGastos: libre * (1 - pct),
     saldoPagosFijos,
     ultimoProcesado: ayer,
+    bonoGastosPendiente: 0,
   }
 }
 
@@ -1170,6 +1171,7 @@ export function migrarPagosFijos(bolsillos, params, hoyISO) {
     saldoGastos: saldoGastosActual - saldoPagosFijos,
     saldoPagosFijos,
     ultimoProcesado: bolsillos.ultimoProcesado,
+    bonoGastosPendiente: Number(bolsillos.bonoGastosPendiente) || 0,
   }
 }
 
@@ -1261,9 +1263,14 @@ export function procesarDiasPendientes(bolsillos) {
   // dia nuevo, y se sobreescribe con el ultimo dia del bucle de abajo si
   // si se cierra alguno. Asi Metricas siempre tiene algo que mostrar.
   let ultimoCierre = bolsillos.ultimoCierre || null
+  // Bono/deuda de gastos pendiente de UN SOLO día (cuadragésima tercera
+  // tanda, cont. — revive `bonoGastosPendiente` de la 39ª tanda, pero
+  // corrigiendo el bug que lo hizo revertir: ver el comentario grande
+  // justo antes del bloque de meta/premio/castigo, abajo).
+  let bonoGastosPendiente = Number(bolsillos.bonoGastosPendiente) || 0
 
   if (ultimoProcesado >= addDaysISO(hoy, -1)) {
-    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado, ultimoCierre }
+    return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado, ultimoCierre, bonoGastosPendiente }
   }
 
   const { sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms } = bolsillos
@@ -1319,32 +1326,92 @@ export function procesarDiasPendientes(bolsillos) {
     const meta = Math.max(saldoGastos, 0) / diasRestantes
     const gastoReal = gastoHormigaEnFecha(gastos, dia)
     saldoGastos -= gastoReal
-    const diferencia = meta - gastoReal
+
+    // Bono de gastos de UN SOLO día (cuadragésima tercera tanda, cont.,
+    // a pedido de Pame: "regresa a que en gasto por día se acumule" —
+    // revive `bonoGastosPendiente` de la 39ª tanda, reescrito para no
+    // repetir el bug que lo hizo revertir). Antes, lo que sobraba o
+    // faltaba de un día se diluía solo, mezclado en `saldoGastos`, entre
+    // TODOS los días que quedan hasta el próximo sueldo grande. Ahora el
+    // sobrante/faltante de HOY se guarda aparte (fuera de `saldoGastos`)
+    // y se aplica COMPLETO a lo disponible de MAÑANA, en vez de diluido.
+    //
+    // La clave para no repetir el bug de la 39ª tanda (un día idle
+    // después de un premio hacía que el bono se tratara como una
+    // recompensa NUEVA, repitiéndose indefinidamente): el premio/castigo
+    // de HOY se calcula SOLO contra la meta BASE de hoy (`meta`, sin el
+    // bono que entró de ayer) — el bono que entra nunca se vuelve a
+    // partir hacia whimms una segunda vez. Su único trabajo es hacer que
+    // "lo disponible de hoy" sea más grande (o más chico, si es deuda);
+    // si no se usa completo, lo que sobra/falta se reincorpora una sola
+    // vez a `saldoGastos`, sin generar ningún movimiento de whimms.
+    const bonoEntrante = bonoGastosPendiente
+    let gastoEfectivo = gastoReal
+    if (bonoEntrante > 0) {
+      // Todo el bono entrante vuelve a saldoGastos: la parte que cubre
+      // el gasto de hoy ("cubierto") estaba fuera de saldoGastos desde
+      // que se generó, y el `saldoGastos -= gastoReal` de arriba ya
+      // restó el gasto COMPLETO sin saber que una parte venía cubierta
+      // por el bono -- si no se regresa aquí, esa parte se pierde (bug
+      // real encontrado con pruebas de conservación de dinero: 40/40
+      // escenarios simulados de 90 días fallaban por exactamente este
+      // monto cada vez que había gasto el mismo día que un bono activo).
+      const cubierto = Math.min(gastoReal, bonoEntrante)
+      gastoEfectivo = gastoReal - cubierto
+      saldoGastos += bonoEntrante
+    }
+    const diferencia = meta - gastoEfectivo
     let cambioWhimms = 0
     let cambioGastos = 0
+    let bonoSaliente = 0
     if (diferencia > 0) {
+      // Simétrico al castigo de abajo: solo `pct` del sobrante se va a
+      // whimms para siempre; el resto se aparta como el bono completo de
+      // mañana (ya no se queda mezclado diluyéndose en `saldoGastos`).
       const aWhimms = diferencia * pct
       saldoGastos -= aWhimms
       saldoWhimms += aWhimms
       cambioWhimms = aWhimms
       cambioGastos = -aWhimms
+      bonoSaliente = diferencia - aWhimms
     } else if (diferencia < 0) {
+      // A pedido de Pame (cuadragésima tercera tanda: "si se gasta solo
+      // un solo día... rebaja todo de whimms"): un sobregasto ya NO le
+      // cuesta a whimms el faltante completo de un solo golpe -- solo le
+      // toca `pct` del faltante (mismo % que una recompensa), igual que
+      // whimms solo se queda con `pct` de un día bueno. El resto del
+      // faltante (lo que whimms no cubre, sea porque solo le tocaba la
+      // mitad o porque ni para eso alcanzó) se vuelve una deuda de UN
+      // SOLO día para mañana, concentrada en vez de diluida.
       const deficit = -diferencia
-      const deWhimms = Math.min(deficit, Math.max(saldoWhimms, 0))
+      const deWhimms = Math.min(deficit * pct, Math.max(saldoWhimms, 0))
       saldoWhimms -= deWhimms
       saldoGastos += deWhimms
       cambioWhimms = -deWhimms
       cambioGastos = deWhimms
+      bonoSaliente = -(deficit - deWhimms)
     }
+    // El bono (o deuda) de MAÑANA sale completo de saldoGastos HOY mismo
+    // -- simétrico en ambos signos. Si es crédito, se aparta para no
+    // diluirse entre todos los días restantes; si es deuda, se adelanta
+    // su descuento de una vez para que mañana solo haga falta restársela
+    // a saldoGastos sin tocar whimms otra vez (bloque de abajo).
+    saldoGastos -= bonoSaliente
+    // Si lo que entró HOY era una deuda de ayer (bono negativo) se aplica
+    // de una vez a saldoGastos -- ya se tomó en cuenta al mostrar lo
+    // disponible de hoy, así que no debe seguir cargándose día tras día.
+    if (bonoEntrante < 0) saldoGastos += bonoEntrante
+    bonoGastosPendiente = bonoSaliente
+
     // Guarda la foto de este dia como el ultimo cierre -- si quedan mas
     // dias pendientes en el bucle, la siguiente vuelta la vuelve a
     // sobreescribir, asi que al salir queda la del dia mas reciente
     // (cuarentava tanda, para el dato de recompensa/castigo en Metricas).
-    ultimoCierre = { fecha: dia, meta, gastoReal, diferencia, pct, cambioWhimms, cambioGastos }
+    ultimoCierre = { fecha: dia, meta, gastoReal: gastoEfectivo, diferencia, pct, cambioWhimms, cambioGastos }
     dia = addDaysISO(dia, 1)
     guard++
   }
-  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1), ultimoCierre }
+  return { saldoWhimms, saldoGastos, saldoPagosFijos, ultimoProcesado: addDaysISO(hoy, -1), ultimoCierre, bonoGastosPendiente }
 }
 
 // Vista EN VIVO para mostrar en pantalla: parte de los bolsillos ya
@@ -1415,6 +1482,11 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   // archivo) -- aquí solo se muestra en vivo antes de que ese cierre pase.
   const diasRestantes = Math.max(diasHastaSueldoMayorEnFecha(params.sueldosFijos, hoy) || 1, 1)
   const metaDelDiaCompleto = Math.max(saldoGastos, 0) / diasRestantes
+  // Bono/deuda de gastos de ayer (cuadragésima tercera tanda, cont.):
+  // solo se MUESTRA sumado a lo disponible de hoy -- no se resuelve ni se
+  // limpia aquí (eso solo pasa cuando el día de hoy de verdad termina y
+  // `procesarDiasPendientes` lo asienta, ver el bloque grande ahí).
+  const bonoGastosPendiente = Number(bolsillos.bonoGastosPendiente) || 0
   const gastoHoy = gastoHormigaEnFecha(params.gastos, hoy)
   // Un sueldo rápido de HOY con destino "gastos" se suma COMPLETO al
   // acumulado del día en que se registró -- no se reparte entre los días
@@ -1430,6 +1502,6 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
     saldoWhimms: Math.max(saldoWhimms, 0),
     saldoGastos: Math.max(saldoGastos, 0),
     saldoPagosFijos: Math.max(saldoPagosFijos, 0),
-    metaGastosHoy: metaDelDiaCompleto + repartoHoy.aGastosRapido - gastoHoy,
+    metaGastosHoy: metaDelDiaCompleto + bonoGastosPendiente + repartoHoy.aGastosRapido - gastoHoy,
   }
 }
