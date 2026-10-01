@@ -7,7 +7,7 @@ import { useUserCollection, useUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysInMonth, formatShortDate, todayISO, compareISOAsc, addDaysISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas, montoOcurrenciaSueldo } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, fechasPagoVivas, fechasVencimientoVivas, montoOcurrenciaPagoFijo, montoOcurrenciaSueldo } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const TODAY_STYLE = { background: 'var(--red)', color: '#fff', fontWeight: 700 }
@@ -141,7 +141,7 @@ export default function Calendario() {
     pagosFijos.filter((p) => p.activo !== false && p.fecha).forEach((p) => {
       const fechas = fechasVencimientoVivas(p, horizonte)
       fechas.forEach((f) => {
-        out.push({ id: `pf-${p.id}-${f}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: f, amount: fmt(p.monto), amountColor: '#1a1208', dotColor: '#7c8c5a', notifFormal: !!p.notifFormal })
+        out.push({ id: `pf-${p.id}-${f}`, cat: 'servicio', tipo: p.tipo, title: `Vencimiento — ${p.name}`, dateISO: f, amount: fmt(montoOcurrenciaPagoFijo(p, f)), amountColor: '#1a1208', dotColor: '#7c8c5a', notifFormal: !!p.notifFormal })
       })
     })
     colaWhimm.filter((w) => w.fechaProyectada).forEach((w) => {

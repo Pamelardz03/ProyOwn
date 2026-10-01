@@ -1,4 +1,4 @@
-import { isThisMonth, todayISO, addDaysISO, extenderFechasPago, compareISOAsc, daysUntil, parseISODate, diasEntreISO } from './date'
+import { isThisMonth, todayISO, addDaysISO, addMonthsISO, extenderFechasPago, compareISOAsc, daysUntil, parseISODate, diasEntreISO } from './date'
 
 // Un sueldo fijo no tiene fecha de fin por default — 2 años hacia adelante
 // es más que suficiente para cualquier vista/paginación real de la app.
@@ -583,7 +583,15 @@ export function construirFlujoFuturo({ sueldosFijos, pagosFijos, hoyISO }) {
     const proximo = proximoVencimientoPagoFijo(p, hoy)
     fechasVencimientoVivas(p, hasta)
       .filter((f) => f > hoy && f > (proximo || hoy))
-      .forEach((f) => { porFecha[f] = (porFecha[f] || 0) - (Number(p.monto) || 0) })
+      // Bug encontrado trigésima octava tanda (MSI): esto restaba
+      // `p.monto` crudo, ignorando `excepciones` — un mes "cubierto" de
+      // un plan a meses sin intereses (monto 0, porque ya se pagó con
+      // dinero apartado de antes) se seguía restando completo aquí,
+      // haciendo ver fechas de otros Whimms más lejanas de lo real
+      // (dinero que en verdad no sale del flujo ese día). Usa el monto
+      // real de la ocurrencia, igual que ya hacían `reservasDiariasPagosFijos`,
+      // `vencimientosEnFecha` y `objetivoPagosFijosEnFecha`.
+      .forEach((f) => { porFecha[f] = (porFecha[f] || 0) - montoOcurrenciaPagoFijo(p, f) })
   })
   return Object.keys(porFecha)
     .sort(compareISOAsc)
@@ -1079,6 +1087,53 @@ export function repartoRapidoAsentado(monto, destino, objetivoPagosFijos, saldoP
   if (destino === 'gastos') return { aPagosFijos, aWhimms: 0, aGastos: restante }
   const p = Number.isFinite(Number(pct)) ? Math.min(Math.max(Number(pct), 0), 1) : 0.5
   return { aPagosFijos, aWhimms: restante * p, aGastos: restante * (1 - p) }
+}
+
+// Meses sin intereses para un Whimm (trigésima octava tanda, a pedido de
+// Pame: "yo ponerle que el whimm se paga cada tantos meses y confirma el
+// monto, y así ya se guarda como pagando"). No crea una tarjeta nueva ni
+// un concepto financiero nuevo: reusa el mecanismo `finito`/`numPagos` que
+// ya existe en cualquier pago fijo (ver `fechasVencimientoVivas`) — el
+// Whimm pasa a `estado: 'pagando'` y lo que antes salía de `saldoWhimms`
+// ahora sale, mes a mes, de un pago fijo nuevo (`tipo: 'MSI'`) ligado a él.
+//
+// Si ya había dinero apartado (`montoApartado`, el efectivo/otra cuenta ya
+// juntado para este Whimm — NO el `acumuladoAutomatico` de la cascada en
+// vivo, que se pierde al salir de la fila), Pame pidió explícitamente que
+// se aplique en cascada contra los meses, empezando por el primero: cubre
+// tantos meses COMPLETOS como alcance, y lo que sobra (si no alcanza para
+// un mes completo más) se acredita como adelanto parcial del siguiente mes
+// — nunca se reduce `numPagos` para "saltarse" esos meses: TODOS los meses
+// se quedan en el calendario (vía `excepciones` de monto, no acortando la
+// serie) para que la notificación de "hay que pagar la tarjeta" se siga
+// generando cada mes sin importar que el monto interno ya esté en $0 —
+// Pame quiere el aviso de todas formas, aunque no haya que mover dinero
+// ese mes en particular.
+export function calcularPlanMSI({ montoApartado, meses, mensualidad, fechaInicio }) {
+  const m = Math.max(Math.round(Number(meses)) || 1, 1)
+  const cuota = Math.max(Number(mensualidad) || 0, 0.01)
+  const apartado = Math.max(Number(montoApartado) || 0, 0)
+  const inicio = fechaInicio || todayISO()
+  // Mismo generador que usará `fechasVencimientoVivas` una vez guardado el
+  // pago fijo real (`extenderFechasPago(frecuencia, [fecha], hasta)` +
+  // slice a `numPagos`) — se replica aquí tal cual para que las fechas
+  // (las llaves de `excepciones`) coincidan exactamente con las que el
+  // documento real va a generar.
+  const hasta = addMonthsISO(inicio, m + 1)
+  const fechas = extenderFechasPago('Mensual', [inicio], hasta).slice(0, m)
+  const mesesCubiertos = Math.min(Math.floor(apartado / cuota), m)
+  const sobra = apartado - mesesCubiertos * cuota
+  const excepciones = {}
+  for (let i = 0; i < mesesCubiertos; i++) excepciones[fechas[i]] = { monto: 0 }
+  if (mesesCubiertos < m && sobra > 0.009) {
+    excepciones[fechas[mesesCubiertos]] = { monto: Math.max(cuota - sobra, 0) }
+  }
+  const total = cuota * m
+  // Informativo, no bloqueante (Pame: "no avisar de comprar de una vez ya
+  // que... lo quiero a pagos para no perder tanto al mes") — solo para
+  // mostrar una nota si ya alcanza para cubrir TODO el plan sin gastar más.
+  const cubreTotalSinMasGasto = apartado >= total
+  return { mensualidad: cuota, numPagos: m, fechas, excepciones, mesesCubiertos, sobra, total, cubreTotalSinMasGasto }
 }
 
 // Cuánto de pagos fijos/Vitall activos vence EXACTAMENTE en `fechaISO`

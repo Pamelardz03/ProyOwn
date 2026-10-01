@@ -14,7 +14,7 @@ import { computeWhimmScore } from '../lib/score'
 import { deriveWhimmCats } from '../lib/categorias'
 import { buildHistorialEvents } from '../lib/historial'
 
-const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos' }
+const ESTADO_LABEL = { espera: 'En espera', apartando: 'Apartando fondos', pagando: 'Pagando a meses' }
 
 // Convierte el timestamp de Firestore (serverTimestamp resuelto) a milisegundos
 // para poder ordenar por fecha real; mientras está pendiente de confirmar con
@@ -135,7 +135,7 @@ export default function Inicio() {
   // si ya le tocó "turno especial". Se toma el de fecha proyectada más
   // próxima entre TODOS los activos, no solo el primero de la fila.
   const activosParaProyeccion = whimms
-    .filter((w) => w.estado !== 'comprado')
+    .filter((w) => w.estado !== 'comprado' && w.estado !== 'pagando')
     .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
   const eventosFlujoInicio = construirFlujoFuturo({ sueldosFijos, pagosFijos })
@@ -182,7 +182,7 @@ export default function Inicio() {
   // Cola de Whimms ordenada por score (necesidad/deseo/precio) — el #1 es
   // el que está acumulando fondos activamente.
   const whimmsTop = whimms
-    .filter((w) => w.estado !== 'comprado')
+    .filter((w) => w.estado !== 'comprado' && w.estado !== 'pagando')
     .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
     .slice(0, 5)

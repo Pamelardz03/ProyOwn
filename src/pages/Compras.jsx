@@ -7,12 +7,12 @@ import { useToast } from '../hooks/useToast'
 import { IconProduct, IconBell, IconClose, IconEdit, IconTrash, IconPlus, IconChevronLeft } from '../components/Icons'
 import { fmt } from '../lib/format'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, setUserDoc, deleteUserDoc, updateUserDoc, addUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { useBackableSheet } from '../hooks/useBackableSheet'
-import { formatShortDate, daysUntil, todayISO } from '../lib/date'
+import { formatShortDate, daysUntil, todayISO, addMonthsISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario, calcularPlanMSI, montoOcurrenciaPagoFijo, fechasVencimientoVivas } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 import { hayCambios } from '../lib/objectDiff'
 
@@ -24,6 +24,7 @@ import { hayCambios } from '../lib/objectDiff'
 // espera" para que se note la diferencia de un vistazo.
 function estadoDisplay(w) {
   if (w.estado === 'comprado') return 'Comprado'
+  if (w.estado === 'pagando') return 'Pagando a meses'
   if (w.estado === 'apartando') return 'Apartando fondos'
   const progreso = (Number(w.montoApartado) || 0) + (Number(w.acumuladoAutomatico) || 0)
   return progreso > 0 ? 'Juntando' : 'En espera'
@@ -114,6 +115,11 @@ export default function Compras() {
   const [dismissed, setDismissed] = useState({})
   const [apartarFor, setApartarFor] = useState(null) // { id, name }
   const [apartarValue, setApartarValue] = useState('')
+  const [msiFor, setMsiFor] = useState(null) // whimm siendo pasado a MSI, o null
+  const [msiMeses, setMsiMeses] = useState('')
+  const [msiMensualidad, setMsiMensualidad] = useState('')
+  const [msiFechaInicio, setMsiFechaInicio] = useState(todayISO())
+  const [msiSaving, setMsiSaving] = useState(false)
   const [showConfig, setShowConfig] = useState(false) // submenu: "Financiar a la vez" + reparto
   const [pauseDialogFor, setPauseDialogFor] = useState(null) // Vitall pendiente de elegir alcance de pausa
 
@@ -184,8 +190,12 @@ export default function Compras() {
   const disponibleWhimms = saldoWhimms
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
+  // Un Whimm "pagando a meses" (MSI, trigésima octava tanda) ya salió de
+  // la cascada de saldoWhimms por completo — lo que falta por pagar sale
+  // del pago fijo ligado (`pagoFijoMsiId`), no de aquí — así que se excluye
+  // de `activos` igual que uno ya comprado, y vive en su propia sección.
   const activos = whimms
-    .filter((w) => w.estado !== 'comprado')
+    .filter((w) => w.estado !== 'comprado' && w.estado !== 'pagando')
     .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
     .sort((a, b) => b._score - a._score)
   // proyectarColaWhimms ya reparte el saldo libre entre los primeros
@@ -194,13 +204,49 @@ export default function Compras() {
   // para las barras de progreso — ya no hace falta llamar asignarSaldoWhimms
   // por separado aquí.
   const comprados = whimms.filter((w) => w.estado === 'comprado')
+  const pagando = whimms
+    .filter((w) => w.estado === 'pagando')
+    .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
+    .sort((a, b) => {
+      const pa = pagosFijos.find((p) => p.id === a.pagoFijoMsiId)
+      const pb = pagosFijos.find((p) => p.id === b.pagoFijoMsiId)
+      const fa = pa ? proximoVencimientoPagoFijo(pa, todayISO()) || '' : ''
+      const fb = pb ? proximoVencimientoPagoFijo(pb, todayISO()) || '' : ''
+      return fa.localeCompare(fb)
+    })
+
+  // Auto-completado de un plan MSI (trigésima octava tanda): en cuanto el
+  // pago fijo ligado ya no tiene ningún vencimiento futuro (se pagó el
+  // último mes), el Whimm pasa solo a "comprado" — sin que Pame tenga que
+  // venir a marcarlo a mano. `montoApartado = precioComprado` es la pieza
+  // clave: hace que `whimmsCompradosEnFecha` (precioFinal - montoApartado)
+  // calcule exactamente $0 a restar de saldoWhimms, porque ese dinero ya
+  // salió completo, mes a mes, del pago fijo — nunca de saldoWhimms.
+  useEffect(() => {
+    if (!user || loadingPagos) return
+    pagando.forEach((w) => {
+      const pf = pagosFijos.find((p) => p.id === w.pagoFijoMsiId)
+      if (!pf || pf.activo === false) return
+      if (proximoVencimientoPagoFijo(pf, todayISO()) !== null) return
+      const horizonte = addMonthsISO(pf.fecha, (Number(pf.numPagos) || 1) + 1)
+      const fechasPlan = fechasVencimientoVivas(pf, horizonte)
+      const compradoEn = fechasPlan[fechasPlan.length - 1] || todayISO()
+      const precioFinal = Number(w.precioComprado) || Number(w.precio) || 0
+      updateUserDoc(user.uid, 'whimms', w.id, {
+        estado: 'comprado',
+        compradoEn,
+        montoApartado: precioFinal,
+      }).catch((err) => console.error('No se pudo auto-completar MSI:', err))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagando, pagosFijos, loadingPagos, user])
   // Última fecha de compra real, para el canal de cadencia mínima
   // (veinticuatroava tanda) dentro de proyectarColaWhimms: si ya pasaron
   // 14 días sin comprar NINGÚN Whimm, se le da prioridad extra al más
   // barato pendiente para que la fila no se estanque.
   const ultimaCompraISO = comprados.reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
   const activosConFecha = proyectarColaWhimms(activos, eventosFlujo, porcentajeWhimms, disponibleWhimms, whimmsSimultaneos, ultimaCompraISO)
-  const whimmsOrdenados = [...activosConFecha, ...comprados]
+  const whimmsOrdenados = [...activosConFecha, ...pagando, ...comprados]
   const compradosOrdenados = [...comprados].sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
 
   // Cuando 2+ de la fila ya juntaron su precio completo al mismo tiempo,
@@ -216,6 +262,10 @@ export default function Compras() {
 
   const detail = whimmsOrdenados.find((w) => w.id === detailId)
   const detailLinks = detail ? (detail.links && detail.links.length ? detail.links : detail.link ? [detail.link] : []) : []
+  const detailPagoFijoMsi = detail && detail.estado === 'pagando' ? pagosFijos.find((p) => p.id === detail.pagoFijoMsiId) : null
+  const detailMsiFechas = detailPagoFijoMsi
+    ? fechasVencimientoVivas(detailPagoFijoMsi, addMonthsISO(detailPagoFijoMsi.fecha, (Number(detailPagoFijoMsi.numPagos) || 1) + 1))
+    : []
 
   // Pausar un Vitall desde aquí (a pedido de Pame, vigésima séptima
   // tanda) — mismo mecanismo y mismos diálogos que Precios fijos: pausar
@@ -308,6 +358,77 @@ export default function Compras() {
     } catch (err) {
       console.error(err)
       show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    }
+  }
+
+  function openMsi(w) {
+    setMsiFor(w)
+    setMsiMeses('')
+    setMsiMensualidad('')
+    setMsiFechaInicio(todayISO())
+  }
+
+  // Vista previa en vivo del plan mientras Pame llena el formulario — solo
+  // para mostrar la nota informativa y el desglose antes de confirmar, no
+  // se guarda nada todavía (ver calcularPlanMSI en src/lib/budget.js).
+  const msiPreview = msiFor && Number(msiMeses) > 0 && Number(msiMensualidad) > 0
+    ? calcularPlanMSI({
+        montoApartado: msiFor.montoApartado,
+        meses: msiMeses,
+        mensualidad: msiMensualidad,
+        fechaInicio: msiFechaInicio || todayISO(),
+      })
+    : null
+
+  async function saveMsi() {
+    if (!msiFor) return
+    const meses = Math.max(Math.round(Number(msiMeses)) || 0, 0)
+    const mensualidad = Number(msiMensualidad) || 0
+    if (!meses || !mensualidad) { show('Falta meses o mensualidad'); return }
+    setMsiSaving(true)
+    try {
+      const plan = calcularPlanMSI({
+        montoApartado: msiFor.montoApartado,
+        meses,
+        mensualidad,
+        fechaInicio: msiFechaInicio || todayISO(),
+      })
+      const pagoFijoRef = await addUserDoc(user.uid, 'pagosFijos', {
+        name: `MSI — ${msiFor.name}`,
+        monto: plan.mensualidad,
+        tipo: 'MSI',
+        frecuencia: 'Mensual',
+        fecha: msiFechaInicio || todayISO(),
+        finito: true,
+        numPagos: plan.numPagos,
+        excepciones: plan.excepciones,
+        notifFormal: true,
+        notifMini: true,
+        activo: true,
+        whimmId: msiFor.id,
+      })
+      // `montoApartado` del Whimm se deja TAL CUAL (no se resetea a 0) —
+      // Pame pidió explícitamente que el detalle siga mostrando cómo se
+      // completó el primer avance (ej. "800 apartados efectivo"). Lo único
+      // que cambia es `estado` (sale de la cascada de saldoWhimms) y se
+      // guarda `precioComprado` como el total real financiado, para que al
+      // completarse el plan (ver efecto de auto-completado) ese sea el
+      // precio final — y para que `whimmsCompradosEnFecha` no reste nada
+      // de saldoWhimms en ese momento (el dinero ya salió mes a mes de
+      // pagosFijos, nunca de saldoWhimms).
+      await updateUserDoc(user.uid, 'whimms', msiFor.id, {
+        estado: 'pagando',
+        pagoFijoMsiId: pagoFijoRef.id,
+        precioComprado: plan.total,
+      })
+      setMsiFor(null)
+      setDetailId(null)
+      show(`"${msiFor.name}" ahora se paga a ${plan.numPagos} meses`)
+    } catch (err) {
+      console.error(err)
+      show(`No se pudo guardar: ${err?.code ? `(${err.code}) ` : ''}${err?.message || ''}`)
+    } finally {
+      setMsiSaving(false)
     }
   }
 
@@ -407,13 +528,27 @@ export default function Compras() {
       // efectivo/otra cuenta (editMontoApartadoComprado) en vez de
       // resetearlo a 0 — de eso depende que totalWhimmsCompradosHasta
       // solo reste del banco la parte que de verdad salió de ahí.
+      // `estado === 'pagando'` (MSI, trigésima octava tanda) no tiene chip
+      // propio en esta hoja — se edita/crea desde la acción "Pagar a meses"
+      // del detalle, no desde aquí — así que si Pame abre "Editar" en un
+      // Whimm que ya está pagando a meses (ej. solo para corregir el
+      // nombre), estos dos campos se CONSERVAN tal cual en vez de
+      // resetearse a 0/null: son justo los que sostienen el desglose "cómo
+      // se completó" y el cálculo de auto-completado del plan.
       montoApartado:
         editEstado === 'apartando'
           ? Number(editMontoApartado) || 0
           : editEstado === 'comprado'
             ? Number(editMontoApartadoComprado) || 0
-            : 0,
-      precioComprado: editEstado === 'comprado' ? (Number(editPrecioComprado) || precio) : null,
+            : editEstado === 'pagando'
+              ? Number(editingWhimm.montoApartado) || 0
+              : 0,
+      precioComprado:
+        editEstado === 'comprado'
+          ? (Number(editPrecioComprado) || precio)
+          : editEstado === 'pagando'
+            ? (editingWhimm.precioComprado ?? null)
+            : null,
       compradoEn: editEstado === 'comprado' ? (editCompradoEn || todayISO()) : null,
       notifFormal: editNotifFormal,
       notifMini: editNotifMini,
@@ -522,6 +657,9 @@ export default function Compras() {
               <button className="segbtn" onClick={() => setSubTabDeseos('activos')} style={{ background: subTabDeseos === 'activos' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'activos' ? '#fff' : 'var(--muted)' }}>
                 En fila ({activosConFecha.length})
               </button>
+              <button className="segbtn" onClick={() => setSubTabDeseos('pagando')} style={{ background: subTabDeseos === 'pagando' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'pagando' ? '#fff' : 'var(--muted)' }}>
+                Pagando ({pagando.length})
+              </button>
               <button className="segbtn" onClick={() => setSubTabDeseos('comprados')} style={{ background: subTabDeseos === 'comprados' ? 'var(--wine)' : 'transparent', color: subTabDeseos === 'comprados' ? '#fff' : 'var(--muted)' }}>
                 Comprados ({compradosOrdenados.length})
               </button>
@@ -592,6 +730,57 @@ export default function Compras() {
                   </div>
                 ))}
                 {!loadingWhimms && !errorWhimms && activosConFecha.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
+              </div>
+            )}
+
+            {subTabDeseos === 'pagando' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {pagando.map((w) => {
+                  const pf = pagosFijos.find((p) => p.id === w.pagoFijoMsiId)
+                  const proximo = pf ? proximoVencimientoPagoFijo(pf, todayISO()) : null
+                  return (
+                    <div key={w.id} onClick={() => setDetailId(w.id)} className="card" style={{ padding: 16, cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                          <div className="icon-tile" style={{ width: 76, height: 76, borderRadius: 16, background: w.imagenUrl ? '#fff' : undefined, overflow: 'hidden' }}>
+                            {w.imagenUrl ? (
+                              <img
+                                src={w.imagenUrl}
+                                alt={w.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                              />
+                            ) : (
+                              <IconProduct size={30} />
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{w.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}{w.lugar ? ` · ${w.lugar}` : ''}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                        <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>{fmt(w.precioComprado ?? w.precio)}</div>
+                        {pf && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                            {proximo ? `Próximo ${formatShortDate(proximo)}` : 'sin próximo pago'}
+                          </div>
+                        )}
+                      </div>
+
+                      {pf && <MsiProgress pagoFijo={pf} style={{ marginTop: 10 }} />}
+
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, color: 'var(--wine4)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8, fontWeight: 600 }}>
+                          Pagando a meses
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {!loadingWhimms && !errorWhimms && pagando.length === 0 && <div className="empty-state">Nada pagándose a meses</div>}
               </div>
             )}
 
@@ -820,6 +1009,67 @@ export default function Compras() {
         </>
       )}
 
+      {msiFor && (
+        <>
+          <div className="sheet-backdrop" style={{ zIndex: 45 }} onClick={() => !msiSaving && setMsiFor(null)} />
+          <div className="sheet" style={{ zIndex: 46 }}>
+            <div className="sheet-grabber"><span /></div>
+            <div className="sheet-body">
+              <div style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 6px' }}>Pagar a meses — {msiFor.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>
+                Confirma cómo se cobra en tu tarjeta — deja de salir de tu saldo para Whimms y pasa a tus pagos fijos
+              </div>
+              <input
+                className="fld"
+                placeholder="Meses (ej. 6)"
+                inputMode="numeric"
+                value={msiMeses}
+                onChange={(e) => setMsiMeses(e.target.value)}
+              />
+              <input
+                className="fld"
+                style={{ marginTop: 8 }}
+                placeholder="Mensualidad (ej. 600)"
+                inputMode="decimal"
+                value={msiMensualidad}
+                onChange={(e) => setMsiMensualidad(e.target.value)}
+              />
+              {Number(msiMeses) > 0 && (
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                  Sugerido: {fmt((Number(msiFor.precio) || 0) / Number(msiMeses))}/mes según el precio estimado
+                </div>
+              )}
+              <div style={{ fontSize: 11, fontWeight: 600, marginTop: 14, marginBottom: 4 }}>Fecha del primer cobro</div>
+              <input
+                type="date"
+                className="fld"
+                value={msiFechaInicio}
+                onChange={(e) => setMsiFechaInicio(e.target.value)}
+              />
+
+              {msiPreview && Number(msiFor.montoApartado) > 0 && (
+                <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginTop: 14, fontSize: 11 }}>
+                  {msiPreview.cubreTotalSinMasGasto ? (
+                    <div>Ya tienes apartado para cubrir TODO el plan — si no gastas nada más, no te costará nada extra mes a mes.</div>
+                  ) : msiPreview.mesesCubiertos > 0 ? (
+                    <div>
+                      Lo que ya tenías apartado ({fmt(msiFor.montoApartado)}) cubre {msiPreview.mesesCubiertos} pago{msiPreview.mesesCubiertos === 1 ? '' : 's'} completo{msiPreview.mesesCubiertos === 1 ? '' : 's'}
+                      {msiPreview.sobra > 0.009 ? ` y deja un adelanto de ${fmt(msiPreview.sobra)} en el siguiente.` : '.'}
+                    </div>
+                  ) : (
+                    <div>Lo que ya tenías apartado ({fmt(msiFor.montoApartado)}) no alcanza ni para el primer pago completo — se acredita como adelanto de {fmt(msiPreview.sobra)}.</div>
+                  )}
+                </div>
+              )}
+
+              <button className="btn-primary" style={{ marginTop: 14 }} onClick={saveMsi} disabled={msiSaving}>
+                {msiSaving ? 'Guardando…' : 'Confirmar plan'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {detail && (
         <>
           <div className="sheet-backdrop" style={{ zIndex: 40 }} onClick={() => setDetailId(null)} />
@@ -852,10 +1102,10 @@ export default function Compras() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 500, flex: 1 }}>
-                  {fmt(detail.estado === 'comprado' ? (detail.precioComprado ?? detail.precio) : detail.precio)}
+                  {fmt((detail.estado === 'comprado' || detail.estado === 'pagando') ? (detail.precioComprado ?? detail.precio) : detail.precio)}
                 </div>
               </div>
-              {detail.estado === 'comprado' && detail.precioComprado != null && detail.precioComprado !== detail.precio && (
+              {(detail.estado === 'comprado' || detail.estado === 'pagando') && detail.precioComprado != null && detail.precioComprado !== detail.precio && (
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -12, marginBottom: 16 }}>
                   Estimado original: {fmt(detail.precio)}
                 </div>
@@ -872,14 +1122,40 @@ export default function Compras() {
                 </div>
               </div>
 
-              {detail.estado !== 'comprado' && (
+              {detail.estado !== 'comprado' && detail.estado !== 'pagando' && (
                 <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>¿Cuándo puedo comprarlo?</div>
                   <WhimmProgressBar whimm={detail} height={10} />
                 </div>
               )}
 
-              {detail.estado !== 'comprado' && (
+              {detail.estado === 'pagando' && detailPagoFijoMsi && (
+                <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>Pagando a meses (MSI)</div>
+                  <MsiProgress pagoFijo={detailPagoFijoMsi} height={10} />
+                  {Number(detail.montoApartado) > 0 && (
+                    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
+                      Ya tenías {fmt(detail.montoApartado)} apartado antes de pasarlo a meses — se usó como adelanto.
+                    </div>
+                  )}
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {detailMsiFechas.map((f) => {
+                      const montoMes = montoOcurrenciaPagoFijo(detailPagoFijoMsi, f)
+                      const pagada = f <= todayISO()
+                      return (
+                        <div key={f} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: pagada ? 'var(--muted)' : 'var(--ink)' }}>{formatShortDate(f)}{pagada ? ' · pagado' : ''}</span>
+                          <span className="mono" style={{ fontWeight: 600 }}>
+                            {montoMes <= 0.009 ? 'Cubierto' : fmt(montoMes)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {detail.estado !== 'comprado' && detail.estado !== 'pagando' && (
                 <>
                   <button
                     onClick={() => openApartar(detail)}
@@ -889,6 +1165,15 @@ export default function Compras() {
                   </button>
                   <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, marginBottom: 16 }}>
                     Dinero aparte ya guardado (efectivo, otra cuenta)
+                  </div>
+                  <button
+                    onClick={() => openMsi(detail)}
+                    style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}
+                  >
+                    Pagar a meses (MSI)
+                  </button>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, marginBottom: 16 }}>
+                    Confirma meses y mensualidad — se mueve a "Pagando" y deja de salir de tu saldo para Whimms
                   </div>
                 </>
               )}
@@ -904,7 +1189,7 @@ export default function Compras() {
                 </div>
               </div>
 
-              {detail.fechaProyectada && detail.estado !== 'comprado' && (
+              {detail.fechaProyectada && detail.estado !== 'comprado' && detail.estado !== 'pagando' && (
                 <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>
                     {cuandoComprarLabel(detail.fechaProyectada) ? '¿Cuándo comprarlo?' : 'Fecha estimada de compra'}
@@ -1233,6 +1518,32 @@ function ScalePicker({ value, onChange }) {
 // original desde el principio y nunca se había construido de verdad.
 // (trigésima quinta tanda, a pedido de Pame: además del %, mostrar el
 // dinero recaudado en pesos como detalle junto a la barra)
+// Progreso de un plan MSI (trigésima octava tanda): "pago X de N" contando
+// cuántas fechas de la serie ya pasaron, NO cuánto dinero se ha reunido
+// (eso ya no aplica — el Whimm salió de saldoWhimms). Se deriva en vivo de
+// `fechasVencimientoVivas`, sin guardar ningún contador aparte.
+function MsiProgress({ pagoFijo, height = 6, style }) {
+  const hoy = todayISO()
+  const horizonte = addMonthsISO(pagoFijo.fecha, (Number(pagoFijo.numPagos) || 1) + 1)
+  const fechas = fechasVencimientoVivas(pagoFijo, horizonte)
+  const n = Number(pagoFijo.numPagos) || fechas.length || 1
+  const pagadas = fechas.filter((f) => f <= hoy).length
+  const pct = Math.min(100, Math.round((pagadas / n) * 100))
+  return (
+    <div style={style}>
+      <div style={{ height, background: 'var(--beige2)', borderRadius: height / 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: height / 2, transition: 'width .3s ease' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>
+          {pagadas >= n ? 'Completado' : `Pago ${pagadas + 1} de ${n}`}
+        </span>
+        <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: 'var(--wine4)' }}>{pct}%</span>
+      </div>
+    </div>
+  )
+}
+
 function WhimmProgressBar({ whimm, height = 6, style }) {
   const precio = Number(whimm.precio) || 0
   const progreso = (Number(whimm.montoApartado) || 0) + (Number(whimm.acumuladoAutomatico) || 0)
