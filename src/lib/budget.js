@@ -198,8 +198,11 @@ function cicloNaturalDias(frecuencia) {
 export function reservasDiariasPagosFijos(pagosFijos, hoyISO, sueldosFijos) {
   const hoy = hoyISO || todayISO()
   const limite = proximoLimiteReserva(sueldosFijos, hoy)
+  // Excluye MSI (trigésima novena tanda) — mismo motivo que
+  // `objetivoPagosFijosEnFecha`: un plan MSI no reserva nada en
+  // `saldoPagosFijos`, así que no debe aparecer aquí tampoco.
   return (pagosFijos || [])
-    .filter((p) => p.activo !== false)
+    .filter((p) => p.activo !== false && p.tipo !== 'MSI')
     .map((p) => {
       const vencimiento = proximoVencimientoPagoFijo(p, hoy)
       if (!vencimiento) return null
@@ -279,8 +282,12 @@ export function estimatePresupuestoDiarioNeto({ sueldosFijos, sueldosRapidosMes,
 export function detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagosFijos, hoyISO }) {
   const hoy = hoyISO || todayISO()
   const limite = proximoLimiteReserva(sueldosFijos, hoy)
+  // Excluye MSI (trigésima novena tanda): este riesgo compara contra
+  // `saldoPagosFijos`, y un plan MSI ya no se fondea de ahí (se fondea de
+  // `saldoWhimms`, ver `vencimientosWhimmsEnFecha`) — incluirlo aquí
+  // generaría un aviso de riesgo sobre el bolsillo equivocado.
   const pendientes = (pagosFijos || [])
-    .filter((p) => p.activo !== false)
+    .filter((p) => p.activo !== false && p.tipo !== 'MSI')
     .map((p) => {
       const vencimiento = proximoVencimientoPagoFijo(p, hoy)
       // El que vence justo HOY ya se resuelve hoy mismo dentro de
@@ -1141,9 +1148,32 @@ export function calcularPlanMSI({ montoApartado, meses, mensualidad, fechaInicio
 // completo de la cuenta de gastos ese mismo día, sin rampa (a diferencia
 // de `reservasDiariasPagosFijos`, que sigue existiendo tal cual solo como
 // aviso anticipado en Perfil/"riesgos detectados").
+//
+// EXCLUYE `tipo === 'MSI'` (trigésima novena tanda, a pedido explícito de
+// Pame: "cuando se registre ese pago a meses deberá tomar dinero de los
+// whimms, ya que si no, no me deja dinero de gastos ya que aumenta el
+// dinero de pagos fijos, solo los whimms toman dinero de whimms"). Un
+// plan MSI vive en la colección `pagosFijos` (reusa `finito`/`numPagos`
+// para el calendario/notificaciones), pero el DINERO de su cobro mensual
+// nunca debe salir de `saldoPagosFijos` ni de `saldoGastos` — financia un
+// Whimm, así que sale de `saldoWhimms` (ver `vencimientosWhimmsEnFecha`,
+// justo abajo, y su uso en `procesarDiasPendientes`/`bolsillosDeHoy`).
 export function vencimientosEnFecha(pagosFijos, fechaISO) {
   return (pagosFijos || [])
-    .filter((p) => p.activo !== false)
+    .filter((p) => p.activo !== false && p.tipo !== 'MSI')
+    .reduce((sum, p) => sum + (fechasVencimientoVivas(p).includes(fechaISO) ? montoOcurrenciaPagoFijo(p, fechaISO) : 0), 0)
+}
+
+// Contraparte de `vencimientosEnFecha` para planes MSI (trigésima novena
+// tanda): cuánto vence EXACTAMENTE en `fechaISO` de pagos fijos
+// `tipo === 'MSI'` — este monto sale de `saldoWhimms`, nunca de
+// `saldoPagosFijos`/`saldoGastos`, porque financia un Whimm. Sin rampa ni
+// fallback a gastos si no alcanza (mismo trato que cualquier compra de
+// Whimm vía `whimmsCompradosEnFecha`: "solo los whimms toman dinero de
+// whimms" — nunca toca gastos, ni siquiera como último recurso).
+export function vencimientosWhimmsEnFecha(pagosFijos, fechaISO) {
+  return (pagosFijos || [])
+    .filter((p) => p.activo !== false && p.tipo === 'MSI')
     .reduce((sum, p) => sum + (fechasVencimientoVivas(p).includes(fechaISO) ? montoOcurrenciaPagoFijo(p, fechaISO) : 0), 0)
 }
 
@@ -1160,10 +1190,16 @@ export function vencimientosEnFecha(pagosFijos, fechaISO) {
 // del día"). Desde la trigésima séptima tanda, un vencimiento el MISMO
 // día que ese sueldo grande tampoco cuenta en el objetivo (ver
 // `reservasDiariasPagosFijos` arriba para el detalle del cambio).
+//
+// EXCLUYE `tipo === 'MSI'` (trigésima novena tanda) por la misma razón
+// que `vencimientosEnFecha`: un plan MSI nunca debe exigir que se aparte
+// dinero en `saldoPagosFijos` — eso era justo lo que le quitaba dinero a
+// `saldoGastos` sin necesidad (el reparto de cada sueldo aparta primero
+// este objetivo, y el resto se divide entre whimms/gastos).
 export function objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, fechaISO) {
   const limite = proximoLimiteReserva(sueldosFijos, fechaISO)
   return (pagosFijos || [])
-    .filter((p) => p.activo !== false)
+    .filter((p) => p.activo !== false && p.tipo !== 'MSI')
     .reduce((sum, p) => {
       const vencimiento = proximoVencimientoPagoFijo(p, fechaISO)
       if (!vencimiento) return sum
@@ -1380,6 +1416,12 @@ export function procesarDiasPendientes(bolsillos) {
     saldoPagosFijos -= dePagosFijos
     saldoGastos -= (debePagosFijos - dePagosFijos)
 
+    // Vencimiento de un plan MSI (trigésima novena tanda): financia un
+    // Whimm, así que sale de `saldoWhimms` — nunca de pagosFijos/gastos,
+    // ni al revés si no alcanza (mismo trato sin fallback que una compra
+    // de Whimm normal, ver `whimmsCompradosEnFecha` más arriba).
+    saldoWhimms -= vencimientosWhimmsEnFecha(pagosFijos, dia)
+
     // Del ingreso del día, primero se aparta lo que haga falta para
     // pagosFijos (hasta el objetivo de ese día); el resto de un sueldo
     // FIJO se reparte por % entre whimms y gastos como siempre, y el
@@ -1558,6 +1600,10 @@ export function bolsillosDeHoy(bolsillos, params, hoyISO) {
   const dePagosFijos = Math.min(debePagosFijos, Math.max(saldoPagosFijos, 0))
   saldoPagosFijos -= dePagosFijos
   saldoGastos -= (debePagosFijos - dePagosFijos)
+
+  // Mismo trato que en `procesarDiasPendientes`: un vencimiento MSI de
+  // HOY sale de `saldoWhimms`, no de pagosFijos/gastos.
+  saldoWhimms -= vencimientosWhimmsEnFecha(params.pagosFijos, hoy)
 
   saldoWhimms -= whimmsCompradosEnFecha(params.whimms, hoy)
 
