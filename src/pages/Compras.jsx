@@ -694,7 +694,7 @@ export default function Compras() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 20 }}>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>Financiar a la vez</div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(disponibleWhimms)} entre los primeros {whimmsSimultaneos}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(disponibleWhimms)} en cascada por toda la fila — esto solo prioriza a los primeros {whimmsSimultaneos} en las fechas estimadas</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <button

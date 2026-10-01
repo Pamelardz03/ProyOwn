@@ -532,22 +532,24 @@ export function promedioGastoHormigaDiario(gastos, hoyISO, ventanaDias = 30) {
   return total / ventanaDias
 }
 
-// Reparte el saldo disponible entre los primeros `n` Whimms activos (ya
-// ordenados por prioridad/score) EN CASCADA (cuadragésima tercera tanda, a
-// pedido de Pame, revirtiendo el reparto proporcional de antes: "no son
-// simultaneos sino en cola... si ya se completo [el #1] aunque aun no lo
-// compre debe de pasar el restante a el siguiente whimm"). El #1 recibe
-// hasta lo que le falta para su precio completo (tope, ya no puede
-// mostrar más del 100%); lo que sobra pasa completo al #2, lo que sobra
-// de ese al #3, y así con los `n` de la ventana — ya no varios avanzando
-// a la vez proporcional por score, sino uno lleno primero y el resto en
-// fila. Cuando el #1 se completa (o se marca comprado), su lugar lo toma
-// el siguiente de la fila la próxima vez que se calcule esto — no hace
-// falta ningún ajuste manual.
-export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible, n) {
-  const top = (whimmsActivosOrdenados || []).slice(0, Math.max(Number(n) || 1, 1))
+// Reparte el saldo disponible entre TODOS los Whimms activos (ya
+// ordenados por prioridad/score) EN CASCADA, SIN TOPE de ventana
+// (cuadragésima tercera tanda, cont. — a pedido de Pame tras ver en vivo
+// que con "1 a la vez" el #1 se quedaba en $3,027/$2,000 mientras el #2
+// seguía en $0: "aunque solo se escoja uno... 1077 pasan a los tenis y
+// muestra su porcentaje"). El #1 recibe hasta lo que le falta para su
+// precio completo (tope, ya no puede mostrar más del 100%); lo que sobra
+// pasa completo al #2, lo que sobra de ese al #3, y así con TODA la fila
+// — el número de "financiar X a la vez" (`n`, todavía usado por el canal
+// de cadencia mínima más abajo) ya NO limita cuántos pueden recibir
+// dinero, solo cuántos resalta la UI como "en juntando" a la vez. Cuando
+// el #1 se completa (o se marca comprado), su lugar lo toma el siguiente
+// de la fila la próxima vez que se calcule esto — no hace falta ningún
+// ajuste manual.
+export function asignarSaldoWhimms(whimmsActivosOrdenados, saldoDisponible) {
+  const lista = whimmsActivosOrdenados || []
   let disponible = Math.max(Number(saldoDisponible) || 0, 0)
-  return top.map((w) => {
+  return lista.map((w) => {
     const yaApartado = Number(w.montoApartado) || 0
     const falta = Math.max((Number(w.precio) || 0) - yaApartado, 0)
     const acumuladoAutomatico = Math.min(falta, disponible)
@@ -686,7 +688,7 @@ export function proyectarColaWhimms(whimmsActivosOrdenados, eventosFlujo, porcen
     }
   }
 
-  const activosHoy = asignarSaldoWhimms(lista, disponibleParaTopN, n)
+  const activosHoy = asignarSaldoWhimms(lista, disponibleParaTopN)
   const acumuladoHoyById = Object.fromEntries(activosHoy.map((w) => [w.id, w.acumuladoAutomatico]))
   if (baratoHoyId) acumuladoHoyById[baratoHoyId] = (acumuladoHoyById[baratoHoyId] || 0) + reservaCadenciaHoy
 
