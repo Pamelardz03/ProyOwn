@@ -1061,6 +1061,26 @@ function repartirIngresoDia(ingresoFijo, rapidos, objetivoPagosFijos, saldoPagos
   return { aPagosFijos, aWhimms, aGastosFijo, aGastosRapido, aGastos: aGastosFijo + aGastosRapido }
 }
 
+// Mismo reparto que le toca a UN sueldo rápido dentro de `repartirIngresoDia`
+// (pagos fijos primero si hace falta, el resto completo a la cartera
+// elegida) pero aislado y exportado para poder aplicarlo A MANO cuando se
+// registra un rápido con una fecha que YA está asentada (cuadragésima
+// cuarta tanda, a pedido de Pame tras encontrar que "Uñas tamy" se quedó
+// sin acreditar — mismo tipo de corrección que ya existía para un gasto o
+// una compra de Whimm con fecha pasada, pero nunca se había hecho para un
+// sueldo rápido). Un rápido legado sin `destino` reparte por `%` igual
+// que siempre.
+export function repartoRapidoAsentado(monto, destino, objetivoPagosFijos, saldoPagosFijosActual, pct) {
+  const necesitaPagosFijos = Math.max((Number(objetivoPagosFijos) || 0) - (Number(saldoPagosFijosActual) || 0), 0)
+  const m = Number(monto) || 0
+  const aPagosFijos = Math.min(necesitaPagosFijos, m)
+  const restante = m - aPagosFijos
+  if (destino === 'whimms') return { aPagosFijos, aWhimms: restante, aGastos: 0 }
+  if (destino === 'gastos') return { aPagosFijos, aWhimms: 0, aGastos: restante }
+  const p = Number.isFinite(Number(pct)) ? Math.min(Math.max(Number(pct), 0), 1) : 0.5
+  return { aPagosFijos, aWhimms: restante * p, aGastos: restante * (1 - p) }
+}
+
 // Cuánto de pagos fijos/Vitall activos vence EXACTAMENTE en `fechaISO`
 // (respetando excepciones/monto por ocurrencia) — este monto sale
 // completo de la cuenta de gastos ese mismo día, sin rampa (a diferencia
@@ -1220,6 +1240,22 @@ export const CORRECCIONES_MANUALES = [
     // entre whimms/gastos ese día -- no cambia el "Total" (la suma de los
     // 3 bolsillos), solo en cuál de los 2 aparece restado.
     monto: -141,
+  },
+  {
+    id: 'sep2026-unas-tamy-50-sin-acreditar',
+    bolsillo: 'saldoGastos',
+    // "Uñas tamy" ($50, destino "gastos") se registró el 26 sep con una
+    // fecha que para entonces ya estaba asentada (`ultimoProcesado` ya
+    // había pasado ese día) -- aparecía en Historial/Sueldos pero nunca
+    // se sumó de verdad a ningún bolsillo, porque `saveRapido` (Sueldos.jsx)
+    // no tenía la misma corrección que ya existía para un gasto o una
+    // compra de Whimm con fecha pasada (tandas 35/40-cont). Encontrado
+    // cruzando el banco real de Pame contra la app: el Total de la app
+    // quedaba exactamente $50 (más ~$1 de redondeo) por debajo de su
+    // saldo real de Nu. Se corrigió `saveRapido` para que esto no se
+    // repita (ver más abajo); esta entrada solo suma, una vez, el $50 que
+    // ya se le quedó atrapado sin acreditar a este caso puntual.
+    monto: 50,
   },
 ]
 

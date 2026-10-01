@@ -6,10 +6,10 @@ import Toggle from '../components/Toggle'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { useAuth } from '../lib/AuthContext'
-import { useUserCollection, addUserDoc, updateUserDoc, deleteUserDoc } from '../lib/firestoreCollections'
+import { useUserCollection, useUserDoc, addUserDoc, updateUserDoc, deleteUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { fmt, fmtSigned } from '../lib/format'
 import { daysUntil, formatShortDate, todayISO, generarFechasPago, weekdayShort, isSunday, isFeriadoMX, compareISOAsc, parseISODate, daysInMonth } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, ingresoDelMesSueldo } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, ingresoDelMesSueldo, objetivoPagosFijosEnFecha, repartoRapidoAsentado } from '../lib/budget'
 import { hayCambios } from '../lib/objectDiff'
 
 const FREQS = ['Semanal', 'Quincenal', 'Mensual']
@@ -245,6 +245,8 @@ export default function Sueldos() {
   const navigate = useNavigate()
   const { data: fijos, loading: loadingFijos, error: errorFijos } = useUserCollection('sueldosFijos')
   const { data: rapidos, loading: loadingRapidos, error: errorRapidos } = useUserCollection('sueldosRapidos')
+  const { data: pagosFijos } = useUserCollection('pagosFijos')
+  const { data: configPresupuesto } = useUserDoc('config', 'presupuesto')
 
   // Abrir directo la edición de un sueldo rápido al llegar desde Historial
   // (a pedido de Pame, vigésima séptima tanda: "que se edite todos los
@@ -459,6 +461,28 @@ export default function Sueldos() {
         await updateUserDoc(user.uid, 'sueldosRapidos', editingRapidoId, payload)
         show('Sueldo rápido actualizado')
       } else {
+        // Un rápido NUEVO con fecha que ya quedó asentada ("se me olvidó
+        // registrar esto de hace unos días") no se suma solo a ningún
+        // bolsillo -- `procesarDiasPendientes` ya cerró ese día sin él.
+        // Mismo problema que ya se había corregido para un gasto o una
+        // compra de Whimm con fecha pasada (tandas 35/40-cont), pero
+        // nunca para un sueldo rápido -- encontrado cruzando el banco
+        // real de Pame contra la app ("Uñas tamy" se quedó sin acreditar).
+        // Se suma a mano aquí, con la misma prioridad de siempre (pagos
+        // fijos primero si hace falta, el resto a la cartera elegida).
+        const yaAsentado = configPresupuesto?.ultimoProcesado && payload.fecha <= configPresupuesto.ultimoProcesado
+        if (yaAsentado) {
+          const hoy = todayISO()
+          const objetivo = objetivoPagosFijosEnFecha(pagosFijos, fijos, hoy)
+          const saldoPagosFijosActual = Number(configPresupuesto?.saldoPagosFijos) || 0
+          const pct = configPresupuesto?.porcentajeWhimms != null ? configPresupuesto.porcentajeWhimms : 0.5
+          const { aPagosFijos, aWhimms, aGastos } = repartoRapidoAsentado(payload.monto, payload.destino, objetivo, saldoPagosFijosActual, pct)
+          await setUserDoc(user.uid, 'config', 'presupuesto', {
+            saldoPagosFijos: saldoPagosFijosActual + aPagosFijos,
+            saldoWhimms: (Number(configPresupuesto?.saldoWhimms) || 0) + aWhimms,
+            saldoGastos: (Number(configPresupuesto?.saldoGastos) || 0) + aGastos,
+          })
+        }
         await addUserDoc(user.uid, 'sueldosRapidos', payload)
         show('Sueldo rápido guardado')
       }
