@@ -12,7 +12,7 @@ import { useBolsillos } from '../hooks/useBolsillos'
 import { useBackableSheet } from '../hooks/useBackableSheet'
 import { formatShortDate, daysUntil, todayISO, addMonthsISO } from '../lib/date'
 import { computeWhimmScore } from '../lib/score'
-import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario, calcularPlanMSI, montoOcurrenciaPagoFijo, fechasVencimientoVivas, reservaProximoPagoMSI } from '../lib/budget'
+import { construirFlujoFuturo, proyectarColaWhimms, proximoVencimientoPagoFijo, promedioGastoHormigaDiario, calcularPlanMSI, montoOcurrenciaPagoFijo, fechasVencimientoVivas, reservaProximoPagoMSI, montoPendienteMesPagoFijo } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 import { hayCambios } from '../lib/objectDiff'
 
@@ -844,7 +844,10 @@ export default function Compras() {
             <div style={{ display: 'flex', gap: 10 }}>
               <div className="card" style={{ flex: 1, padding: 14 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Total mensual pendiente</div>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 500, marginTop: 4 }}>{fmt(servicios.reduce((s, x) => s + (Number(x.monto) || 0), 0))}</div>
+                {/* Suma TODAS las ocurrencias de cada Vitall que todavía caen este mes
+                    (no solo su `monto` una vez) — ver `montoPendienteMesPagoFijo`,
+                    cuadragésima quinta tanda, a pedido de Pame. */}
+                <div className="mono" style={{ fontSize: 18, fontWeight: 500, marginTop: 4 }}>{fmt(servicios.reduce((s, x) => s + montoPendienteMesPagoFijo(x, todayISO()), 0))}</div>
               </div>
               <div className="card" style={{ flex: 1, padding: 14 }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>Vitall activos</div>

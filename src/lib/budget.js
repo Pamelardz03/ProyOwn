@@ -286,22 +286,22 @@ export function detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagos
   // `saldoPagosFijos`, y un plan MSI ya no se fondea de ahí (se fondea de
   // `saldoWhimms`, ver `vencimientosWhimmsEnFecha`) — incluirlo aquí
   // generaría un aviso de riesgo sobre el bolsillo equivocado.
+  // Mismo bug/arreglo que `objetivoPagosFijosEnFecha` (cuadragésima
+  // quinta tanda): antes solo se contaba el PRÓXIMO vencimiento de cada
+  // pago fijo, nunca TODAS las ocurrencias que caen antes del límite —
+  // subestimando el riesgo real de un pago semanal con varias fechas
+  // pendientes antes del próximo sueldo grande. Ahora se usa
+  // `fechasVencimientoVivas` para juntar cada ocurrencia por separado
+  // (cada una con su propia fecha/monto/días), excluyendo siempre la de
+  // HOY (se resuelve hoy mismo dentro de `bolsillosDeHoy`, ver abajo).
   const pendientes = (pagosFijos || [])
     .filter((p) => p.activo !== false && p.tipo !== 'MSI')
-    .map((p) => {
-      const vencimiento = proximoVencimientoPagoFijo(p, hoy)
-      // El que vence justo HOY ya se resuelve hoy mismo dentro de
-      // `bolsillosDeHoy` (se paga de este mismo bolsillo, o si no
-      // alcanza, sale de gastos como último recurso) — incluirlo aquí
-      // de nuevo lo contaría dos veces y generaba un falso "riesgo" del
-      // monto exacto que ya se acaba de pagar, todos los días que algo
-      // vence. Solo cuenta como pendiente lo que vence DESPUÉS de hoy.
-      if (!vencimiento || vencimiento === hoy) return null
-      if (limite && vencimiento >= limite) return null
-      const dias = Math.max(daysUntil(vencimiento), 1)
-      return { pago: p, vencimiento, monto: montoOcurrenciaPagoFijo(p, vencimiento), dias }
+    .flatMap((p) => {
+      const fechas = limite
+        ? fechasVencimientoVivas(p, limite).filter((f) => f > hoy && f < limite)
+        : [proximoVencimientoPagoFijo(p, hoy)].filter((f) => f && f !== hoy)
+      return fechas.map((f) => ({ pago: p, vencimiento: f, monto: montoOcurrenciaPagoFijo(p, f), dias: Math.max(daysUntil(f), 1) }))
     })
-    .filter(Boolean)
     .sort((a, b) => a.dias - b.dias)
 
   let faltante = Math.max(pendientes.reduce((s, r) => s + r.monto, 0) - (Number(saldoPagosFijos) || 0), 0)
@@ -995,6 +995,26 @@ export function montoOcurrenciaPagoFijo(pagoFijo, fechaISO) {
   return Number(pagoFijo.monto) || 0
 }
 
+// Cuánto queda por pagar de UN pago fijo/Vitall este mes calendario —
+// a diferencia de `cobradoMesPagoFijo` (lo que YA se cobró), esto suma
+// el monto de cada ocurrencia que TODAVÍA cae este mes desde `hoyISO`
+// en adelante (cuadragésima quinta tanda, a pedido de Pame: "en el
+// apartado de vitall en compras dice total mensual pendiente 189, pero
+// es incorrecto... 1 spotify = 60, 1 google one = 39, 4 estacionamientos
+// miercoles =180 y 4 viernes de estacionamiento = 180"). La tarjeta de
+// Compras sumaba el campo `monto` de cada Vitall UNA sola vez sin
+// importar su frecuencia — un Vitall semanal (ej. Estacionamiento)
+// aparecía con un solo pago de $45 en vez de sus 4 ocurrencias reales
+// del mes ($180). Ahora se usa `fechasVencimientoVivas` para contar cada
+// ocurrencia real por separado.
+export function montoPendienteMesPagoFijo(pagoFijo, hoyISO) {
+  const hoy = hoyISO || todayISO()
+  const hasta = addDaysISO(hoy, 31)
+  return fechasVencimientoVivas(pagoFijo, hasta)
+    .filter((f) => f >= hoy && isThisMonth(f, hoy))
+    .reduce((s, f) => s + montoOcurrenciaPagoFijo(pagoFijo, f), 0)
+}
+
 // Cómo se reparte (o se revierte) la DIFERENCIA cuando se corrige el
 // monto de una ocurrencia de sueldo FIJO ya asentada (fecha <=
 // ultimoProcesado) -- el dinero de esa quincena ya se había repartido
@@ -1283,15 +1303,28 @@ export function vencimientosWhimmsEnFecha(pagosFijos, fechaISO) {
 // dinero en `saldoPagosFijos` — eso era justo lo que le quitaba dinero a
 // `saldoGastos` sin necesidad (el reparto de cada sueldo aparta primero
 // este objetivo, y el resto se divide entre whimms/gastos).
+// Bug real encontrado (cuadragésima quinta tanda, a pedido de Pame: "en
+// perfil que dice para pagos fijos ahi debe ser antes del prox mayor
+// pago... por lo que debe ser 45+45+60+45+39+45"): esto solo contaba el
+// PRÓXIMO vencimiento de cada pago fijo, una sola vez, aunque ese pago
+// fuera semanal y vencsiera VARIAS veces antes del límite (ej.
+// Estacionamiento miércoles/viernes, semanal: entre hoy y el próximo
+// Kenet caen 2 miércoles y 2 viernes, no solo 1 de cada). Ahora se suman
+// TODAS las ocurrencias vivas de cada pago fijo que caen entre `fechaISO`
+// y el límite (sin límite, ej. no hay sueldo grande configurado, no hay
+// ventana que sumar completa, así que se usa solo la próxima ocurrencia,
+// igual que antes).
 export function objetivoPagosFijosEnFecha(pagosFijos, sueldosFijos, fechaISO) {
   const limite = proximoLimiteReserva(sueldosFijos, fechaISO)
   return (pagosFijos || [])
     .filter((p) => p.activo !== false && p.tipo !== 'MSI')
     .reduce((sum, p) => {
-      const vencimiento = proximoVencimientoPagoFijo(p, fechaISO)
-      if (!vencimiento) return sum
-      if (limite && vencimiento >= limite) return sum
-      return sum + montoOcurrenciaPagoFijo(p, vencimiento)
+      if (!limite) {
+        const vencimiento = proximoVencimientoPagoFijo(p, fechaISO)
+        return vencimiento ? sum + montoOcurrenciaPagoFijo(p, vencimiento) : sum
+      }
+      const fechas = fechasVencimientoVivas(p, limite).filter((f) => f >= fechaISO && f < limite)
+      return sum + fechas.reduce((s, f) => s + montoOcurrenciaPagoFijo(p, f), 0)
     }, 0)
 }
 

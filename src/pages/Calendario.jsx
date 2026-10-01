@@ -121,9 +121,21 @@ export default function Calendario() {
   const ultimaCompraISO = whimms
     .filter((w) => w.estado === 'comprado')
     .reduce((max, w) => (w.compradoEn && w.compradoEn > (max || '') ? w.compradoEn : max), null)
+  // Un Whimm "pagando a meses" (MSI) ya salió por completo de la cascada
+  // de saldoWhimms -- lo que falta por pagar sale del pago fijo ligado,
+  // no de aquí (ver Compras.jsx, que ya excluye `estado === 'pagando'`
+  // de esta misma lista). Al Calendario le faltaba este mismo filtro
+  // (cuadragésima quinta tanda, a pedido de Pame: "dice que el a5 se
+  // compran los new balance pero en whimms ya se puede comprar") -- un
+  // MSI (ej. Reloj/Google) se quedaba compitiendo por el saldo diario de
+  // la simulación como si fuera un Whimm normal más, sin completarse
+  // nunca (su progreso real no sube por este canal), y le quitaba
+  // reparto/turno a los demás de la fila -- incluyendo a New Balance,
+  // que en Compras ya se mostraba al 100% pero aquí seguía proyectando
+  // una fecha futura.
   const colaWhimm = proyectarColaWhimms(
     whimms
-      .filter((w) => w.estado !== 'comprado')
+      .filter((w) => w.estado !== 'comprado' && w.estado !== 'pagando')
       .map((w) => ({ ...w, _score: computeWhimmScore(w) }))
       .sort((a, b) => b._score - a._score),
     eventosFlujo,
