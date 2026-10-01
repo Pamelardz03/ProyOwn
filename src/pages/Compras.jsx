@@ -50,15 +50,21 @@ function cuandoComprarLabel(fechaProyectada) {
 // transformación de escala para mostrarlo — no cambia el orden ni la
 // fórmula real (`computeWhimmScore`), que sigue siendo la que decide la
 // prioridad (a pedido de Pame, quinceava tanda). El multiplicador (×2.2,
-// antes ×10) se recalibró en la dieciochoava tanda: con la fórmula v2
-// (precio^0.25, ver src/lib/score.js) el score crudo de un Whimm real de
-// Pame llega hasta ~4.5 (necesidad/deseo al máximo + el precio más barato
-// de su lista, ~$125) — con ×10 casi cualquier Whimm con buena prioridad
-// se topaba en 10.0 sin distinguirse de otro. Con ×2.2 ese mismo tope
-// llega a ~9.9, dejando espacio para diferenciar entre los que antes se
-// veían idénticos.
+// antes ×10) se calibró en la dieciochoava tanda para la escala vieja de
+// necesidad/deseo (1-5, numerador máximo 15). Recalibrado a ×1.1 en la
+// cuadragésima sexta tanda, a pedido de Pame ("sera necesario poner un
+// rango de necesidad y deseo de 1-10... aunque bajamos a 1 algunos, siguen
+// arriba por su precio" — necesitaba más rango arriba para que un Whimm
+// importante pudiera ganarle a uno barato aunque este último ya estuviera
+// al mínimo): con necesidad/deseo ahora en 1-10 el numerador máximo se
+// DUPLICÓ (de 15 a 30), así que el multiplicador se redujo a la mitad
+// exacta (2.2 → 1.1) para mantener el mismo tope visual (~9.9 para el
+// Whimm con mejor prioridad + precio más barato, ~$125) — si no se
+// recalibraba, cualquier Whimm bien priorizado se hubiera topado en 10.0
+// de inmediato, perdiendo la distinción entre ellos (el mismo problema que
+// esto evitó la primera vez).
 function scoreOutOf10(score) {
-  return Math.min(10, Math.max(0, Number(score) || 0) * 2.2).toFixed(1)
+  return Math.min(10, Math.max(0, Number(score) || 0) * 1.1).toFixed(1)
 }
 
 // Nombre del sitio real al que apunta un link (Amazon, Mercado Libre, ...),
@@ -125,8 +131,8 @@ export default function Compras() {
 
   const [editingWhimm, setEditingWhimm] = useState(null) // whimm object siendo editado, o null
   const [editForm, setEditForm] = useState({ nombre: '', categoria: '', lugar: '', precio: '', imagenUrl: '' })
-  const [editNecesidad, setEditNecesidad] = useState(3)
-  const [editDeseo, setEditDeseo] = useState(3)
+  const [editNecesidad, setEditNecesidad] = useState(5)
+  const [editDeseo, setEditDeseo] = useState(5)
   const [editEstado, setEditEstado] = useState('espera')
   const [editMontoApartado, setEditMontoApartado] = useState('')
   const [editPrecioComprado, setEditPrecioComprado] = useState('')
@@ -487,8 +493,8 @@ export default function Compras() {
       precio: String(w.precio ?? ''),
       imagenUrl: w.imagenUrl || '',
     })
-    setEditNecesidad(w.necesidad ?? 3)
-    setEditDeseo(w.deseo ?? 3)
+    setEditNecesidad(w.necesidad ?? 5)
+    setEditDeseo(w.deseo ?? 5)
     setEditEstado(w.estado || 'espera')
     setEditMontoApartado(String(w.montoApartado ?? ''))
     setEditPrecioComprado(String(w.precioComprado ?? w.precio ?? ''))
@@ -1193,11 +1199,11 @@ export default function Compras() {
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Necesidad</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.necesidad ?? '—'}/5</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.necesidad ?? '—'}/10</div>
                 </div>
                 <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Deseo</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.deseo ?? '—'}/5</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{detail.deseo ?? '—'}/10</div>
                 </div>
               </div>
 
@@ -1508,14 +1514,24 @@ function NotifRow({ label, hint, on, onClick }) {
   )
 }
 
+// Escala 1-10 (antes 1-5, cuadragésima sexta tanda a pedido de Pame): con
+// solo 5 niveles no había suficiente rango para que un Whimm importante
+// le ganara en score a uno barato aunque este ya estuviera al mínimo (1)
+// -- el precio seguía dominando. Con 10 niveles hay el doble de "fuerza"
+// para subir necesidad/deseo por encima de eso. Los Whimms ya existentes
+// (creados bajo la escala vieja, valores 1-5) NO se migran -- se quedan
+// con su número literal, que ahora cae en la MITAD de la escala nueva en
+// vez del tope, dejando espacio arriba para los que de verdad quieras
+// priorizar más. Grid de 5 columnas para que los 10 botones quepan en 2
+// filas cómodas en vez de 10 apretados en una sola.
 function ScalePicker({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      {[1, 2, 3, 4, 5].map((n) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
         <button
           key={n}
           onClick={() => onChange(n)}
-          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
+          style={{ padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
         >
           {n}
         </button>

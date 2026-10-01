@@ -4,11 +4,18 @@
 // contra uno baratísimo con necesidad/deseo al mínimo, solo por el precio).
 // Antes se dividía por √precio; ahora por precio^0.25, un divisor mucho
 // menos agresivo, para que necesidad/deseo pesen más frente al precio.
-// Usa necesidad/deseo (1-5) y el precio para ordenar la cola: más
-// necesidad/deseo y menor precio = score más alto.
+// Usa necesidad/deseo y el precio para ordenar la cola: más necesidad/deseo
+// y menor precio = score más alto. La fórmula misma no asume ningún tope
+// para necesidad/deseo -- el rango real (antes 1-5, ahora 1-10 en la UI,
+// cuadragésima sexta tanda a pedido de Pame: "aunque bajamos a 1 algunos,
+// siguen arriba por su precio" -- necesitaba más rango para que un Whimm
+// importante pudiera ganarle en score a uno barato) vive solo en el
+// `ScalePicker` de Compras.jsx/AddSheet.jsx. El multiplicador de display
+// `scoreOutOf10` (Compras.jsx) sí depende de ese rango y se recalibró
+// junto con este cambio.
 export function computeWhimmScore({ necesidad, deseo, precio }) {
-  const n = Number(necesidad) || 3
-  const d = Number(deseo) || 3
+  const n = Number(necesidad) || 5
+  const d = Number(deseo) || 5
   const p = Math.max(Number(precio) || 1, 1)
   return (n * 2 + d) / Math.pow(p, 0.25)
 }

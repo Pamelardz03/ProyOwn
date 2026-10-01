@@ -62,8 +62,8 @@ export default function AddSheet({ onToast, cats, pagosFijos }) {
   const [newCatValue, setNewCatValue] = useState('')
   const [estadoSel, setEstadoSel] = useState('espera')
   const [linksList, setLinksList] = useState([''])
-  const [necesidadSel, setNecesidadSel] = useState(3)
-  const [deseoSel, setDeseoSel] = useState(3)
+  const [necesidadSel, setNecesidadSel] = useState(5)
+  const [deseoSel, setDeseoSel] = useState(5)
   const [montoApartado, setMontoApartado] = useState('')
   const [objNotifFormal, setObjNotifFormal] = useState(true)
   const [objNotifMini, setObjNotifMini] = useState(true)
@@ -758,14 +758,19 @@ function ToggleRow({ label, hint, on, onClick }) {
   )
 }
 
+// Escala 1-10 (antes 1-5, cuadragésima sexta tanda) -- mismo cambio y
+// mismo motivo que su copia en Compras.jsx (ver el comentario ahí): más
+// rango arriba para que un Whimm importante pueda ganarle en score a uno
+// barato. Grid de 5 columnas para que quepan 2 filas de 5 en vez de 10
+// botones apretados en una sola fila.
 function ScalePicker({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      {[1, 2, 3, 4, 5].map((n) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
         <button
           key={n}
           onClick={() => onChange(n)}
-          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
+          style={{ padding: '8px 0', borderRadius: 8, background: value === n ? 'var(--wine)' : 'var(--card)', color: value === n ? '#fff' : 'var(--muted)', fontSize: 12, fontWeight: 700, border: value === n ? 'none' : '1px solid var(--beige3)' }}
         >
           {n}
         </button>
