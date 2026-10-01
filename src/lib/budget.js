@@ -324,6 +324,56 @@ export function detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagos
   return riesgos
 }
 
+// Contraparte de `detectarRiesgosPagosFijos` para planes MSI (cuadragésima
+// tanda, a pedido explícito de Pame: "se supone se comporta como un
+// vitall pero se cobra de whimm... sino es mucho para whimm y nada para
+// gastos"). Un MSI no aparta nada por adelantado dentro de `saldoWhimms`
+// (a diferencia de un Vitall/pago fijo normal, que sí tiene su reserva
+// diaria completa antes de vencer) — el cobro completo sale de un solo
+// golpe el día que vence, de lo que sea que haya en `saldoWhimms` ese
+// día. Si ya se gastó ese dinero en otros Whimms de la fila, puede
+// quedar muy bajo o negativo sin ningún aviso previo. Esta función es
+// ese aviso: mismo criterio que `detectarRiesgosPagosFijos` (solo el
+// PRÓXIMO vencimiento de cada plan, nunca el que vence justo hoy — eso
+// ya se resuelve hoy mismo dentro de `bolsillosDeHoy`), pero comparando
+// contra `saldoWhimms` en vez de `saldoPagosFijos`, y sin "límite" de
+// próximo sueldo grande (a diferencia de pagos fijos, `saldoWhimms` no
+// se funda solo de sueldos grandes — crece con cada reparto diario — así
+// que no hay un corte natural equivalente; se avisa siempre que el
+// próximo cobro MSI no esté ya cubierto).
+export function detectarRiesgosWhimmsMSI({ pagosFijos, saldoWhimms, hoyISO }) {
+  const hoy = hoyISO || todayISO()
+  const pendientes = (pagosFijos || [])
+    .filter((p) => p.activo !== false && p.tipo === 'MSI')
+    .map((p) => {
+      const vencimiento = proximoVencimientoPagoFijo(p, hoy)
+      if (!vencimiento || vencimiento === hoy) return null
+      const dias = Math.max(daysUntil(vencimiento), 1)
+      return { pago: p, vencimiento, monto: montoOcurrenciaPagoFijo(p, vencimiento), dias }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dias - b.dias)
+
+  let faltante = Math.max(pendientes.reduce((s, r) => s + r.monto, 0) - (Number(saldoWhimms) || 0), 0)
+  if (faltante <= 0) return []
+
+  const riesgos = []
+  pendientes.forEach((r) => {
+    if (faltante <= 0) return
+    const faltanteEste = Math.min(r.monto, faltante)
+    faltante -= faltanteEste
+    riesgos.push({
+      nombre: r.pago.name,
+      monto: r.monto,
+      vencimiento: r.vencimiento,
+      dias: r.dias,
+      reservaDiaria: faltanteEste / r.dias,
+      faltante: Math.round(faltanteEste),
+    })
+  })
+  return riesgos
+}
+
 // --- Saldo libre acumulado real (novena tanda) ---
 // A diferencia de "Saldo del mes" (que se reinicia cada mes), este es
 // histórico: todo lo que se ha recibido (sueldos fijos + rápidos) menos

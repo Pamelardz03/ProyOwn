@@ -9,7 +9,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useUserCollection, useUserDoc, setUserDoc } from '../lib/firestoreCollections'
 import { useBolsillos } from '../hooks/useBolsillos'
 import { daysUntil, formatShortDate, todayISO } from '../lib/date'
-import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, diasHastaSueldoMayor, promedioGastoHormigaDiario } from '../lib/budget'
+import { proximaFechaSueldo, fechasPagoVivas, detectarRiesgosPagosFijos, detectarRiesgosWhimmsMSI, diasHastaSueldoMayor, promedioGastoHormigaDiario } from '../lib/budget'
 import { deriveWhimmCats } from '../lib/categorias'
 
 const LINKS = [
@@ -102,6 +102,14 @@ export default function Perfil() {
   // sino contra lo que de verdad está apartado y protegido ahora mismo
   // en "Para pagos fijos/Vitall" (`saldoPagosFijos`, calculado arriba).
   const riesgosFlujo = detectarRiesgosPagosFijos({ sueldosFijos, pagosFijos, saldoPagosFijos, hoyISO: hoy })
+  // Contraparte para planes MSI (cuadragésima tanda, a pedido de Pame:
+  // "se supone se comporta como un vitall pero se cobra de whimm... sino
+  // es mucho para whimm y nada para gastos") — ver el comentario grande
+  // en `detectarRiesgosWhimmsMSI`, src/lib/budget.js: un MSI no aparta
+  // nada por adelantado dentro de `saldoWhimms`, así que sin este aviso
+  // el próximo cobro podía dejarlo muy bajo o negativo sin que Pame se
+  // enterara con tiempo.
+  const riesgosWhimms = detectarRiesgosWhimmsMSI({ pagosFijos, saldoWhimms, hoyISO: hoy })
   const diasProximoIngreso = diasHastaSueldoMayor(sueldosFijos)
   const gastoHormigaPromedioDiario = promedioGastoHormigaDiario(gastos)
   const colchonBajo = metaGastosHoy != null && metaGastosHoy < gastoHormigaPromedioDiario
@@ -122,6 +130,9 @@ export default function Perfil() {
   const riesgos = []
   riesgosFlujo.forEach((r) => {
     riesgos.push(`${r.nombre}: de los ${fmt(r.monto)} que vencen ${formatShortDate(r.vencimiento)} todavía faltan ${fmt(r.faltante)} sin apartar — necesitarías juntar ~${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'}.`)
+  })
+  riesgosWhimms.forEach((r) => {
+    riesgos.push(`${r.nombre} (a meses): de los ${fmt(r.monto)} que vencen ${formatShortDate(r.vencimiento)} todavía faltan ${fmt(r.faltante)} sin apartar en Whimms — necesitarías juntar ~${fmt(Math.round(r.reservaDiaria))}/día en los próximos ${r.dias} día${r.dias === 1 ? '' : 's'} para no quedarte corta.`)
   })
 
   return (
