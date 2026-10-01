@@ -1348,6 +1348,33 @@ export const CORRECCIONES_MANUALES = [
     // ya se le quedó atrapado sin acreditar a este caso puntual.
     monto: 50,
   },
+  {
+    id: 'sep2026-reconciliacion-nu-347',
+    bolsillo: 'saldoGastos',
+    // Reconciliación completa pedida por Pame (30 sep): su saldo real en
+    // Nu ($4,576.14) no cuadraba contra el Total de la app ($5,852, antes
+    // de que se cobre el pago fijo "Vuelos"). Se cruzó su banco real
+    // contra el Historial completo, día por día, del 14 al 30 de sep.
+    // Dos cosas que parecían huecos resultaron NO ser bugs: (1) los "dos
+    // enchinadores" ($140 en Amazon, 21 sep) — Tamy le regresó $70 de su
+    // mitad, así que el $70 que quedó como gasto real de Pame coincide
+    // exacto con el Whimm "enchinador elf" ya registrado; (2) el hueco de
+    // "Domingo" ($350 vs $209, 20 sep) ya estaba corregido de una tanda
+    // anterior (ver `sep2026-domingo-350-vs-209`, arriba). Dos cosas se
+    // dejaron FUERA a propósito de esta corrección porque se resuelven
+    // solas: un Amazon de $20 (21 sep) que aún no le reembolsan (va a
+    // volver a su Nu real solo, sin que la app se entere nunca de ida ni
+    // de vuelta) y que el pago fijo "Vuelos" está configurado en $900
+    // pero el pago real fue $909 (Pame: "despues yo lo cambio, eso no
+    // hace diferencia" — si corrige el monto en Precios fijos antes de
+    // que se cobre, se autocorrige solo). Después de descartar esas 4
+    // cosas, quedó un residuo de $346.86 que no se pudo rastrear a
+    // ninguna transacción puntual ni para atrás del 14 sep — a pedido
+    // explícito de Pame ("corrígelo una vez y seguir adelante" en vez de
+    // seguir cruzando semanas más viejas), se resta aquí de una vez en
+    // vez de seguir buscando el origen exacto.
+    monto: -346.86,
+  },
 ]
 
 // Aplica, una sola vez cada una, las correcciones manuales pendientes
