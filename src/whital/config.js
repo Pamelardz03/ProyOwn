@@ -5,10 +5,11 @@
 //
 // Si `user.uid` está en esta lista, App.jsx renderiza el App Shell/motor
 // nuevo de Whital (src/whital/) en vez de la app de producción de hoy.
-// Vacío por ahora -- se llena con el UID real de la cuenta
-// pamela.rodriguezd@udem.edu la primera vez que Pame inicie sesión con
-// ella (se lee con una diagnosis de solo lectura, nunca escribiendo nada).
-export const WHITAL_UIDS = []
+// UID real de pamela.rodriguezd@udem.edu, leído el 2 oct con una
+// diagnosis de solo lectura (IndexedDB -> firebaseLocalStorageDb) sobre
+// una sesión que Pame inició a mano -- nunca se escribió nada para
+// obtenerlo.
+export const WHITAL_UIDS = ['mXsSrvUK61NuVct4EUa4sZ2YbTP2'] // pamela.rodriguezd@udem.edu
 
 export function esCuentaWhital(uid) {
   return !!uid && WHITAL_UIDS.includes(uid)
