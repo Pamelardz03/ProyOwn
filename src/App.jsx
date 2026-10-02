@@ -13,6 +13,8 @@ import MetricasStats from './pages/MetricasStats'
 import HistorialCompleto from './pages/HistorialCompleto'
 import PreciosFijos from './pages/PreciosFijos'
 import Sueldos from './pages/Sueldos'
+import { esCuentaWhital } from './whital/config'
+import WhitalShell from './whital/WhitalShell'
 
 // Las 5 pestañas principales muestran la barra inferior; las subpantallas de
 // Perfil (que se abren con "Volver") no, igual que en el diseño original.
@@ -98,6 +100,14 @@ function Gate() {
         <Login />
       </div>
     )
+  }
+
+  // Gate por cuenta para el proyecto Whital (ver organizador-gastos-reglas-
+  // actuales.md sección 10, punto 1): SOLO la cuenta de prueba UDEM ve el
+  // App Shell/motor nuevo (src/whital/) -- cualquier otra cuenta (incluida
+  // la personal real de Pame) sigue viendo la app de hoy exactamente igual.
+  if (esCuentaWhital(user?.uid)) {
+    return <WhitalShell />
   }
 
   return <AppShell />
