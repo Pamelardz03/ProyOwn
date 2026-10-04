@@ -9,6 +9,7 @@ import Campo, { Aviso } from '../components/Campo'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { PRESUPUESTO_SEMANAL_DEFAULT, generarFechasPago, ocurrenciasSueldo, todayISO } from '../lib/budget'
+import { CADENCIA_DEFAULT_MIN, OPCIONES_RECORDATORIO } from '../lib/recordatorio'
 import { borrarDatos, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '../lib/seed'
 import { fechaCorta, fmt } from '../lib/vista'
 
@@ -77,6 +78,44 @@ function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
           <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>{confirmarEliminar ? 'Toca de nuevo para eliminar todo, incluido el historial' : 'Eliminar todo'}</button>
         </>
       )}
+    </div>
+  )
+}
+
+// Cada cuánto recordar que registres gastos. Suena mientras la app esté abierta o
+// en segundo plano; con la app cerrada del todo haría falta push (FCM).
+function Recordatorios({ config, user, show }) {
+  const actual = config?.recordatorioCadaMin ?? CADENCIA_DEFAULT_MIN
+  const [permiso, setPermiso] = useState(typeof Notification === 'undefined' ? 'no-soportado' : Notification.permission)
+
+  const cambiar = async (min) => {
+    try {
+      await setUserDoc(user.uid, 'config', 'presupuesto', { recordatorioCadaMin: min })
+      show(min > 0 ? 'Recordatorio guardado' : 'Recordatorio apagado')
+    } catch {
+      show('No se pudo guardar')
+    }
+  }
+  const pedirPermiso = async () => {
+    if (typeof Notification === 'undefined') return
+    setPermiso(await Notification.requestPermission())
+  }
+
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="eyebrow">Recordatorios</div>
+      <Campo label="Recordarme registrar mis gastos" nota="Cuenta desde tu último gasto registrado y se repite hasta que registres algo. Si abres la app tarde, te avisa al entrar.">
+        <select className="fld" value={actual} onChange={(e) => cambiar(Number(e.target.value))}>
+          {OPCIONES_RECORDATORIO.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
+        </select>
+      </Campo>
+      {permiso === 'granted' && <Aviso tono="green">Las notificaciones del sistema están activadas.</Aviso>}
+      {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Permitir notificaciones del sistema</button>}
+      {permiso === 'denied' && <Aviso tono="amber">Bloqueaste las notificaciones en el navegador. Actívalas en los permisos del sitio; mientras tanto el aviso sale dentro de la app.</Aviso>}
+      {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no permite notificaciones del sistema; el aviso sale dentro de la app.</Aviso>}
+      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
+        Funcionan con la app abierta o en segundo plano. Con la app cerrada del todo, el teléfono no deja avisar sin notificaciones push (pendiente de activar en Firebase).
+      </div>
     </div>
   )
 }
@@ -229,6 +268,8 @@ export default function Ajustes() {
                   </div>
                 )}
             </div>
+
+            <Recordatorios config={datos.config} user={user} show={show} />
 
             <DatosDePrueba datos={datos} user={user} show={show} />
 

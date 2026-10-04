@@ -33,3 +33,21 @@ self.addEventListener('fetch', (event) => {
     )
   )
 })
+
+// Al tocar una notificación se enfoca la app (o se abre) en la URL indicada,
+// p.ej. el formulario de gasto. Solo actúa si algo llegó a mostrar una notificación.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const destino = new URL((event.notification.data && event.notification.data.url) || './', self.registration.scope).href
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ventanas) => {
+      for (const ventana of ventanas) {
+        if ('focus' in ventana) {
+          if ('navigate' in ventana) ventana.navigate(destino)
+          return ventana.focus()
+        }
+      }
+      return self.clients.openWindow(destino)
+    })
+  )
+})

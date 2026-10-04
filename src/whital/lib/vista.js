@@ -103,8 +103,9 @@ export function calcularVistaInicio(datos, hoyISO) {
 }
 
 // Avisos dentro de la app (banners de Inicio). Cada aviso trae un `id` estable
-// para poder descartarlo. `ahora` es un Date (se pasa para poder probarlo).
-export function calcularAvisos(datos, hoyISO, bolsas, ahora = new Date()) {
+// para poder descartarlo. (El recordatorio de registrar gastos es aparte: se
+// configura en Ajustes, ver hooks/useRecordatorioRegistro.js.)
+export function calcularAvisos(datos, hoyISO, bolsas) {
   const avisos = []
   const diaSemana = (parseISODate(hoyISO).getDay() + 6) % 7 // 0 = lunes
   const semanaInicio = startOfWeekISO(hoyISO)
@@ -148,10 +149,5 @@ export function calcularAvisos(datos, hoyISO, bolsas, ahora = new Date()) {
       })
     })
 
-  // Recordatorio del día: después de las 8 pm sin gastos registrados hoy.
-  const hayGastoHoy = (datos.gastos || []).some((g) => g.fecha === hoyISO)
-  if (ahora.getHours() >= 20 && !hayGastoHoy) {
-    avisos.push({ id: `registro-${hoyISO}`, tipo: 'registro', texto: 'Hoy no has registrado gastos. ¿Se te pasó alguno?' })
-  }
   return avisos
 }

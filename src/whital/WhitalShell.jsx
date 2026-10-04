@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import AvisoRecordatorio from './components/AvisoRecordatorio'
 import WhitalNav from './components/WhitalNav'
 import Ajustes from './pages/Ajustes'
 import Calendar from './pages/Calendar'
@@ -29,11 +30,13 @@ function useAtajoDelLauncher() {
 
 export default function WhitalShell() {
   useAtajoDelLauncher()
+  const location = useLocation()
   return (
     <div className="app-shell">
+      <AvisoRecordatorio />
       <Routes>
         <Route path="/" element={<Inicio />} />
-        <Route path="/gastos" element={<Gastos />} />
+        <Route path="/gastos" element={<Gastos key={location.key} />} />
         <Route path="/whimms" element={<Whimms />} />
         <Route path="/vitalls" element={<Vitalls />} />
         <Route path="/calendar" element={<Calendar />} />

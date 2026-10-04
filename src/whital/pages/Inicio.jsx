@@ -60,7 +60,7 @@ function AvisosInicio({ avisos, user, show }) {
     }
   }
 
-  const color = { cierre: 'var(--wine)', cobro: 'var(--green)', vitall: 'var(--amber)', registro: 'var(--muted)' }
+  const color = { cierre: 'var(--wine)', cobro: 'var(--green)', vitall: 'var(--amber)' }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {visibles.map((a) => (
