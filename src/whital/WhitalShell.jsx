@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import WhitalNav from './components/WhitalNav'
+import Ajustes from './pages/Ajustes'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
 import Inicio from './pages/Inicio'
@@ -18,6 +19,7 @@ export default function WhitalShell() {
         <Route path="/whimms" element={<Whimms />} />
         <Route path="/vitalls" element={<Vitalls />} />
         <Route path="/calendar" element={<Calendar />} />
+        <Route path="/ajustes" element={<Ajustes />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <WhitalNav />

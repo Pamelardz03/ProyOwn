@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Toggle from '../../components/Toggle'
 import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
@@ -238,7 +239,7 @@ function CardCajitas({ cajitas }) {
 }
 
 export default function Inicio() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
@@ -251,7 +252,7 @@ export default function Inicio() {
           <div className="eyebrow">Whital</div>
           <h1>Inicio</h1>
         </div>
-        <button onClick={logout} style={{ fontSize: 12, color: 'var(--muted)' }}>Salir</button>
+        <Link to="/ajustes" style={{ fontSize: 12, color: 'var(--wine)', fontWeight: 600 }}>Ajustes</Link>
       </div>
 
       {error && <div className="card" style={{ padding: 12, fontSize: 12, color: 'var(--red)' }}>{error}</div>}
