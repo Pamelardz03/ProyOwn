@@ -9,15 +9,36 @@ import FilaExcepcion from '../components/FilaExcepcion'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { parseISODate, proyectarColaWhimms, todayISO } from '../lib/budget'
-import { MESES, casillasDelMes, eventosDelMes } from '../lib/calendario'
-import { diaSemanaCorto, fmt, parametrosMotor } from '../lib/vista'
+import { MESES, casillasDelMes, eventosDelMes, proximosEventos } from '../lib/calendario'
+import { diaSemanaCorto, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
-const ENCABEZADOS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+const DIAS = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA']
+const COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
+const FILTROS = [['todos', 'Todos'], ['servicio', 'Pagos fijos'], ['compra', 'Whimm'], ['nomina', 'Sueldos']]
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 
-function titulo(iso) {
-  const d = parseISODate(iso)
-  return `${diaSemanaCorto(iso)} ${d.getDate()} de ${MESES[d.getMonth()]}`
+// Borde del día: un color por categoría; con 2 o más, el borde se reparte en partes iguales.
+function estiloDia(cats, esHoy) {
+  const unicas = [...new Set(cats)]
+  let borde = {}
+  if (unicas.length === 1) borde = { border: `2px solid ${COLOR[unicas[0]]}` }
+  else if (unicas.length > 1) {
+    const paso = 360 / unicas.length
+    const stops = unicas.map((c, i) => `${COLOR[c]} ${i * paso}deg ${(i + 1) * paso}deg`).join(', ')
+    borde = { border: '2px solid transparent', borderImage: `conic-gradient(${stops}) 1` }
+  }
+  if (esHoy) return { background: 'var(--red)', color: '#fff', fontWeight: 700, ...borde }
+  if (unicas.length === 0) return {}
+  return { ...borde, fontWeight: 600, ...(unicas.length === 1 ? { color: COLOR[unicas[0]] } : {}) }
+}
+
+function Leyenda({ color, solido, texto }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <span style={{ width: 9, height: 9, borderRadius: 2, ...(solido ? { background: color } : { border: `2px solid ${color}`, boxSizing: 'border-box' }) }} />
+      <span style={{ fontSize: 10, color: 'var(--muted)' }}>{texto}</span>
+    </div>
+  )
 }
 
 function IngresoRapido({ fecha, user, show, onListo }) {
@@ -28,8 +49,6 @@ function IngresoRapido({ fecha, user, show, onListo }) {
     try {
       await addUserDoc(user.uid, 'sueldosRapidos', { desc: desc.trim() || 'Ingreso', monto: num(monto), fecha })
       show('Ingreso agregado')
-      setDesc('')
-      setMonto('')
       onListo()
     } catch {
       show('No se pudo guardar')
@@ -38,10 +57,10 @@ function IngresoRapido({ fecha, user, show, onListo }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1 }}><Campo label="Descripción"><input className="fld" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Uñas, venta…" /></Campo></div>
+        <div style={{ flex: 1 }}><Campo label="Descripción"><input className="fld" value={desc} onChange={(e) => setDesc(e.target.value)} /></Campo></div>
         <div style={{ flex: 1 }}><Campo label="Monto"><input className="fld" type="number" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} /></Campo></div>
       </div>
-      <button className="btn-primary" style={{ opacity: num(monto) > 0 ? 1 : 0.45 }} disabled={!(num(monto) > 0)} onClick={guardar}>Agregar ingreso a este día</button>
+      <button className="btn-primary" style={{ opacity: num(monto) > 0 ? 1 : 0.45 }} disabled={!(num(monto) > 0)} onClick={guardar}>Agregar ingreso</button>
     </div>
   )
 }
@@ -65,24 +84,24 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
 
       {evento?.ingresos.length > 0 && (
         <div>
-          <div className="eyebrow" style={{ color: 'var(--green)' }}>Ingresos</div>
+          <div className="eyebrow" style={{ color: COLOR.nomina }}>Sueldos</div>
           {evento.ingresos.map((i) =>
-            i.tipo === 'fijo'
-              ? <FilaExcepcion key={`${i.entidad.id}-${i.fecha}`} coleccion="sueldosFijos" entidad={i.entidad} ocurrencia={i} hoy={hoy} user={user} show={show} nombre={i.nombre} />
-              : (
-                <div key={i.entidad.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--beige2)' }}>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{i.nombre}</div>
-                  <div className="mono" style={{ fontSize: 13 }}>{fmt(i.monto)}</div>
-                  <button style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }} onClick={() => borrarRapido(i.entidad.id)}>Eliminar</button>
-                </div>
-              )
+            i.tipo === 'fijo' ? (
+              <FilaExcepcion key={`${i.entidad.id}-${i.fecha}`} coleccion="sueldosFijos" entidad={i.entidad} ocurrencia={i} hoy={hoy} user={user} show={show} nombre={i.nombre} />
+            ) : (
+              <div key={i.entidad.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--beige2)' }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{i.nombre}</div>
+                <div className="mono" style={{ fontSize: 13 }}>{fmt(i.monto)}</div>
+                <button style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }} onClick={() => borrarRapido(i.entidad.id)}>Eliminar</button>
+              </div>
+            )
           )}
         </div>
       )}
 
       {evento?.compromisos.length > 0 && (
         <div>
-          <div className="eyebrow" style={{ color: 'var(--red)' }}>Compromisos</div>
+          <div className="eyebrow" style={{ color: COLOR.servicio }}>Pagos fijos</div>
           {evento.compromisos.map((c) => (
             <FilaExcepcion key={`${c.entidad.id}-${c.fecha}`} coleccion="pagosFijos" entidad={c.entidad} ocurrencia={c} hoy={hoy} user={user} show={show} nombre={`${c.nombre}${c.msi ? ' (a meses)' : ''}`} />
           ))}
@@ -91,20 +110,21 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
 
       {evento?.compras.length > 0 && (
         <div>
-          <div className="eyebrow">🎁 Compras proyectadas</div>
+          <div className="eyebrow" style={{ color: COLOR.compra }}>Whimm</div>
           {evento.compras.map((c) => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--beige2)' }}>
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{c.nombre}</div>
+              <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{c.nombre} — estimado disponible</div>
               <div className="mono" style={{ fontSize: 13 }}>{fmt(c.faltante)}</div>
             </div>
           ))}
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>La fecha se mueve sola si cambian tus gastos, ingresos o Vitalls.</div>
         </div>
       )}
 
-      {agregando
-        ? <IngresoRapido fecha={fecha} user={user} show={show} onListo={() => setAgregando(false)} />
-        : <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => setAgregando(true)}>+ Ingreso rápido en este día</button>}
+      {agregando ? (
+        <IngresoRapido fecha={fecha} user={user} show={show} onListo={() => setAgregando(false)} />
+      ) : (
+        <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => setAgregando(true)}>+ Ingreso rápido</button>
+      )}
     </div>
   )
 }
@@ -117,79 +137,99 @@ export default function Calendar() {
   const hoyDate = parseISODate(hoy)
   const [vista, setVista] = useState({ anio: hoyDate.getFullYear(), mes: hoyDate.getMonth() })
   const [dia, setDia] = useState(null)
+  const [filtro, setFiltro] = useState('todos')
+  const [visibles, setVisibles] = useState(20)
 
   const cola = useMemo(() => (loading ? [] : proyectarColaWhimms(parametrosMotor(datos, hoy))), [datos, loading, hoy])
-  const { porDia, totales } = useMemo(() => eventosDelMes({ datos, cola, anio: vista.anio, mes: vista.mes }), [datos, cola, vista])
+  const { porDia } = useMemo(() => eventosDelMes({ datos, cola, anio: vista.anio, mes: vista.mes }), [datos, cola, vista])
   const casillas = useMemo(() => casillasDelMes(vista.anio, vista.mes), [vista])
+  const proximos = useMemo(() => proximosEventos({ datos, cola, hoyISO: hoy }), [datos, cola, hoy])
+
+  const filtrados = proximos.filter((e) => filtro === 'todos' || e.cat === filtro)
+  const mostrados = filtrados.slice(0, visibles)
 
   const mover = (delta) => {
     const d = new Date(vista.anio, vista.mes + delta, 1)
     setVista({ anio: d.getFullYear(), mes: d.getMonth() })
   }
+  const flecha = { width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
   return (
     <>
-      <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div className="eyebrow">Whital</div>
-          <h1>Calendar</h1>
-        </div>
-        {error && <Aviso tono="red">{error}</Aviso>}
-        {loading && !error && <div className="empty-state">Cargando…</div>}
-        {!loading && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button className="back-btn" onClick={() => mover(-1)} aria-label="Mes anterior"><IconChevronLeft /></button>
-              <div style={{ fontSize: 15, fontWeight: 600, textTransform: 'capitalize' }}>{MESES[vista.mes]} {vista.anio}</div>
-              <button className="back-btn" onClick={() => mover(1)} aria-label="Mes siguiente"><IconChevronRight /></button>
-            </div>
+      <div className="screen">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <h1>Calendario</h1>
+          {error && <Aviso tono="red">{error}</Aviso>}
+          {loading && !error && <div className="empty-state">Cargando…</div>}
+          {!loading && (
+            <>
+              <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <button aria-label="Mes anterior" onClick={() => mover(-1)} style={flecha}><IconChevronLeft size={14} /></button>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{MESES[vista.mes][0].toUpperCase() + MESES[vista.mes].slice(1)} {vista.anio}</div>
+                  <button aria-label="Mes siguiente" onClick={() => mover(1)} style={flecha}><IconChevronRight size={14} color="var(--wine)" /></button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, fontSize: 10, color: 'var(--muted)', fontWeight: 600, textAlign: 'center', marginBottom: 6 }}>
+                  {DIAS.map((d) => <div key={d}>{d}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+                  {casillas.map((f, i) => {
+                    if (!f) return <div key={`h${i}`} style={{ height: 32 }} />
+                    const ev = porDia.get(f)
+                    const cats = []
+                    if (ev?.ingresos.some((x) => !x.omitida)) cats.push('nomina')
+                    if (ev?.compromisos.some((x) => !x.omitida)) cats.push('servicio')
+                    if (ev?.compras.length > 0) cats.push('compra')
+                    return (
+                      <div key={f} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32 }}>
+                        <button
+                          className="mono"
+                          onClick={() => setDia(f)}
+                          aria-label={`Día ${parseISODate(f).getDate()}`}
+                          style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', fontSize: 12, ...estiloDia(cats, f === hoy) }}
+                        >
+                          {parseISODate(f).getDate()}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--beige2)' }}>
+                  <Leyenda color="var(--red)" solido texto="Hoy" />
+                  <Leyenda color={COLOR.nomina} texto="Sueldos" />
+                  <Leyenda color={COLOR.servicio} texto="Pagos fijos" />
+                  <Leyenda color={COLOR.compra} texto="Whimm" />
+                </div>
+              </div>
 
-            <div className="card" style={{ padding: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
-                {ENCABEZADOS.map((h, i) => <div key={i} className="eyebrow" style={{ textAlign: 'center' }}>{h}</div>)}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                {casillas.map((f, i) => {
-                  if (!f) return <div key={`h${i}`} />
-                  const ev = porDia.get(f)
-                  const ingreso = ev?.ingresos.some((x) => !x.omitida)
-                  const compromiso = ev?.compromisos.some((x) => !x.omitida)
-                  const compra = ev?.compras.length > 0
-                  const esHoy = f === hoy
-                  return (
-                    <button key={f} onClick={() => setDia(f)} style={{ aspectRatio: '1 / 1.05', borderRadius: 10, background: esHoy ? 'var(--wine)' : 'var(--beige2)', color: esHoy ? '#fff' : 'var(--text)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, fontSize: 12, fontWeight: esHoy ? 700 : 500 }}>
-                      <span>{parseISODate(f).getDate()}</span>
-                      <span style={{ display: 'flex', gap: 3, height: 8, alignItems: 'center', fontSize: 8, lineHeight: 1 }}>
-                        {ingreso && <span style={{ width: 6, height: 6, borderRadius: 3, background: esHoy ? '#b7d6a8' : 'var(--green)' }} />}
-                        {compromiso && <span style={{ width: 6, height: 6, borderRadius: 3, background: esHoy ? '#f0b3a8' : 'var(--red)' }} />}
-                        {compra && <span>🎁</span>}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 10, color: 'var(--muted)', flexWrap: 'wrap' }}>
-                <span><span style={{ color: 'var(--green)' }}>●</span> Ingresos</span>
-                <span><span style={{ color: 'var(--red)' }}>●</span> Compromisos</span>
-                <span>🎁 Compras proyectadas</span>
-              </div>
-            </div>
-
-            <div className="card" style={{ padding: 14, display: 'flex', justifyContent: 'space-between' }}>
               <div>
-                <div className="eyebrow">Entra en el mes</div>
-                <div className="mono" style={{ fontSize: 15, color: 'var(--green)', marginTop: 3 }}>{fmt(totales.ingresos)}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Próximos eventos</div>
+                <div className="chiprow" style={{ marginBottom: 12 }}>
+                  {FILTROS.map(([k, t]) => (
+                    <span key={k} onClick={() => { setFiltro(k); setVisibles(20) }} className="pill" style={{ background: filtro === k ? 'var(--wine)' : 'transparent', color: filtro === k ? '#fff' : 'var(--muted)' }}>{t}</span>
+                  ))}
+                </div>
+                <div className="row-list">
+                  {mostrados.map((e) => (
+                    <div key={e.id} className="row-list-item">
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR[e.cat], flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 13 }}>{e.titulo}</span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{fechaCorta(e.fecha)}</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: e.monto > 0 ? 'var(--green)' : 'var(--text)' }}>{e.monto > 0 ? '+' : ''}{fmt(Math.abs(e.monto))}</span>
+                    </div>
+                  ))}
+                  {mostrados.length === 0 && <div className="empty-state">Sin eventos próximos para este filtro</div>}
+                </div>
+                {filtrados.length > mostrados.length && (
+                  <button onClick={() => setVisibles((n) => n + 20)} style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>Ver más</button>
+                )}
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="eyebrow">Compromisos</div>
-                <div className="mono" style={{ fontSize: 15, color: 'var(--red)', marginTop: 3 }}>{fmt(totales.compromisos)}</div>
-              </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
-      <Sheet abierto={!!dia} onClose={() => setDia(null)} titulo={dia ? titulo(dia) : ''}>
+      <Sheet abierto={!!dia} onClose={() => setDia(null)} titulo={dia ? `${diaSemanaCorto(dia)} ${parseISODate(dia).getDate()} de ${MESES[parseISODate(dia).getMonth()]}` : ''}>
         {dia && <DiaSheet key={dia} fecha={dia} evento={porDia.get(dia)} hoy={hoy} user={user} show={show} />}
       </Sheet>
       <Toast message={message} />

@@ -11,10 +11,10 @@ export function rangoDelMes(anio, mes) {
   return { inicio, fin }
 }
 
-// Casillas del mes en cuadrícula Lun-Dom: null para los huecos iniciales.
+// Casillas del mes en cuadrícula Dom-Sáb: null para los huecos iniciales.
 export function casillasDelMes(anio, mes) {
   const { inicio, fin } = rangoDelMes(anio, mes)
-  const huecos = (new Date(anio, mes, 1).getDay() + 6) % 7
+  const huecos = new Date(anio, mes, 1).getDay() // la cuadrícula empieza en domingo, como la app original
   const dias = []
   for (let f = inicio; f <= fin; f = addDaysISO(f, 1)) dias.push(f)
   return [...Array(huecos).fill(null), ...dias]
@@ -53,4 +53,28 @@ export function eventosDelMes({ datos, cola, anio, mes }) {
     compromisos += vivas(d.compromisos).reduce((s, x) => s + x.monto, 0)
   })
   return { porDia, totales: { ingresos, compromisos } }
+}
+
+// Lista de próximos eventos (a partir de mañana) para la lista bajo el calendario.
+// cat: 'nomina' (sueldos) | 'servicio' (pagos fijos y Vitalls) | 'compra' (Whimm proyectado).
+export function proximosEventos({ datos, cola, hoyISO, dias = 365 }) {
+  const desde = addDaysISO(hoyISO, 1)
+  const hasta = addDaysISO(hoyISO, dias)
+  const out = []
+  ;(datos.sueldosFijos || []).forEach((s) => {
+    ocurrenciasSueldo(s, hasta, desde).filter((o) => !o.omitida).forEach((o) => out.push({ id: `sf-${s.id}-${o.fecha}`, cat: 'nomina', titulo: `${s.name || s.nombre || 'Sueldo'} depositado`, fecha: o.fecha, monto: o.monto }))
+  })
+  ;(datos.sueldosRapidos || []).forEach((r) => {
+    if (r.fecha && r.fecha >= desde && r.fecha <= hasta) out.push({ id: `sr-${r.id}`, cat: 'nomina', titulo: `${r.desc || 'Ingreso'} depositado`, fecha: r.fecha, monto: Number(r.monto) || 0 })
+  })
+  ;(datos.pagosFijos || []).forEach((p) => {
+    ocurrenciasPagoFijo(p, hasta, desde).filter((o) => !o.omitida).forEach((o) => out.push({ id: `pf-${p.id}-${o.fecha}`, cat: 'servicio', tipo: p.tipo, titulo: `Vencimiento — ${p.name}`, fecha: o.fecha, monto: -o.monto }))
+  })
+  const nombres = new Map((datos.whimms || []).map((w) => [w.id, w]))
+  ;(cola || []).forEach((r) => {
+    if (r.fechaProyectada && r.fechaProyectada >= desde && r.fechaProyectada <= hasta) {
+      out.push({ id: `w-${r.id}`, cat: 'compra', titulo: `${nombres.get(r.id)?.name || 'Whimm'} — estimado disponible`, fecha: r.fechaProyectada, monto: -(Number(nombres.get(r.id)?.precio) || 0) })
+    }
+  })
+  return out.sort((a, b) => a.fecha.localeCompare(b.fecha))
 }

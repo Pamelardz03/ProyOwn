@@ -30,7 +30,6 @@ function OcurrenciasSerie({ pago, hoy, user, show }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {ocurrencias.map((o) => <FilaExcepcion key={o.fecha} coleccion="pagosFijos" entidad={pago} ocurrencia={o} hoy={hoy} user={user} show={show} />)}
-      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>El interruptor omite solo esa fecha; la serie sigue igual.</div>
     </div>
   )
 }
@@ -93,7 +92,6 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar }) {
           <button className="segbtn" style={{ background: plazos ? 'var(--wine)' : 'var(--beige2)', color: plazos ? '#fff' : 'var(--muted)' }} onClick={() => setPlazos(true)}>A plazos (con fin)</button>
         </div>
       )}
-      {msi && <Aviso tono="amber">Este pago nació de un Whimm a meses. Cambiar su monto o fechas afecta cuándo se compra lo demás de tu fila.</Aviso>}
 
       <Campo label="Nombre"><input className="fld" value={name} onChange={(e) => setName(e.target.value)} placeholder="Spotify, Teléfono, Colegiatura…" /></Campo>
       <div style={{ display: 'flex', gap: 10 }}>
@@ -104,7 +102,7 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar }) {
           </Campo>
         </div>
       </div>
-      <Campo label={nuevo ? 'Primer vencimiento' : 'Vencimiento base de la serie'} nota={!nuevo ? 'Las demás fechas se calculan a partir de esta.' : undefined}>
+      <Campo label={nuevo ? 'Primer vencimiento' : 'Vencimiento base'}>
         <input className="fld" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
       </Campo>
       {plazos && (
@@ -176,10 +174,7 @@ export default function Vitalls() {
   return (
     <>
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div className="eyebrow">Whital</div>
-          <h1>Vitalls</h1>
-        </div>
+        <h1>Vitalls</h1>
         {error && <Aviso tono="red">{error}</Aviso>}
         {loading && !error && <div className="empty-state">Cargando…</div>}
         {!loading && (
@@ -187,13 +182,13 @@ export default function Vitalls() {
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Suscripciones y recurrentes</div>
               {suscripciones.length === 0
-                ? <div className="empty-state">Sin suscripciones. Agrega Spotify, estacionamiento, etc. con el botón +.</div>
+                ? <div className="empty-state">Sin suscripciones</div>
                 : <div className="row-list">{suscripciones.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} />)}</div>}
             </div>
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Pagos a plazos</div>
               {plazos.length === 0
-                ? <div className="empty-state">Sin pagos a plazos. Los de MSI aparecen aquí cuando pasas un Whimm a meses.</div>
+                ? <div className="empty-state">Sin pagos a plazos</div>
                 : <div className="row-list">{plazos.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} />)}</div>}
             </div>
           </>

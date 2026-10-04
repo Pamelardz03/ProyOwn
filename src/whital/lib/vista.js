@@ -7,8 +7,10 @@ import {
   addDaysISO,
   analizarPresupuestoSemanal,
   computeBolsas,
+  diasEntreISO,
   distribucionCajitas,
   gastoNeto,
+  ocurrenciasPagoFijo,
   ocurrenciasSueldo,
   parseISODate,
   proximosVitalls,
@@ -87,8 +89,27 @@ export function calcularVistaInicio(datos, hoyISO) {
     .filter((r) => r.fechaLimite && (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura'))
     .map((r) => ({ ...r, whimm: porId.get(r.id) }))
 
+  // Próxima compra = el Whimm con la fecha proyectada más cercana.
+  const itemCola = (r) => ({ ...r, whimm: porId.get(r.id) })
+  const conFecha = cola.filter((r) => r.fechaProyectada).sort((a, b) => a.fechaProyectada.localeCompare(b.fechaProyectada) || b.prioridad - a.prioridad)
+  const proximaCompra = conFecha[0] ? { ...itemCola(conFecha[0]), dias: diasEntreISO(hoyISO, conFecha[0].fechaProyectada) } : null
+
+  // Lo que pasa HOY: cobros, vencimientos y Whimms listos para comprar.
+  const accionesHoy = [
+    ...(base.sueldosFijos || []).flatMap((s) =>
+      ocurrenciasSueldo(s, hoyISO, hoyISO).filter((o) => !o.omitida).map((o) => ({ id: `sueldo-${s.id}`, titulo: s.name || s.nombre || 'Sueldo', sub: 'Sueldo', monto: o.monto }))
+    ),
+    ...(base.pagosFijos || []).flatMap((p) =>
+      ocurrenciasPagoFijo(p, hoyISO, hoyISO).filter((o) => !o.omitida).map((o) => ({ id: `pago-${p.id}`, titulo: p.name, sub: p.tipo === 'MSI' ? 'Pago a meses' : p.tipo === 'Vitall' ? 'Vitall' : 'Pago fijo', monto: -o.monto }))
+    ),
+    ...cola.filter((r) => r.estatus === 'comprable_hoy').map((r) => ({ id: `whimm-${r.id}`, titulo: porId.get(r.id)?.name || 'Whimm', sub: 'Listo para comprar', monto: -r.faltante })),
+  ]
+
   return {
     saldoReal,
+    proximaCompra,
+    accionesHoy,
+    colaDetallada: cola.map(itemCola),
     bolsas,
     presupuestoSemanal: base.presupuestoSemanal,
     dias,
@@ -118,34 +139,20 @@ export function calcularAvisos(datos, hoyISO, bolsas) {
       id: `cierre-${semanaInicio}`,
       tipo: 'cierre',
       texto: sobro
-        ? `Cerró la semana: te sobraron ${fmt(cierre.resultado)} de ${fmt(cierre.presupuesto)}. Ese dinero adelanta tu fila de Whimms.`
-        : `Cerró la semana: te pasaste ${fmt(-cierre.resultado)} de ${fmt(cierre.presupuesto)}. Eso retrasa un poco tu fila de Whimms.`,
+        ? `Cerró la semana: te sobraron ${fmt(cierre.resultado)}.`
+        : `Cerró la semana: te pasaste ${fmt(-cierre.resultado)}.`,
     })
   }
 
-  // Cobros de hoy y de mañana.
-  const manana = addDaysISO(hoyISO, 1)
-  ;(datos.sueldosFijos || []).forEach((s) => {
-    ocurrenciasSueldo(s, manana, hoyISO)
-      .filter((o) => !o.omitida)
-      .forEach((o) => {
-        avisos.push({
-          id: `cobro-${s.id}-${o.fecha}`,
-          tipo: 'cobro',
-          texto: `${o.fecha === hoyISO ? 'Hoy' : 'Mañana'} te toca cobrar ${s.name || s.nombre || 'tu sueldo'}: ${fmt(o.monto)}.`,
-        })
-      })
-  })
-
-  // Vitalls que vencen hoy o en los próximos 2 días (con opción de omitir).
+  // Vitalls que vencen mañana o pasado (los de hoy ya salen en "Acciones de hoy"), con opción de omitir.
   proximosVitalls({ pagosFijos: datos.pagosFijos, hoyISO, dias: 2 })
-    .filter((v) => !v.omitida)
+    .filter((v) => !v.omitida && v.fecha > hoyISO)
     .forEach((v) => {
       avisos.push({
         id: `vitall-${v.pagoId}-${v.fecha}`,
         tipo: 'vitall',
         vitall: v,
-        texto: `${v.fecha === hoyISO ? 'Hoy' : v.fecha === manana ? 'Mañana' : `El ${diaSemanaCorto(v.fecha)} ${fechaCorta(v.fecha)}`} vence ${v.name}: ${fmt(v.monto)}.`,
+        texto: `${v.fecha === addDaysISO(hoyISO, 1) ? 'Mañana' : `El ${diaSemanaCorto(v.fecha)} ${fechaCorta(v.fecha)}`} vence ${v.name}: ${fmt(v.monto)}.`,
       })
     })
 

@@ -37,7 +37,7 @@ export default function WhitalShell() {
       <Routes>
         <Route path="/" element={<Inicio />} />
         <Route path="/gastos" element={<Gastos key={location.key} />} />
-        <Route path="/whimms" element={<Whimms />} />
+        <Route path="/whimms" element={<Whimms key={location.key} />} />
         <Route path="/vitalls" element={<Vitalls />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/ajustes" element={<Ajustes />} />

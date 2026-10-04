@@ -6,7 +6,7 @@ const ITEMS = [
   { to: '/gastos', label: 'Gastos', Icon: IconReceipt },
   { to: '/whimms', label: 'Whimms', Icon: IconBag },
   { to: '/vitalls', label: 'Vitalls', Icon: IconVitall },
-  { to: '/calendar', label: 'Calendar', Icon: IconCalendar },
+  { to: '/calendar', label: 'Calendario', Icon: IconCalendar },
 ]
 
 export default function WhitalNav() {

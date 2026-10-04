@@ -62,19 +62,18 @@ function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
           </Campo>
         </div>
       </div>
-      <Campo label="Cobra desde" nota={frecuencia === 'Quincenal' ? 'Quincenal = días 15 y último de cada mes, a partir de esta fecha.' : frecuencia === 'Semanal' ? 'Semanal = cada 7 días desde esta fecha (usa el primer día que cobraste).' : 'Mensual = el mismo día de cada mes.'}>
+      <Campo label="Cobra desde">
         <input className="fld" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
       </Campo>
       {!nuevo && (frecuencia !== sueldo.frecuencia || fechaInicio !== sueldo.fechaInicio) && (
-        <Aviso tono="amber">Cambiar la frecuencia o la fecha de inicio vuelve a calcular todas las fechas de cobro. Las excepciones por fecha se conservan.</Aviso>
+        <Aviso tono="amber">Se recalcularán las fechas de cobro (las excepciones se conservan).</Aviso>
       )}
       <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar sueldo' : 'Guardar cambios'}</button>
       {!nuevo && (
         <>
-          <div style={{ fontSize: 11, color: 'var(--muted)' }}>Para omitir o cambiar un cobro de un día específico, ábrelo en Calendar.</div>
           {detenido
-            ? <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={reanudar}>Reanudar (hoy dejó de cobrarse desde {fechaCorta(sueldo.fechaFin)})</button>
-            : <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={detener}>Detener a partir de hoy (conserva el historial)</button>}
+            ? <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={reanudar}>Reanudar (detenido desde {fechaCorta(sueldo.fechaFin)})</button>
+            : <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={detener}>Detener a partir de hoy</button>}
           <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>{confirmarEliminar ? 'Toca de nuevo para eliminar todo, incluido el historial' : 'Eliminar todo'}</button>
         </>
       )}
@@ -104,18 +103,16 @@ function Recordatorios({ config, user, show }) {
   return (
     <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="eyebrow">Recordatorios</div>
-      <Campo label="Recordarme registrar mis gastos" nota="Cuenta desde tu último gasto registrado y se repite hasta que registres algo. Si abres la app tarde, te avisa al entrar.">
+      <Campo label="Recordarme registrar mis gastos">
         <select className="fld" value={actual} onChange={(e) => cambiar(Number(e.target.value))}>
           {OPCIONES_RECORDATORIO.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
         </select>
       </Campo>
-      {permiso === 'granted' && <Aviso tono="green">Las notificaciones del sistema están activadas.</Aviso>}
-      {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Permitir notificaciones del sistema</button>}
-      {permiso === 'denied' && <Aviso tono="amber">Bloqueaste las notificaciones en el navegador. Actívalas en los permisos del sitio; mientras tanto el aviso sale dentro de la app.</Aviso>}
-      {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no permite notificaciones del sistema; el aviso sale dentro de la app.</Aviso>}
-      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
-        Funcionan con la app abierta o en segundo plano. Con la app cerrada del todo, el teléfono no deja avisar sin notificaciones push (pendiente de activar en Firebase).
-      </div>
+      {permiso === 'granted' && <Aviso tono="green">Notificaciones activadas.</Aviso>}
+      {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Permitir notificaciones</button>}
+      {permiso === 'denied' && <Aviso tono="amber">Notificaciones bloqueadas en el navegador.</Aviso>}
+      {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no admite notificaciones.</Aviso>}
+      <div style={{ fontSize: 10, color: 'var(--muted)' }}>Con la app cerrada del todo no avisa (falta push).</div>
     </div>
   )
 }
@@ -147,15 +144,15 @@ function DatosDePrueba({ datos, user, show }) {
 
   return (
     <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="eyebrow">Datos de prueba · solo esta cuenta</div>
+      <div className="eyebrow">Datos de prueba</div>
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
-        Borra TODOS tus gastos, Whimms, Vitalls, sueldos y ajustes de esta cuenta y carga el escenario de prueba (tu historial real + el plan de Gemini).
+        Borra todo lo de esta cuenta y carga el escenario de prueba.
       </div>
       <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.5 : 1, background: confirmar === 'recargar' ? 'var(--red)' : 'var(--wine)' }} onClick={() => (confirmar === 'recargar' ? correr(true) : setConfirmar('recargar'))}>
         {trabajando ? 'Trabajando…' : confirmar === 'recargar' ? 'Toca de nuevo: borrar y cargar' : 'Borrar todo y cargar datos de prueba'}
       </button>
       <button disabled={trabajando} style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmar === 'borrar' ? correr(false) : setConfirmar('borrar'))}>
-        {confirmar === 'borrar' ? 'Toca de nuevo para borrar todo' : 'Solo borrar todo (dejar la cuenta en blanco)'}
+        {confirmar === 'borrar' ? 'Toca de nuevo para borrar todo' : 'Solo borrar todo'}
       </button>
     </div>
   )
@@ -207,10 +204,7 @@ export default function Ajustes() {
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="back-btn" onClick={() => navigate('/')} aria-label="Volver"><IconChevronLeft /></button>
-          <div>
-            <div className="eyebrow">Whital</div>
-            <h1>Ajustes</h1>
-          </div>
+          <h1>Ajustes</h1>
         </div>
         {error && <Aviso tono="red">{error}</Aviso>}
         {loading && !error && <div className="empty-state">Cargando…</div>}
@@ -219,10 +213,10 @@ export default function Ajustes() {
           <>
             <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="eyebrow">Dinero</div>
-              <Campo label="Presupuesto semanal fijo" nota="Lo que te das para gastar de lunes a domingo. Lo demás queda libre para Whimms.">
+              <Campo label="Presupuesto semanal fijo">
                 <input className="fld" type="number" inputMode="decimal" value={valorPresupuesto} onChange={(e) => setPresupuesto(e.target.value)} />
               </Campo>
-              <Campo label="Saldo inicial" nota="Lo que tenías en el banco el día que empezaste a registrar. Si no cuadra con tu banco hoy, usa 'Ajustar saldo a mi banco' en Inicio.">
+              <Campo label="Saldo inicial">
                 <input className="fld" type="number" inputMode="decimal" value={valorSaldo} onChange={(e) => setSaldoInicial(e.target.value)} />
               </Campo>
               <button className="btn-primary" style={{ opacity: cambioConfig ? 1 : 0.45 }} disabled={!cambioConfig} onClick={guardarConfig}>Guardar</button>
@@ -231,7 +225,7 @@ export default function Ajustes() {
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Sueldos fijos</div>
               {datos.sueldosFijos.length === 0
-                ? <div className="empty-state">Sin sueldos todavía. Agrega el primero con el botón +.</div>
+                ? <div className="empty-state">Sin sueldos</div>
                 : (
                   <div className="row-list">
                     {datos.sueldosFijos.map((s) => (
@@ -252,7 +246,7 @@ export default function Ajustes() {
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Ajustes de saldo a mi banco</div>
               {ajustes.length === 0
-                ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>Ninguno. Aparecen aquí cuando uses "Ajustar saldo a mi banco" en Inicio.</div>
+                ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>Ninguno</div>
                 : (
                   <div className="row-list">
                     {ajustes.map((a) => (
