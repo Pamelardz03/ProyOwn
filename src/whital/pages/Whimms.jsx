@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
+import FilaDeslizable from '../components/FilaDeslizable'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -15,7 +16,6 @@ import {
   NIVEL_MAX,
   addDaysISO,
   addMonthsISO,
-  analizarPresupuestoSemanal,
   computeBolsas,
   normalizarNivel,
   ocurrenciasPagoFijo,
@@ -24,7 +24,7 @@ import {
   repartoProgreso,
   todayISO,
 } from '../lib/budget'
-import { fechaCorta, fmt, parametrosMotor } from '../lib/vista'
+import { enDias, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 const scoreDe10 = (score) => Math.min(10, Math.max(0, Number(score) || 0) * 1.1).toFixed(1)
@@ -41,11 +41,12 @@ function sitioDe(url) {
   }
 }
 
-function Dato({ label, valor, color }) {
+function Dato({ label, valor, color, sub }) {
   return (
     <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
       <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3, color }}>{valor}</div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
@@ -77,48 +78,46 @@ function Barra({ precio, progreso, alto = 6, texto = true }) {
   )
 }
 
-function PresupuestoSemanal({ datos, base, user, show }) {
-  const analisis = useMemo(() => analizarPresupuestoSemanal({ gastos: datos.gastos, presupuestoSemanal: base.presupuestoSemanal, hoyISO: base.hoyISO }), [datos.gastos, base])
-  const bolsas = useMemo(() => computeBolsas(base), [base])
-  const [editando, setEditando] = useState(false)
-  const [valor, setValor] = useState('')
+// "Reparto y prioridad": cuántos Whimms se van juntando a la vez (barra de avance).
+function RepartoPrioridad({ libre, n, user, show }) {
+  const [abierto, setAbierto] = useState(false)
+  const [valor, setValor] = useState(n)
 
-  const guardar = async (monto) => {
-    if (!(monto > 0)) return
+  const guardar = async () => {
     try {
-      await setUserDoc(user.uid, 'config', 'presupuesto', { presupuestoSemanal: monto })
-      show('Presupuesto actualizado')
-      setEditando(false)
+      await setUserDoc(user.uid, 'config', 'presupuesto', { whimmsSimultaneos: valor })
+      show('Guardado')
+      setAbierto(false)
     } catch {
       show('No se pudo guardar')
     }
   }
+  const paso = { width: 40, height: 40, borderRadius: 20, background: 'var(--beige2)', fontSize: 20, fontWeight: 600, color: 'var(--wine)', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
   return (
-    <div className="card" style={{ padding: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+    <>
+      <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Presupuesto semanal</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(base.presupuestoSemanal)}/semana · {fmt(bolsas.bolsaWhimms)} libres para Whimms</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(libre)} libres · {n} a la vez</div>
         </div>
-        <button aria-label="Editar presupuesto semanal" onClick={() => { setValor(String(base.presupuestoSemanal)); setEditando(!editando) }} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <button aria-label="Editar reparto y prioridad" onClick={() => { setValor(n); setAbierto(true) }} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <IconEdit size={14} color="var(--wine)" />
         </button>
       </div>
-      {editando && (
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input className="fld" type="number" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
-            <button className="segbtn" style={{ background: 'var(--wine)', color: '#fff', flex: 'none', padding: '0 16px' }} onClick={() => guardar(num(valor))}>Guardar</button>
-          </div>
-          {analisis.confiable && analisis.sugerido !== base.presupuestoSemanal && (
-            <button style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--wine)', fontWeight: 700, textDecoration: 'underline' }} onClick={() => guardar(analisis.sugerido)}>
-              Lo que más gastas por semana: {fmt(analisis.sugerido)} · usar
-            </button>
-          )}
+      <Modal abierto={abierto} onClose={() => setAbierto(false)}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Financiar a la vez</div>
+          <button aria-label="Cerrar" onClick={() => setAbierto(false)} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconClose /></button>
         </div>
-      )}
-    </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22, marginBottom: 18 }}>
+          <button aria-label="Menos Whimms a la vez" style={paso} onClick={() => setValor((v) => Math.max(1, v - 1))}>−</button>
+          <div className="mono" style={{ fontSize: 34, fontWeight: 500, minWidth: 40, textAlign: 'center' }}>{valor}</div>
+          <button aria-label="Más Whimms a la vez" style={paso} onClick={() => setValor((v) => Math.min(10, v + 1))}>+</button>
+        </div>
+        <button className="btn-primary" onClick={guardar}>Guardar</button>
+      </Modal>
+    </>
   )
 }
 
@@ -228,8 +227,8 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
             <Barra precio={precio} progreso={progreso} alto={10} />
           </div>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-            <Dato label="Fecha estimada" valor={r?.fechaProyectada ? (r.estatus === 'comprable_hoy' ? 'Hoy' : fechaCorta(r.fechaProyectada)) : 'Sin fecha segura'} />
-            <Dato label="Fecha límite" valor={whimm.fechaLimite ? fechaCorta(whimm.fechaLimite) : '—'} color={tarde ? 'var(--red)' : undefined} />
+            <Dato label="Fecha estimada" valor={r?.fechaProyectada ? (r.estatus === 'comprable_hoy' ? 'Hoy' : fechaCorta(r.fechaProyectada)) : 'Sin fecha segura'} sub={r?.fechaProyectada && r.estatus !== 'comprable_hoy' ? enDias(r.fechaProyectada, hoy) : null} />
+            <Dato label="Fecha límite" valor={whimm.fechaLimite ? fechaCorta(whimm.fechaLimite) : '—'} color={tarde ? 'var(--red)' : undefined} sub={whimm.fechaLimite ? enDias(whimm.fechaLimite, hoy) : null} />
           </div>
           {r?.intercambiado && <Aviso tono="amber">Espera al lunes por pasarte del presupuesto.</Aviso>}
         </>
@@ -402,7 +401,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
 
 const chipEstado = { fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }
 
-function TarjetaFila({ w, r, posicion, progreso, onClick }) {
+function TarjetaFila({ w, r, posicion, progreso, hoy, onClick }) {
   const tarde = r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura'
   return (
     <div onClick={onClick} className="card" style={{ padding: 14, cursor: 'pointer' }}>
@@ -423,7 +422,7 @@ function TarjetaFila({ w, r, posicion, progreso, onClick }) {
           {r.estatus === 'tarde' ? 'Llegaría tarde' : r.estatus === 'sin_fecha_segura' ? 'Sin fecha segura' : progreso > 0 ? 'Juntando' : 'En espera'}
         </span>
         {r.intercambiado && <span style={{ ...chipEstado, color: 'var(--amber)', fontWeight: 600 }}>Espera al lunes</span>}
-        {r.fechaProyectada && <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>{r.estatus === 'comprable_hoy' ? 'Cómpralo hoy' : `Estimado ${fechaCorta(r.fechaProyectada)}`}</span>}
+        {r.fechaProyectada && <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>{r.estatus === 'comprable_hoy' ? 'Cómpralo hoy' : `Estimado ${fechaCorta(r.fechaProyectada)} · ${enDias(r.fechaProyectada, hoy)}`}</span>}
         {r.fechaLimite && <span style={{ fontSize: 11, color: tarde ? 'var(--red)' : 'var(--muted)' }}>Límite {fechaCorta(r.fechaLimite)}</span>}
       </div>
       <div style={{ marginTop: 8 }}><Barra precio={Number(w.precio) || 0} progreso={progreso} /></div>
@@ -444,7 +443,8 @@ export default function Whimms() {
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const cola = useMemo(() => (base ? proyectarColaWhimms(base) : []), [base])
   const libre = useMemo(() => (base ? computeBolsas(base).bolsaWhimms : 0), [base])
-  const asignado = useMemo(() => repartoProgreso({ cola, libre }), [cola, libre])
+  const simultaneos = Number(datos.config?.whimmsSimultaneos) || 3
+  const asignado = useMemo(() => repartoProgreso({ cola, libre, simultaneos }), [cola, libre, simultaneos])
   const porId = useMemo(() => new Map(datos.whimms.map((w) => [w.id, w])), [datos.whimms])
   const colaPorId = useMemo(() => new Map(cola.map((r, i) => [r.id, { r, posicion: i + 1 }])), [cola])
 
@@ -454,6 +454,21 @@ export default function Whimms() {
   const progresoDe = (w) => (Number(w.montoApartado) || 0) + (asignado.get(w.id) || 0)
 
   const detalle = detalleId ? porId.get(detalleId) : null
+
+  const eliminarWhimm = async (w) => {
+    try {
+      if (w.pagoFijoMsiId) await deleteUserDoc(user.uid, 'pagosFijos', w.pagoFijoMsiId)
+      await deleteUserDoc(user.uid, 'whimms', w.id)
+      show('Whimm eliminado')
+    } catch {
+      show('No se pudo eliminar')
+    }
+  }
+  const deslizable = (w, hijo) => (
+    <FilaDeslizable key={w.id} radio={16} titulo={`Eliminar ${w.name}`} mensaje={`¿Eliminar este Whimm? No se puede deshacer.${w.estado === 'pagando' ? ' También se borra su plan de pagos.' : ''}`} onEliminar={() => eliminarWhimm(w)} onTap={() => setDetalleId(w.id)}>
+      {hijo}
+    </FilaDeslizable>
+  )
   const tabs = [['fila', `En fila (${enFila.length})`], ['pagando', `Pagando (${pagando.length})`], ['comprados', `Comprados (${comprados.length})`]]
 
   return (
@@ -465,7 +480,7 @@ export default function Whimms() {
           {!base && !error && <div className="empty-state">Cargando…</div>}
           {base && (
             <>
-              <PresupuestoSemanal datos={datos} base={base} user={user} show={show} />
+              <RepartoPrioridad libre={libre} n={simultaneos} user={user} show={show} />
 
               <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
                 {tabs.map(([k, t]) => (
@@ -475,7 +490,7 @@ export default function Whimms() {
 
               {tab === 'fila' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {enFila.map(({ r, w }, i) => <TarjetaFila key={w.id} w={w} r={r} posicion={i + 1} progreso={progresoDe(w)} onClick={() => setDetalleId(w.id)} />)}
+                  {enFila.map(({ r, w }, i) => deslizable(w, <TarjetaFila w={w} r={r} posicion={i + 1} progreso={progresoDe(w)} hoy={hoy} />))}
                   {enFila.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
                 </div>
               )}
@@ -485,8 +500,8 @@ export default function Whimms() {
                   {pagando.map((w) => {
                     const pago = datos.pagosFijos.find((p) => p.id === w.pagoFijoMsiId)
                     const prog = pago ? progresoPagoFijo(pago, hoy) : null
-                    return (
-                      <div key={w.id} onClick={() => setDetalleId(w.id)} className="card" style={{ padding: 14, cursor: 'pointer' }}>
+                    return deslizable(w, (
+                      <div className="card" style={{ padding: 14, cursor: 'pointer' }}>
                         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                           <TileImagen url={w.imagenUrl} size={60} radius={14} icono={26} alt={w.name} />
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -505,7 +520,7 @@ export default function Whimms() {
                           </div>
                         )}
                       </div>
-                    )
+                    ))
                   })}
                   {pagando.length === 0 && <div className="empty-state">Nada a meses por ahora</div>}
                 </div>
@@ -513,8 +528,8 @@ export default function Whimms() {
 
               {tab === 'comprados' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {comprados.map((w) => (
-                    <div key={w.id} onClick={() => setDetalleId(w.id)} className="card card-solid" style={{ padding: 13, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {comprados.map((w) => deslizable(w,
+                    <div className="card card-solid" style={{ padding: 13, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
                       <TileImagen url={w.imagenUrl} size={44} radius={12} icono={19} alt={w.name} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{w.name}</div>

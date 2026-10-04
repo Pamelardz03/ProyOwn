@@ -69,3 +69,17 @@ export async function sembrarDatos(uid, seed) {
   for (const a of seed.ajustesSaldo || []) await add('ajustesSaldo', a)
   return escritos
 }
+
+// Pone la imagen a los Whimms que no la tienen (por nombre), sin borrar nada.
+export async function completarImagenes(uid, whimmsActuales, seed) {
+  const porNombre = new Map((seed.whimms || []).filter((w) => w.imagenUrl).map((w) => [w.name, w.imagenUrl]))
+  let n = 0
+  for (const w of whimmsActuales || []) {
+    const url = porNombre.get(w.name)
+    if (url && !w.imagenUrl) {
+      await updateUserDoc(uid, 'whimms', w.id, { imagenUrl: url })
+      n++
+    }
+  }
+  return n
+}

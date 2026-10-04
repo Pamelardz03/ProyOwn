@@ -8,10 +8,11 @@ import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
+import FilaDeslizable from '../components/FilaDeslizable'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { progresoPagoFijo, todayISO } from '../lib/budget'
-import { fechaCorta, fmt } from '../lib/vista'
+import { enDias, fechaCorta, fmt } from '../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
@@ -114,21 +115,23 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
   )
 }
 
-function Fila({ p, hoy, onClick, onPausar }) {
+function Fila({ p, hoy, onPausar }) {
   const prog = progresoPagoFijo(p, hoy)
   const activo = p.activo !== false
   return (
-    <div className="row-list-item" onClick={onClick} style={{ cursor: 'pointer', opacity: activo ? 1 : 0.5 }}>
+    <div className="row-list-item" style={{ cursor: 'pointer', opacity: activo ? 1 : 0.5 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>
           {p.frecuencia}
           {esPlazos(p) && prog.total ? ` · ${Math.min(prog.pagados, prog.total)} de ${prog.total} pagos` : ''}
-          {!activo ? ' · pausado' : prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : esPlazos(p) ? ' · liquidado' : ''}
+          {!activo ? ' · pausado' : prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)} · ${enDias(prog.siguiente, hoy)}` : esPlazos(p) ? ' · liquidado' : ''}
         </div>
       </div>
       <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{fmt(p.monto)}</div>
-      <Toggle on={activo} onClick={(e) => { e.stopPropagation(); onPausar(p) }} ariaLabel={activo ? 'Pausar' : 'Reanudar'} />
+      <span onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+        <Toggle on={activo} onClick={() => onPausar(p)} ariaLabel={activo ? 'Pausar' : 'Reanudar'} />
+      </span>
     </div>
   )
 }
@@ -158,6 +161,22 @@ export default function Vitalls() {
   const pagoEnlazado = !sheet && pendienteId ? datos.pagosFijos.find((p) => p.id === pendienteId) : null
   const hoja = sheet || (pagoEnlazado ? { pago: pagoEnlazado } : null)
 
+  const eliminarPago = async (p) => {
+    try {
+      // Un pago a meses liga a su Whimm: al borrarlo el Whimm regresa a la fila.
+      if (p.tipo === 'MSI' && p.whimmId) await updateUserDoc(user.uid, 'whimms', p.whimmId, { estado: 'espera', pagoFijoMsiId: null, precioComprado: null })
+      await deleteUserDoc(user.uid, 'pagosFijos', p.id)
+      show('Serie eliminada')
+    } catch {
+      show('No se pudo eliminar')
+    }
+  }
+  const renderFila = (p) => (
+    <FilaDeslizable key={p.id} titulo={`Eliminar ${p.name}`} mensaje="¿Eliminar toda la serie? También se pierden sus pagos del historial." onEliminar={() => eliminarPago(p)} onTap={() => setSheet({ pago: p })}>
+      <Fila p={p} hoy={hoy} onPausar={pausar} />
+    </FilaDeslizable>
+  )
+
   const suscripciones = datos.pagosFijos.filter((p) => !esPlazos(p))
   const plazos = datos.pagosFijos.filter(esPlazos)
 
@@ -173,13 +192,13 @@ export default function Vitalls() {
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Suscripciones y recurrentes</div>
               {suscripciones.length === 0
                 ? <div className="empty-state">Sin suscripciones</div>
-                : <div className="row-list">{suscripciones.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} onPausar={pausar} />)}</div>}
+                : <div className="row-list">{suscripciones.map(renderFila)}</div>}
             </div>
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Pagos a plazos</div>
               {plazos.length === 0
                 ? <div className="empty-state">Sin pagos a plazos</div>
-                : <div className="row-list">{plazos.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} onPausar={pausar} />)}</div>}
+                : <div className="row-list">{plazos.map(renderFila)}</div>}
             </div>
           </>
         )}

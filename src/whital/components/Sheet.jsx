@@ -1,21 +1,18 @@
 import { IconClose } from '../../components/Icons'
+import Modal from './Modal'
 
-// Hoja inferior reutilizable (usa las clases .sheet de index.css).
+// Ventana de formulario (crear / editar): ahora en medio de la pantalla, igual que
+// el detalle de un Whimm, y no desde abajo.
 export default function Sheet({ abierto, onClose, titulo, children }) {
-  if (!abierto) return null
   return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose} />
-      <div className="sheet" style={{ maxHeight: '88%' }}>
-        <div className="sheet-grabber"><span /></div>
-        <div className="sheet-body">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{titulo}</div>
-            <button className="back-btn" onClick={onClose} aria-label="Cerrar"><IconClose /></button>
-          </div>
-          {children}
-        </div>
+    <Modal abierto={abierto} onClose={onClose}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>{titulo}</div>
+        <button aria-label="Cerrar" onClick={onClose} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <IconClose />
+        </button>
       </div>
-    </>
+      {children}
+    </Modal>
   )
 }

@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
+import FilaDeslizable from '../components/FilaDeslizable'
 import Sheet from '../components/Sheet'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -141,7 +142,7 @@ function Tarjeta({ icono, titulo, sub, extra, monto, onEditar, etiquetaEditar })
         {extra && <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 1 }}>{extra}</div>}
       </div>
       <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>-{fmt(monto)}</div>
-      <button aria-label={etiquetaEditar} onClick={onEditar}><IconEdit /></button>
+      <button aria-label={etiquetaEditar} onClick={onEditar} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}><IconEdit /></button>
     </div>
   )
 }
@@ -265,8 +266,8 @@ export default function Gastos() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {lista.map((it) =>
                   it.tipo === 'gasto' ? (
+                    <FilaDeslizable key={`g-${it.g.id}`} radio={16} titulo="Eliminar gasto" mensaje="¿Eliminar este gasto? No se puede deshacer." onEliminar={() => eliminar(it.g.id)} onTap={() => setSheet({ gasto: it.g })}>
                     <Tarjeta
-                      key={`g-${it.g.id}`}
                       icono={<div className="icon-tile" style={{ width: 38, height: 38 }}><IconReceipt size={17} /></div>}
                       titulo={it.g.concepto}
                       sub={`${etiquetaDe(it.g)} · ${fechaCorta(it.fecha)}`}
@@ -275,6 +276,7 @@ export default function Gastos() {
                       etiquetaEditar="Editar gasto"
                       onEditar={() => setSheet({ gasto: it.g })}
                     />
+                    </FilaDeslizable>
                   ) : (
                     <Tarjeta
                       key={`w-${it.w.id}`}

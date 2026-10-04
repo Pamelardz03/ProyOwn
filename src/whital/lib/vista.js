@@ -34,6 +34,16 @@ export function textoDias(n) {
   return `${n} ${n === 1 ? 'día' : 'días'}`
 }
 
+// "hoy", "mañana", "en 15 días" (o "hace 2 días" si ya pasó).
+export function enDias(fechaISO, hoyISO) {
+  const n = diasEntreISO(hoyISO, fechaISO)
+  if (n == null) return ''
+  if (n === 0) return 'hoy'
+  if (n === 1) return 'mañana'
+  if (n < 0) return `hace ${-n} ${n === -1 ? 'día' : 'días'}`
+  return `en ${n} días`
+}
+
 export function fechaCorta(iso) {
   const d = parseISODate(iso)
   if (!d) return ''

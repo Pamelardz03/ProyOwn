@@ -5,7 +5,7 @@ import BotonEliminar from '../../components/BotonEliminar'
 import Campo, { Aviso } from '../../components/Campo'
 import { generarFechasPago } from '../../lib/budget'
 import { CADENCIA_DEFAULT_MIN, OPCIONES_RECORDATORIO } from '../../lib/recordatorio'
-import { borrarDatos, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '../../lib/seed'
+import { borrarDatos, completarImagenes, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '../../lib/seed'
 import { fechaCorta, fmt } from '../../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
@@ -136,6 +136,17 @@ export function DatosDePrueba({ datos, user, show }) {
     setConfirmar(null)
   }
 
+  const imagenes = async () => {
+    setTrabajando(true)
+    try {
+      const n = await completarImagenes(user.uid, datos.whimms, seed)
+      show(n ? `Imágenes agregadas a ${n} Whimms` : 'Todos los Whimms ya tienen imagen')
+    } catch {
+      show('No se pudieron agregar las imágenes')
+    }
+    setTrabajando(false)
+  }
+
   return (
     <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div className="eyebrow">Datos de prueba</div>
@@ -145,6 +156,7 @@ export function DatosDePrueba({ datos, user, show }) {
       <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.5 : 1, background: confirmar === 'recargar' ? 'var(--red)' : 'var(--wine)' }} onClick={() => (confirmar === 'recargar' ? correr(true) : setConfirmar('recargar'))}>
         {trabajando ? 'Trabajando…' : confirmar === 'recargar' ? 'Toca de nuevo: borrar y cargar' : 'Borrar todo y cargar datos de prueba'}
       </button>
+      <button className="segbtn" disabled={trabajando} style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={imagenes}>Solo agregar imágenes faltantes</button>
       <BotonEliminar texto="Eliminar todo" mensaje="Se borran todos los gastos, Whimms, Vitalls y sueldos de esta cuenta." deshabilitado={trabajando} onConfirmar={() => correr(false)} />
     </div>
   )

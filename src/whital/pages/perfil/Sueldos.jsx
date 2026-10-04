@@ -6,10 +6,11 @@ import { useAuth } from '../../../lib/AuthContext'
 import { deleteUserDoc } from '../../../lib/firestoreCollections'
 import DetalleEliminable from '../../components/DetalleEliminable'
 import EncabezadoSub from '../../components/EncabezadoSub'
+import FilaDeslizable from '../../components/FilaDeslizable'
 import Sheet from '../../components/Sheet'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
 import { ocurrenciasSueldo, todayISO } from '../../lib/budget'
-import { fechaCorta, fmt } from '../../lib/vista'
+import { enDias, fechaCorta, fmt } from '../../lib/vista'
 import { IngresoRapidoForm, SueldoForm } from './piezas'
 
 export default function Sueldos() {
@@ -30,6 +31,15 @@ export default function Sueldos() {
 
   const proximoCobro = (s) => ocurrenciasSueldo(s, `${new Date().getFullYear() + 3}-12-31`, hoy).find((o) => !o.omitida && o.fecha >= hoy)?.fecha
   const rapidos = useMemo(() => [...datos.sueldosRapidos].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 15), [datos.sueldosRapidos])
+
+  const borrarSueldo = async (id) => {
+    try {
+      await deleteUserDoc(user.uid, 'sueldosFijos', id)
+      show('Sueldo eliminado')
+    } catch {
+      show('No se pudo eliminar')
+    }
+  }
 
   const borrarRapido = async (id) => {
     try {
@@ -62,15 +72,17 @@ export default function Sueldos() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {datos.sueldosFijos.map((s) => (
-                      <div key={s.id} onClick={() => setManual({ sueldo: s })} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', opacity: s.fechaFin ? 0.55 : 1 }}>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name || s.nombre}</div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                            {s.frecuencia}{s.fechaFin ? ` · detenido ${fechaCorta(s.fechaFin)}` : proximoCobro(s) ? ` · próximo ${fechaCorta(proximoCobro(s))}` : ''}
+                      <FilaDeslizable key={s.id} radio={16} titulo={`Eliminar ${s.name || s.nombre}`} mensaje="¿Eliminar este sueldo? También se pierde su historial de cobros." onEliminar={() => borrarSueldo(s.id)} onTap={() => setManual({ sueldo: s })}>
+                        <div className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', opacity: s.fechaFin ? 0.55 : 1 }}>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name || s.nombre}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                              {s.frecuencia}{s.fechaFin ? ` · detenido ${fechaCorta(s.fechaFin)}` : proximoCobro(s) ? ` · próximo ${fechaCorta(proximoCobro(s))} · ${enDias(proximoCobro(s), hoy)}` : ''}
+                            </div>
                           </div>
+                          <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(s.monto)}</div>
                         </div>
-                        <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(s.monto)}</div>
-                      </div>
+                      </FilaDeslizable>
                     ))}
                   </div>
                 )}
@@ -83,11 +95,13 @@ export default function Sueldos() {
                 ) : (
                   <div className="row-list">
                     {rapidos.map((r) => (
-                      <div key={r.id} onClick={() => setRapidoDetalle(r)} className="row-list-item" style={{ cursor: 'pointer' }}>
-                        <div style={{ flex: 1, fontSize: 13 }}>{r.desc || 'Ingreso'}</div>
-                        <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{fechaCorta(r.fecha)}</span>
-                        <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(r.monto)}</span>
-                      </div>
+                      <FilaDeslizable key={r.id} titulo={`Eliminar ${r.desc || 'ingreso'}`} mensaje="¿Eliminar este ingreso? No se puede deshacer." onEliminar={() => borrarRapido(r.id)} onTap={() => setRapidoDetalle(r)}>
+                        <div className="row-list-item" style={{ cursor: 'pointer' }}>
+                          <div style={{ flex: 1, fontSize: 13 }}>{r.desc || 'Ingreso'}</div>
+                          <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{fechaCorta(r.fecha)}</span>
+                          <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(r.monto)}</span>
+                        </div>
+                      </FilaDeslizable>
                     ))}
                   </div>
                 )}

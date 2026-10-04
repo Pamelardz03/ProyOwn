@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
+import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc } from '../../lib/firestoreCollections'
+import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
-import { calcularAjusteSaldo, todayISO } from '../lib/budget'
+import { calcularAjusteSaldo, gastoNeto, todayISO } from '../lib/budget'
 import { calcularAvisos, calcularVistaInicio, diaSemanaCorto, fechaCorta, fmt, parametrosMotor, textoDias } from '../lib/vista'
 
 const signo = (n) => (n >= 0 ? '+' : '-') + fmt(Math.abs(n))
@@ -89,6 +91,37 @@ function AjustarSaldo({ datos, hoy, user, show }) {
   )
 }
 
+// Detalle de un día de la semana: lo que se gastó ese día.
+function DetalleDia({ dia, gastos, presupuestoDia, onCerrar }) {
+  return (
+    <Modal abierto onClose={onCerrar}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{dia.label} {fechaCorta(dia.fecha)}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Presupuesto por día: {fmt(presupuestoDia)}</div>
+        </div>
+        <button aria-label="Cerrar" onClick={onCerrar} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><IconClose /></button>
+      </div>
+      <div className="mono" style={{ fontSize: 22, fontWeight: 500, marginBottom: 14, color: dia.gastado > presupuestoDia ? 'var(--red)' : 'var(--text)' }}>{fmt(dia.gastado)}</div>
+      {gastos.length === 0 ? (
+        <div className="empty-state" style={{ padding: '8px 0' }}>{dia.futuro ? 'Todavía no llega este día' : 'Sin gastos este día'}</div>
+      ) : (
+        <div className="row-list">
+          {gastos.map((g) => (
+            <div key={g.id} className="row-list-item">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{g.concepto}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{g.etiqueta || g.categoriaWhimm || 'General'}</div>
+              </div>
+              <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(gastoNeto(g))}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 function Encabezado({ eyebrow, titulo, children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 2px 10px' }}>
@@ -109,6 +142,7 @@ export default function Inicio() {
   const vista = useMemo(() => (loading ? null : calcularVistaInicio(datos, hoy)), [datos, loading, hoy])
   const avisos = useMemo(() => (vista ? calcularAvisos(datos, hoy, vista.bolsas) : []), [datos, hoy, vista])
   const nombre = user?.displayName?.split(' ')[0] || 'Pame'
+  const [diaAbierto, setDiaAbierto] = useState(null)
 
   return (
     <div className="screen">
@@ -154,7 +188,7 @@ export default function Inicio() {
             </div>
 
             <div className="card" style={{ padding: 18 }}>
-              <div className="eyebrow" style={{ marginBottom: 2 }}>Esta semana</div>
+              <div className="eyebrow" style={{ marginBottom: 2 }}>Esta semana · gasto por día</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: vista.bolsas.disponibleSemana < 0 ? 'var(--red)' : 'var(--text)' }}>
                 {vista.bolsas.disponibleSemana < 0
                   ? `Te pasaste ${fmt(-vista.bolsas.disponibleSemana)}`
@@ -165,12 +199,12 @@ export default function Inicio() {
                 {(() => {
                   const max = Math.max(...vista.dias.map((d) => d.gastado), vista.presupuestoSemanal / 7, 1)
                   return vista.dias.map((d) => (
-                    <div key={d.fecha} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <button key={d.fecha} onClick={() => setDiaAbierto(d)} aria-label={`Gastos del ${d.label}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end' }}>
                         <div style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--wine)' : 'var(--wine4)' }} />
                       </div>
                       <span style={{ fontSize: 9, color: d.esHoy ? 'var(--wine)' : 'var(--muted)', fontWeight: d.esHoy ? 700 : 500 }}>{d.label}</span>
-                    </div>
+                    </button>
                   ))
                 })()}
               </div>
@@ -256,6 +290,7 @@ export default function Inicio() {
           </>
         )}
       </div>
+      {diaAbierto && <DetalleDia dia={diaAbierto} gastos={datos.gastos.filter((g) => g.categoria !== 'Vitall' && g.fecha === diaAbierto.fecha)} presupuestoDia={(vista?.presupuestoSemanal || 0) / 7} onCerrar={() => setDiaAbierto(null)} />}
       <Toast message={message} />
     </div>
   )
