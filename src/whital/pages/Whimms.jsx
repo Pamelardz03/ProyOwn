@@ -1,19 +1,53 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
-import { IconEdit, IconPlus } from '../../components/Icons'
+import { IconChevronLeft, IconClose, IconEdit, IconPlus, IconTrash } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import Campo, { Aviso } from '../components/Campo'
-import Sheet from '../components/Sheet'
+import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
-import { NIVEL_DEFAULT, NIVEL_MAX, addMonthsISO, analizarPresupuestoSemanal, computeBolsas, normalizarNivel, progresoPagoFijo, proyectarColaWhimms, todayISO } from '../lib/budget'
+import {
+  NIVEL_DEFAULT,
+  NIVEL_MAX,
+  addDaysISO,
+  addMonthsISO,
+  analizarPresupuestoSemanal,
+  computeBolsas,
+  normalizarNivel,
+  ocurrenciasPagoFijo,
+  progresoPagoFijo,
+  proyectarColaWhimms,
+  repartoProgreso,
+  todayISO,
+} from '../lib/budget'
 import { fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 const scoreDe10 = (score) => Math.min(10, Math.max(0, Number(score) || 0) * 1.1).toFixed(1)
+const SITIOS = [[/amazon/, 'Amazon'], [/mercadolibre|mercadolivre/, 'Mercado Libre'], [/liverpool/, 'Liverpool'], [/coppel/, 'Coppel'], [/sephora/, 'Sephora'], [/shein/, 'Shein'], [/walmart/, 'Walmart'], [/cyamoda/, 'C&A'], [/pinterest|pin\.it/, 'Pinterest']]
+
+function sitioDe(url) {
+  const u = String(url || '').toLowerCase()
+  const conocido = SITIOS.find(([re]) => re.test(u))
+  if (conocido) return conocido[1]
+  try {
+    return new globalThis.URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return 'Enlace'
+  }
+}
+
+function Dato({ label, valor, color }) {
+  return (
+    <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3, color }}>{valor}</div>
+    </div>
+  )
+}
 
 function Nivel({ valor, onChange }) {
   return (
@@ -21,6 +55,23 @@ function Nivel({ valor, onChange }) {
       {Array.from({ length: NIVEL_MAX }, (_, i) => i + 1).map((n) => (
         <button key={n} className="segbtn" style={{ background: valor === n ? 'var(--wine)' : 'var(--beige2)', color: valor === n ? '#fff' : 'var(--muted)' }} onClick={() => onChange(n)}>{n}</button>
       ))}
+    </div>
+  )
+}
+
+function Barra({ precio, progreso, alto = 6, texto = true }) {
+  const pct = precio > 0 ? Math.min(100, Math.round((progreso / precio) * 100)) : 0
+  return (
+    <div>
+      <div style={{ height: alto, background: 'var(--beige3)', borderRadius: alto / 2, overflow: 'hidden', opacity: 1 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: alto / 2, transition: 'width .3s ease' }} />
+      </div>
+      {texto && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>{progreso > 0 ? `${fmt(progreso)} de ${fmt(precio)}` : `De ${fmt(precio)}`}</span>
+          <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--wine4)' }}>{progreso > 0 ? `${pct}%` : 'En cola'}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -70,41 +121,30 @@ function PresupuestoSemanal({ datos, base, user, show }) {
   )
 }
 
-function WhimmForm({ whimm, datos, base, user, show, onCerrar }) {
-  const nuevo = !whimm?.id
-  const hoy = base.hoyISO
-  const [name, setName] = useState(whimm?.name || '')
-  const [categoria, setCategoria] = useState(whimm?.categoria || '')
-  const [precio, setPrecio] = useState(whimm?.precio != null ? String(whimm.precio) : '')
-  const [lugar, setLugar] = useState(whimm?.lugar || '')
-  const [imagenUrl, setImagenUrl] = useState(whimm?.imagenUrl || '')
-  const [link, setLink] = useState(whimm?.links?.[0] || whimm?.link || '')
-  const [necesidad, setNecesidad] = useState(normalizarNivel(whimm?.necesidad ?? NIVEL_DEFAULT))
-  const [deseo, setDeseo] = useState(normalizarNivel(whimm?.deseo ?? NIVEL_DEFAULT))
-  const [fechaLimite, setFechaLimite] = useState(whimm?.fechaLimite || '')
+// ---------------------------------------------------------------------------
+// Detalle del Whimm: ventana en medio, igual que en la app original.
+// ---------------------------------------------------------------------------
+function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, onCerrar, onEditar }) {
   const [accion, setAccion] = useState(null) // 'comprar' | 'apartar' | 'msi'
-  const [precioPagado, setPrecioPagado] = useState(whimm?.precioComprado != null ? String(whimm.precioComprado) : String(whimm?.precio ?? ''))
-  const [fechaCompra, setFechaCompra] = useState(whimm?.compradoEn || hoy)
+  const [precioPagado, setPrecioPagado] = useState(String(whimm.precioComprado ?? whimm.precio ?? ''))
+  const [fechaCompra, setFechaCompra] = useState(hoy)
   const [extra, setExtra] = useState('')
   const [numPagos, setNumPagos] = useState('3')
   const [primerPago, setPrimerPago] = useState(addMonthsISO(hoy, 1))
   const [confirmarEliminar, setConfirmarEliminar] = useState(false)
 
-  const categorias = useMemo(() => [...new Set(datos.whimms.map((w) => w.categoria).filter(Boolean))], [datos.whimms])
-  const estado = whimm?.estado || 'espera'
-  const faltante = Math.max(num(precio) - (Number(whimm?.montoApartado) || 0), 0)
+  const estado = whimm.estado || 'espera'
+  const enFila = estado === 'espera' || estado === 'apartando'
+  const precio = Number(whimm.precio) || 0
+  const apartado = Number(whimm.montoApartado) || 0
+  const faltante = Math.max(precio - apartado, 0)
+  const links = (Array.isArray(whimm.links) && whimm.links.length ? whimm.links : whimm.link ? [whimm.link] : []).filter(Boolean)
+  const tarde = r && (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura')
+  const estadoTexto = estado === 'comprado' ? 'Comprado' : estado === 'pagando' ? 'Pagando a meses' : tarde ? 'Llegaría tarde' : progreso > 0 ? 'Juntando' : 'En espera'
 
-  const campos = () => ({
-    name: name.trim(),
-    categoria: categoria.trim(),
-    precio: num(precio),
-    lugar: lugar.trim(),
-    imagenUrl: imagenUrl.trim(),
-    links: link.trim() ? [link.trim()] : [],
-    necesidad,
-    deseo,
-    fechaLimite: fechaLimite || null,
-  })
+  const pago = estado === 'pagando' ? datos.pagosFijos.find((p) => p.id === whimm.pagoFijoMsiId) : null
+  const fechasPago = pago ? ocurrenciasPagoFijo(pago, addDaysISO(hoy, 3660)) : []
+  const progPago = pago ? progresoPagoFijo(pago, hoy) : null
 
   const ejecutar = async (fn, mensaje) => {
     try {
@@ -116,177 +156,255 @@ function WhimmForm({ whimm, datos, base, user, show, onCerrar }) {
     }
   }
 
-  const guardar = () =>
-    ejecutar(async () => {
-      if (nuevo) await addUserDoc(user.uid, 'whimms', { ...campos(), estado: 'espera', montoApartado: 0, notifFormal: false, notifMini: false })
-      else await updateUserDoc(user.uid, 'whimms', whimm.id, campos())
-    }, nuevo ? 'Whimm agregado' : 'Whimm actualizado')
-
-  const comprar = () => ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { ...campos(), estado: 'comprado', compradoEn: fechaCompra, precioComprado: num(precioPagado) }), 'Marcado como comprado')
-  const guardarCompra = () => ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { compradoEn: fechaCompra, precioComprado: num(precioPagado) }), 'Compra actualizada')
+  const comprar = () => ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { estado: 'comprado', compradoEn: fechaCompra, precioComprado: num(precioPagado) }), 'Marcado como comprado')
   const regresarAFila = () => ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { estado: 'espera', compradoEn: null, precioComprado: null }), 'Regresó a la fila')
-
   const apartar = () => {
     const monto = Math.min(num(extra), faltante)
-    if (!(monto > 0)) return
-    return ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { montoApartado: (Number(whimm.montoApartado) || 0) + monto, estado: 'apartando' }), `Apartaste ${fmt(monto)}`)
+    if (!(monto > 0)) return undefined
+    return ejecutar(() => updateUserDoc(user.uid, 'whimms', whimm.id, { montoApartado: apartado + monto, estado: 'apartando' }), `Apartaste ${fmt(monto)}`)
   }
-
   const pagarAMeses = () => {
     const n = Math.max(Math.round(num(numPagos)), 2)
-    const pago = Math.round((num(precio) / n) * 100) / 100
+    const monto = Math.round((precio / n) * 100) / 100
     return ejecutar(async () => {
-      const ref = await addUserDoc(user.uid, 'pagosFijos', {
-        name: `MSI — ${whimm.name}`, monto: pago, frecuencia: 'Mensual', tipo: 'MSI', fecha: primerPago, activo: true, finito: true, numPagos: n, whimmId: whimm.id, excepciones: {}, notifFormal: false, notifMini: false,
-      })
-      await updateUserDoc(user.uid, 'whimms', whimm.id, { ...campos(), estado: 'pagando', pagoFijoMsiId: ref.id, precioComprado: num(precio) })
+      const ref = await addUserDoc(user.uid, 'pagosFijos', { name: `MSI — ${whimm.name}`, monto, frecuencia: 'Mensual', tipo: 'MSI', fecha: primerPago, activo: true, finito: true, numPagos: n, whimmId: whimm.id, excepciones: {}, notifFormal: false, notifMini: false })
+      await updateUserDoc(user.uid, 'whimms', whimm.id, { estado: 'pagando', pagoFijoMsiId: ref.id, precioComprado: precio })
     }, 'Ahora se paga a meses')
   }
-
   const cancelarMSI = () =>
     ejecutar(async () => {
       if (whimm.pagoFijoMsiId) await deleteUserDoc(user.uid, 'pagosFijos', whimm.pagoFijoMsiId)
       await updateUserDoc(user.uid, 'whimms', whimm.id, { estado: 'espera', pagoFijoMsiId: null, precioComprado: null })
     }, 'MSI cancelado')
-
   const eliminar = () =>
     ejecutar(async () => {
       if (whimm.pagoFijoMsiId) await deleteUserDoc(user.uid, 'pagosFijos', whimm.pagoFijoMsiId)
       await deleteUserDoc(user.uid, 'whimms', whimm.id)
     }, 'Whimm eliminado')
 
-  const botonEliminar = (texto) => (
-    <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>
-      {confirmarEliminar ? 'Toca de nuevo para eliminar' : texto}
-    </button>
+  const botonAccion = (k, texto) => (
+    <button key={k} onClick={() => setAccion(accion === k ? null : k)} style={{ width: '100%', background: accion === k ? 'var(--wine)' : 'var(--beige2)', color: accion === k ? '#fff' : 'var(--wine)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600 }}>{texto}</button>
   )
-  const puedeGuardar = name.trim() && num(precio) > 0
 
-  if (estado === 'comprado') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <TileImagen url={whimm.imagenUrl} size={48} radius={12} icono={20} />
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{whimm.name}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1 }}><Campo label="Precio pagado"><input className="fld" type="number" inputMode="decimal" value={precioPagado} onChange={(e) => setPrecioPagado(e.target.value)} /></Campo></div>
-          <div style={{ flex: 1 }}><Campo label="Fecha de compra"><input className="fld" type="date" value={fechaCompra} onChange={(e) => setFechaCompra(e.target.value)} /></Campo></div>
-        </div>
-        <button className="btn-primary" onClick={guardarCompra}>Guardar cambios</button>
-        <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={regresarAFila}>Regresar a la fila</button>
-        {botonEliminar('Eliminar')}
-      </div>
-    )
-  }
-
-  if (estado === 'pagando') {
-    const pago = datos.pagosFijos.find((p) => p.id === whimm.pagoFijoMsiId)
-    const prog = pago ? progresoPagoFijo(pago, hoy) : null
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <TileImagen url={whimm.imagenUrl} size={48} radius={12} icono={20} />
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{whimm.name}</div>
-        </div>
-        {pago ? (
-          <Aviso tono="green">
-            {fmt(pago.monto)} al mes · {prog.pagados} de {prog.total} pagos{prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : ' · liquidado'}
-          </Aviso>
-        ) : (
-          <Aviso tono="red">No encuentro el pago a meses ligado.</Aviso>
-        )}
-        <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={cancelarMSI}>Cancelar los meses y regresar a la fila</button>
-        {botonEliminar('Eliminar')}
-      </div>
-    )
-  }
+  const pie = (
+    <>
+      <button onClick={onEditar} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+        <IconEdit color="var(--wine)" /> Editar
+      </button>
+      <button onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--red-bg)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
+        <IconTrash size={13} color="var(--red)" /> {confirmarEliminar ? 'Confirmar' : 'Eliminar'}
+      </button>
+    </>
+  )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Campo label="Nombre"><input className="fld" value={name} onChange={(e) => setName(e.target.value)} /></Campo>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1 }}><Campo label="Precio"><input className="fld" type="number" inputMode="decimal" value={precio} onChange={(e) => setPrecio(e.target.value)} /></Campo></div>
-        <div style={{ flex: 1 }}>
-          <Campo label="Categoría">
-            <input className="fld" list="cats-whimm" value={categoria} onChange={(e) => setCategoria(e.target.value)} />
-            <datalist id="cats-whimm">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
-          </Campo>
-        </div>
-      </div>
-      <Campo label="Necesidad"><Nivel valor={necesidad} onChange={setNecesidad} /></Campo>
-      <Campo label="Deseo"><Nivel valor={deseo} onChange={setDeseo} /></Campo>
-      <Campo label="Fecha límite (opcional)">
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input className="fld" type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} />
-          {fechaLimite && <button className="pill" style={{ background: 'var(--beige2)' }} onClick={() => setFechaLimite('')}>Quitar</button>}
-        </div>
-      </Campo>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ flex: 1 }}><Campo label="Lugar"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo></div>
-        <div style={{ flex: 1 }}><Campo label="Link"><input className="fld" value={link} onChange={(e) => setLink(e.target.value)} /></Campo></div>
-      </div>
-      <Campo label="Imagen (URL)"><input className="fld" value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} /></Campo>
-
-      <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
-
-      {!nuevo && (
-        <div style={{ borderTop: '1px solid var(--beige3)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[['comprar', 'Ya lo compré'], ['apartar', 'Apartar'], ['msi', 'A meses']].map(([k, t]) => (
-              <button key={k} className="segbtn" style={{ fontSize: 11, background: accion === k ? 'var(--wine)' : 'var(--beige2)', color: accion === k ? '#fff' : 'var(--wine)' }} onClick={() => setAccion(accion === k ? null : k)}>{t}</button>
-            ))}
+    <Modal abierto onClose={onCerrar} pie={pie}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', minWidth: 0 }}>
+          <TileImagen url={whimm.imagenUrl} size={60} radius={14} icono={26} alt={whimm.name} />
+          <div style={{ minWidth: 0 }}>
+            {posicion && <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--wine4)' }}>#{posicion}</div>}
+            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{whimm.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{whimm.categoria}{whimm.lugar ? ` · ${whimm.lugar}` : ''}</div>
           </div>
-          {accion === 'comprar' && (
+        </div>
+        <button aria-label="Cerrar" onClick={onCerrar} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <IconClose />
+        </button>
+      </div>
+
+      <div className="mono" style={{ fontSize: 22, fontWeight: 500 }}>{fmt(estado === 'comprado' || estado === 'pagando' ? whimm.precioComprado ?? precio : precio)}</div>
+      {(estado === 'comprado' || estado === 'pagando') && whimm.precioComprado != null && whimm.precioComprado !== precio && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Estimado original: {fmt(precio)}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, margin: '16px 0 10px' }}>
+        <Dato label="Categoría" valor={whimm.categoria || '—'} />
+        <Dato label="Estado" valor={estadoTexto} color={tarde ? 'var(--red)' : undefined} />
+      </div>
+
+      {enFila && (
+        <>
+          <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>¿Cuándo puedo comprarlo?</div>
+            <Barra precio={precio} progreso={progreso} alto={10} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            <Dato label="Fecha estimada" valor={r?.fechaProyectada ? (r.estatus === 'comprable_hoy' ? 'Hoy' : fechaCorta(r.fechaProyectada)) : 'Sin fecha segura'} />
+            <Dato label="Fecha límite" valor={whimm.fechaLimite ? fechaCorta(whimm.fechaLimite) : '—'} color={tarde ? 'var(--red)' : undefined} />
+          </div>
+          {r?.intercambiado && <Aviso tono="amber">Espera al lunes por pasarte del presupuesto.</Aviso>}
+        </>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, margin: '10px 0 16px' }}>
+        <Dato label="Necesidad" valor={`${normalizarNivel(whimm.necesidad)}/${NIVEL_MAX}`} />
+        <Dato label="Deseo" valor={`${normalizarNivel(whimm.deseo)}/${NIVEL_MAX}`} />
+        {r && <Dato label="Calificación" valor={scoreDe10(r.score)} />}
+      </div>
+
+      {estado === 'pagando' && (
+        <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>Pagando a meses (MSI)</div>
+          {pago ? (
             <>
+              <Barra precio={progPago.total || 1} progreso={progPago.pagados} alto={10} texto={false} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{progPago.pagados} de {progPago.total} pagos</span>
+                <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--wine4)' }}>{fmt(pago.monto)}/mes</span>
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {fechasPago.map((p) => (
+                  <div key={p.fecha} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: p.omitida ? 0.5 : 1 }}>
+                    <span style={{ color: p.fecha <= hoy ? 'var(--muted)' : 'var(--text)', textDecoration: p.omitida ? 'line-through' : 'none' }}>{fechaCorta(p.fecha)}{p.fecha <= hoy && !p.omitida ? ' · pagado' : ''}</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{fmt(p.monto)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--red)' }}>No encuentro el pago a meses ligado.</div>
+          )}
+        </div>
+      )}
+
+      {estado === 'comprado' && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <Dato label="Fecha de compra" valor={whimm.compradoEn ? fechaCorta(whimm.compradoEn) : '—'} />
+          <Dato label="Precio pagado" valor={fmt(whimm.precioComprado ?? precio)} />
+        </div>
+      )}
+
+      {enFila && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          {botonAccion('comprar', 'Ya lo compré')}
+          {accion === 'comprar' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}><Campo label="Precio pagado"><input className="fld" type="number" inputMode="decimal" value={precioPagado} onChange={(e) => setPrecioPagado(e.target.value)} /></Campo></div>
                 <div style={{ flex: 1 }}><Campo label="Fecha"><input className="fld" type="date" value={fechaCompra} onChange={(e) => setFechaCompra(e.target.value)} /></Campo></div>
               </div>
               <button className="btn-primary" onClick={comprar}>Marcar como comprado</button>
-            </>
+            </div>
           )}
+          {botonAccion('apartar', estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos')}
           {accion === 'apartar' && (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Campo label={`Monto a apartar · faltan ${fmt(faltante)}`}><input className="fld" type="number" inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} /></Campo>
               <button className="btn-primary" onClick={apartar}>Apartar</button>
-            </>
+            </div>
           )}
+          {botonAccion('msi', 'Pagar a meses (MSI)')}
           {accion === 'msi' && (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}><Campo label="Meses"><input className="fld" type="number" inputMode="numeric" value={numPagos} onChange={(e) => setNumPagos(e.target.value)} /></Campo></div>
                 <div style={{ flex: 1 }}><Campo label="Primer pago"><input className="fld" type="date" value={primerPago} onChange={(e) => setPrimerPago(e.target.value)} /></Campo></div>
               </div>
-              <button className="btn-primary" onClick={pagarAMeses}>Pasar a {fmt(num(precio) / Math.max(Math.round(num(numPagos)), 2))} al mes</button>
-            </>
+              <button className="btn-primary" onClick={pagarAMeses}>Confirmar {fmt(precio / Math.max(Math.round(num(numPagos)), 2))} al mes</button>
+            </div>
           )}
-          {botonEliminar('Eliminar Whimm')}
         </div>
       )}
-    </div>
+
+      {estado === 'pagando' && <button onClick={cancelarMSI} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 14 }}>Cancelar los meses y regresar a la fila</button>}
+      {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 14 }}>Regresar a la fila</button>}
+
+      {links.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Dónde lo encontré</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {links.map((lk, i) => (
+              <div key={i} style={{ background: 'var(--beige2)', borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{sitioDe(lk)}</div>
+                <a href={lk} target="_blank" rel="noreferrer" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600 }}>Ver</a>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Modal>
   )
 }
 
-function Barra({ precio, apartado }) {
-  const pct = precio > 0 ? Math.min(100, Math.round((apartado / precio) * 100)) : 0
+// ---------------------------------------------------------------------------
+// Alta / edición del Whimm: también ventana en medio, con flecha para volver.
+// ---------------------------------------------------------------------------
+function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
+  const nuevo = !whimm?.id
+  const [name, setName] = useState(whimm?.name || '')
+  const [categoria, setCategoria] = useState(whimm?.categoria || '')
+  const [precio, setPrecio] = useState(whimm?.precio != null ? String(whimm.precio) : '')
+  const [lugar, setLugar] = useState(whimm?.lugar || '')
+  const [imagenUrl, setImagenUrl] = useState(whimm?.imagenUrl || '')
+  const [link, setLink] = useState(whimm?.links?.[0] || whimm?.link || '')
+  const [necesidad, setNecesidad] = useState(normalizarNivel(whimm?.necesidad ?? NIVEL_DEFAULT))
+  const [deseo, setDeseo] = useState(normalizarNivel(whimm?.deseo ?? NIVEL_DEFAULT))
+  const [fechaLimite, setFechaLimite] = useState(whimm?.fechaLimite || '')
+  const [precioPagado, setPrecioPagado] = useState(whimm?.precioComprado != null ? String(whimm.precioComprado) : '')
+  const [fechaCompra, setFechaCompra] = useState(whimm?.compradoEn || '')
+
+  const categorias = useMemo(() => [...new Set(datos.whimms.map((w) => w.categoria).filter(Boolean))], [datos.whimms])
+  const comprado = whimm?.estado === 'comprado'
+  const puedeGuardar = name.trim() && num(precio) > 0
+
+  const guardar = async () => {
+    const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: link.trim() ? [link.trim()] : [], necesidad, deseo, fechaLimite: fechaLimite || null }
+    try {
+      if (nuevo) await addUserDoc(user.uid, 'whimms', { ...campos, estado: 'espera', montoApartado: 0, notifFormal: false, notifMini: false })
+      else await updateUserDoc(user.uid, 'whimms', whimm.id, comprado ? { ...campos, precioComprado: num(precioPagado), compradoEn: fechaCompra || null } : campos)
+      show(nuevo ? 'Whimm agregado' : 'Whimm actualizado')
+      onCerrar()
+    } catch {
+      show('No se pudo guardar')
+    }
+  }
+
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ height: 6, background: 'var(--beige2)', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--wine)', borderRadius: 3 }} />
+    <Modal abierto onClose={onCerrar} nivel={1}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <button aria-label="Atrás" onClick={onCerrar}><IconChevronLeft /></button>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{nuevo ? 'Nuevo Whimm' : 'Editar Whimm'}</div>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>{apartado > 0 ? `${fmt(apartado)} de ${fmt(precio)}` : `De ${fmt(precio)}`}</span>
-        <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--wine4)' }}>{apartado > 0 ? `${pct}%` : 'En cola'}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Campo label="Nombre"><input className="fld" value={name} onChange={(e) => setName(e.target.value)} /></Campo>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}><Campo label="Precio"><input className="fld" type="number" inputMode="decimal" value={precio} onChange={(e) => setPrecio(e.target.value)} /></Campo></div>
+          <div style={{ flex: 1 }}>
+            <Campo label="Categoría">
+              <input className="fld" list="cats-whimm" value={categoria} onChange={(e) => setCategoria(e.target.value)} />
+              <datalist id="cats-whimm">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+            </Campo>
+          </div>
+        </div>
+        {comprado && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><Campo label="Precio pagado"><input className="fld" type="number" inputMode="decimal" value={precioPagado} onChange={(e) => setPrecioPagado(e.target.value)} /></Campo></div>
+            <div style={{ flex: 1 }}><Campo label="Fecha de compra"><input className="fld" type="date" value={fechaCompra} onChange={(e) => setFechaCompra(e.target.value)} /></Campo></div>
+          </div>
+        )}
+        <Campo label="Necesidad"><Nivel valor={necesidad} onChange={setNecesidad} /></Campo>
+        <Campo label="Deseo"><Nivel valor={deseo} onChange={setDeseo} /></Campo>
+        <Campo label="Fecha límite (opcional)">
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="fld" type="date" value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} />
+            {fechaLimite && <button className="pill" style={{ background: 'var(--beige2)' }} onClick={() => setFechaLimite('')}>Quitar</button>}
+          </div>
+        </Campo>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}><Campo label="Lugar"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo></div>
+          <div style={{ flex: 1 }}><Campo label="Link"><input className="fld" value={link} onChange={(e) => setLink(e.target.value)} /></Campo></div>
+        </div>
+        <Campo label="Imagen (URL)"><input className="fld" value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} /></Campo>
+        <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
 const chipEstado = { fontSize: 11, color: 'var(--muted)', background: 'var(--beige2)', padding: '5px 10px', borderRadius: 8 }
 
-function TarjetaFila({ w, r, posicion, onClick }) {
-  const apartado = Number(w.montoApartado) || 0
+function TarjetaFila({ w, r, posicion, progreso, onClick }) {
   const tarde = r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura'
   return (
     <div onClick={onClick} className="card" style={{ padding: 14, cursor: 'pointer' }}>
@@ -304,15 +422,13 @@ function TarjetaFila({ w, r, posicion, onClick }) {
       <div className="mono" style={{ fontSize: 18, fontWeight: 500, marginTop: 10 }}>{fmt(w.precio)}</div>
       <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={tarde ? { ...chipEstado, color: 'var(--red)', background: 'var(--red-bg)', fontWeight: 600 } : chipEstado}>
-          {r.estatus === 'tarde' ? 'Llegaría tarde' : r.estatus === 'sin_fecha_segura' ? 'Sin fecha segura' : apartado > 0 ? 'Juntando' : 'En espera'}
+          {r.estatus === 'tarde' ? 'Llegaría tarde' : r.estatus === 'sin_fecha_segura' ? 'Sin fecha segura' : progreso > 0 ? 'Juntando' : 'En espera'}
         </span>
         {r.intercambiado && <span style={{ ...chipEstado, color: 'var(--amber)', fontWeight: 600 }}>Espera al lunes</span>}
-        {r.fechaProyectada && (
-          <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>{r.estatus === 'comprable_hoy' ? 'Cómpralo hoy' : `Estimado ${fechaCorta(r.fechaProyectada)}`}</span>
-        )}
+        {r.fechaProyectada && <span style={{ fontSize: 11, color: 'var(--wine4)', fontWeight: 600 }}>{r.estatus === 'comprable_hoy' ? 'Cómpralo hoy' : `Estimado ${fechaCorta(r.fechaProyectada)}`}</span>}
         {r.fechaLimite && <span style={{ fontSize: 11, color: tarde ? 'var(--red)' : 'var(--muted)' }}>Límite {fechaCorta(r.fechaLimite)}</span>}
       </div>
-      <Barra precio={Number(w.precio) || 0} apartado={apartado} />
+      <div style={{ marginTop: 8 }}><Barra precio={Number(w.precio) || 0} progreso={progreso} /></div>
     </div>
   )
 }
@@ -324,25 +440,23 @@ export default function Whimms() {
   const { message, show } = useToast()
   const hoy = todayISO()
   const [tab, setTab] = useState('fila')
-  const [sheet, setSheet] = useState(null) // null | {} (nuevo) | { whimm }
-  const [pendienteAbrir, setPendienteAbrir] = useState(location.state?.openWhimmId || null)
+  const [detalleId, setDetalleId] = useState(location.state?.openWhimmId || null)
+  const [edicion, setEdicion] = useState(location.state?.nuevo ? {} : null) // null | {} (nuevo) | { whimm }
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const cola = useMemo(() => (base ? proyectarColaWhimms(base) : []), [base])
+  const libre = useMemo(() => (base ? computeBolsas(base).bolsaWhimms : 0), [base])
+  const asignado = useMemo(() => repartoProgreso({ cola, libre }), [cola, libre])
   const porId = useMemo(() => new Map(datos.whimms.map((w) => [w.id, w])), [datos.whimms])
+  const colaPorId = useMemo(() => new Map(cola.map((r, i) => [r.id, { r, posicion: i + 1 }])), [cola])
 
   const enFila = cola.map((r) => ({ r, w: porId.get(r.id) })).filter((x) => x.w)
   const pagando = datos.whimms.filter((w) => w.estado === 'pagando')
   const comprados = datos.whimms.filter((w) => w.estado === 'comprado').sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
+  const progresoDe = (w) => (Number(w.montoApartado) || 0) + (asignado.get(w.id) || 0)
 
-  // Abre el detalle de un Whimm que llegó por navegación (p. ej. desde Inicio).
-  const whimmEnlazado = !sheet && pendienteAbrir ? porId.get(pendienteAbrir) : null
-  const hojaAbierta = !!sheet || !!whimmEnlazado
-  const whimmEnHoja = sheet ? sheet.whimm : whimmEnlazado
-  const cerrar = () => { setSheet(null); setPendienteAbrir(null) }
-
+  const detalle = detalleId ? porId.get(detalleId) : null
   const tabs = [['fila', `En fila (${enFila.length})`], ['pagando', `Pagando (${pagando.length})`], ['comprados', `Comprados (${comprados.length})`]]
-  const tituloHoja = !whimmEnHoja ? 'Nuevo Whimm' : whimmEnHoja.estado === 'comprado' ? 'Compra' : whimmEnHoja.estado === 'pagando' ? 'Pagando a meses' : 'Whimm'
 
   return (
     <>
@@ -363,7 +477,7 @@ export default function Whimms() {
 
               {tab === 'fila' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {enFila.map(({ r, w }, i) => <TarjetaFila key={w.id} w={w} r={r} posicion={i + 1} onClick={() => setSheet({ whimm: w })} />)}
+                  {enFila.map(({ r, w }, i) => <TarjetaFila key={w.id} w={w} r={r} posicion={i + 1} progreso={progresoDe(w)} onClick={() => setDetalleId(w.id)} />)}
                   {enFila.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
                 </div>
               )}
@@ -374,15 +488,24 @@ export default function Whimms() {
                     const pago = datos.pagosFijos.find((p) => p.id === w.pagoFijoMsiId)
                     const prog = pago ? progresoPagoFijo(pago, hoy) : null
                     return (
-                      <div key={w.id} onClick={() => setSheet({ whimm: w })} className="card" style={{ padding: 14, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <TileImagen url={w.imagenUrl} size={60} radius={14} icono={26} alt={w.name} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 600 }}>{w.name}</div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                            {prog ? `${prog.pagados} de ${prog.total} pagos${prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : ''}` : 'Sin plan ligado'}
+                      <div key={w.id} onClick={() => setDetalleId(w.id)} className="card" style={{ padding: 14, cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <TileImagen url={w.imagenUrl} size={60} radius={14} icono={26} alt={w.name} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600 }}>{w.name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{w.categoria}</div>
                           </div>
+                          <div className="mono" style={{ fontSize: 15, fontWeight: 500 }}>{pago ? `${fmt(pago.monto)}/mes` : fmt(w.precio)}</div>
                         </div>
-                        <div className="mono" style={{ fontSize: 15, fontWeight: 500 }}>{pago ? `${fmt(pago.monto)}/mes` : fmt(w.precio)}</div>
+                        {prog && (
+                          <div style={{ marginTop: 10 }}>
+                            <Barra precio={prog.total || 1} progreso={prog.pagados} texto={false} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                              <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>{prog.pagados} de {prog.total} pagos</span>
+                              <span className="mono" style={{ fontSize: 10, fontWeight: 600, color: 'var(--wine4)' }}>{prog.siguiente ? `Siguiente ${fechaCorta(prog.siguiente)}` : 'Liquidado'}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -393,7 +516,7 @@ export default function Whimms() {
               {tab === 'comprados' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {comprados.map((w) => (
-                    <div key={w.id} onClick={() => setSheet({ whimm: w })} className="card card-solid" style={{ padding: 13, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div key={w.id} onClick={() => setDetalleId(w.id)} className="card card-solid" style={{ padding: 13, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
                       <TileImagen url={w.imagenUrl} size={44} radius={12} icono={19} alt={w.name} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{w.name}</div>
@@ -410,10 +533,26 @@ export default function Whimms() {
         </div>
       </div>
 
-      <button className="fab" onClick={() => setSheet({})} aria-label="Agregar Whimm"><IconPlus /></button>
-      <Sheet abierto={hojaAbierta} onClose={cerrar} titulo={tituloHoja}>
-        {hojaAbierta && base && <WhimmForm key={whimmEnHoja?.id || 'nuevo'} whimm={whimmEnHoja} datos={datos} base={base} user={user} show={show} onCerrar={cerrar} />}
-      </Sheet>
+      <button className="fab" onClick={() => setEdicion({})} aria-label="Agregar Whimm"><IconPlus /></button>
+
+      {detalle && base && !edicion && (
+        <WhimmDetalle
+          key={detalle.id}
+          whimm={detalle}
+          r={colaPorId.get(detalle.id)?.r}
+          posicion={colaPorId.get(detalle.id)?.posicion}
+          progreso={progresoDe(detalle)}
+          datos={datos}
+          hoy={hoy}
+          user={user}
+          show={show}
+          onCerrar={() => setDetalleId(null)}
+          onEditar={() => setEdicion({ whimm: detalle })}
+        />
+      )}
+      {edicion && base && (
+        <WhimmEdicion key={edicion.whimm?.id || 'nuevo'} whimm={edicion.whimm} datos={datos} user={user} show={show} onCerrar={() => setEdicion(null)} />
+      )}
       <Toast message={message} />
     </>
   )

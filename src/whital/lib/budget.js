@@ -749,3 +749,24 @@ export function generarFechasPago({ frecuencia, fechaInicio, meses = 36 }) {
   }
   return [...new Set(fechas)].filter((f) => f >= fechaInicio).sort(compareISOAsc)
 }
+
+// ---------------------------------------------------------------------------
+// Avance de cada Whimm: del dinero libre que hay HOY, cuánto le toca a cada uno
+// repartido en el orden en que se compran (fecha proyectada más cercana primero).
+// Los que esperan al lunes por exceso de presupuesto no reciben nada todavía.
+// El avance que se muestra es `montoApartado` + lo que devuelve esta función.
+// ---------------------------------------------------------------------------
+export function repartoProgreso({ cola, libre }) {
+  let restante = Math.max(Number(libre) || 0, 0)
+  const asignado = new Map((cola || []).map((r) => [r.id, 0]))
+  ;(cola || [])
+    .map((r, orden) => ({ r, orden }))
+    .filter(({ r }) => !r.intercambiado)
+    .sort((a, b) => (a.r.fechaProyectada || '9999').localeCompare(b.r.fechaProyectada || '9999') || a.orden - b.orden)
+    .forEach(({ r }) => {
+      const parte = Math.min(restante, Math.max(Number(r.faltante) || 0, 0))
+      asignado.set(r.id, parte)
+      restante -= parte
+    })
+  return asignado
+}
