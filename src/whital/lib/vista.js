@@ -89,6 +89,7 @@ export function calcularVistaInicio(datos, hoyISO) {
     analisis,
     proximoWhimm,
     whimmsEnRiesgo: enRiesgo,
+    whimmsIntercambiados: cola.filter((r) => r.intercambiado).map((r) => ({ ...r, whimm: porId.get(r.id) })),
     comprablesHoy: cola.filter((r) => r.estatus === 'comprable_hoy').length,
     vitalls: proximosVitalls({ pagosFijos: base.pagosFijos, hoyISO, dias: 7 }),
     cajitas: distribucionCajitas({ saldoReal, bolsaWhimms: bolsas.bolsaWhimms, ...base }),

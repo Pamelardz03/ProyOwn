@@ -162,6 +162,11 @@ function CardProximoWhimm({ vista }) {
         {apartado > 0 ? `${fmt(apartado)} apartados (${pct}%)` : 'Sin fondos apartados todavía'}
         {comprablesHoy > 0 ? ` · ${comprablesHoy} comprable${comprablesHoy > 1 ? 's' : ''} hoy` : ''}
       </div>
+      {vista.whimmsIntercambiados.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--amber)', lineHeight: 1.4 }}>
+          Por pasarte del presupuesto esta semana, esperan hasta el lunes: {vista.whimmsIntercambiados.map((r) => r.whimm?.name || r.id).join(', ')}.
+        </div>
+      )}
       {whimmsEnRiesgo.length > 0 && (
         <div style={{ marginTop: 10, fontSize: 11, color: 'var(--red)', lineHeight: 1.4 }}>
           Fechas en riesgo: {whimmsEnRiesgo.map((r) => `${r.whimm?.name || r.id} (límite ${fechaCorta(r.fechaLimite)})`).join(', ')}

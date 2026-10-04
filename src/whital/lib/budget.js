@@ -456,20 +456,29 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // ---------------------------------------------------------------------------
 export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, hoyISO }) {
   const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
-  const saldosBase = linea.saldos.map((s) => s - apartadoTotalPendiente(whimms))
+  const apartado = apartadoTotalPendiente(whimms)
+  const saldosBase = linea.saldos.map((s) => s - apartado)
 
   const porPrioridad = (whimms || [])
     .filter(esWhimmPendiente)
     .map((w) => ({ w, score: computeWhimmScore(w), prioridad: computeWhimmPrioridad(w, hoyISO) }))
     .sort((a, b) => b.prioridad - a.prioridad || (Number(a.w.precio) || 0) - (Number(b.w.precio) || 0))
 
+  // Intercambio por exceso de presupuesto semanal (más abajo): los Whimms
+  // "bloqueados" no se pueden comprar antes del lunes siguiente.
+  const semanaInicio = startOfWeekISO(hoyISO)
+  const proximoLunes = addDaysISO(semanaInicio, 7)
+  const idxLunes = Math.max(linea.fechas.findIndex((f) => f >= proximoLunes), 0)
+  const bloqueados = new Set()
+
   // Acomoda la fila en el orden dado y devuelve la fecha de cada Whimm.
   const simular = (orden) => {
     const saldos = [...saldosBase]
     return orden.map(({ w, score, prioridad }) => {
       const faltante = Math.max((Number(w.precio) || 0) - (Number(w.montoApartado) || 0), 0)
+      const desde = bloqueados.has(w.id) ? idxLunes : 0
       const minimos = minimosDesdeElFinal(saldos)
-      const idx = minimos.findIndex((m) => m + EPS >= faltante)
+      const idx = minimos.findIndex((m, k) => k >= desde && m + EPS >= faltante)
       let fechaProyectada = null
       if (idx >= 0) {
         fechaProyectada = linea.fechas[idx]
@@ -481,7 +490,7 @@ export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pago
         if (diasMargen != null && diasMargen < 0) estatus = 'tarde'
         else estatus = fechaProyectada === hoyISO ? 'comprable_hoy' : 'en_fecha'
       }
-      return { id: w.id, score, prioridad, faltante, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus }
+      return { id: w.id, score, prioridad, faltante, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus, intercambiado: bloqueados.has(w.id) }
     })
   }
 
@@ -495,44 +504,65 @@ export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pago
     return sum + (r.diasMargen < 0 ? -r.diasMargen : 0)
   }, 0)
 
-  let orden = porPrioridad
-  let resultado = simular(orden)
-  let atrasoActual = atraso(resultado)
-  for (let pasada = 0; pasada < 20 && atrasoActual > 0; pasada++) {
-    // Se atiende primero el Whimm incumplido con la fecha límite más cercana.
-    let i = -1
-    resultado.forEach((r, k) => {
-      const incumple = r.fechaLimite && (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura')
-      if (incumple && (i < 0 || r.fechaLimite < resultado[i].fechaLimite)) i = k
-    })
-    if (i < 0) break
+  const resolver = () => {
+    let orden = porPrioridad
+    let resultado = simular(orden)
+    let atrasoActual = atraso(resultado)
+    for (let pasada = 0; pasada < 20 && atrasoActual > 0; pasada++) {
+      // Se atiende primero el Whimm incumplido con la fecha límite más cercana.
+      let i = -1
+      resultado.forEach((r, k) => {
+        const incumple = r.fechaLimite && (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura')
+        if (incumple && (i < 0 || r.fechaLimite < resultado[i].fechaLimite)) i = k
+      })
+      if (i < 0) break
 
-    // Dos tipos de movimiento: subir al incumplido, o bajar detrás de él a un
-    // Whimm anterior que no esté incumpliendo (le sobra margen o no tiene fecha).
-    const candidatos = []
-    for (let j = i - 1; j >= 0; j--) {
-      const c = [...orden]
-      c.splice(j, 0, c.splice(i, 1)[0])
-      candidatos.push({ orden: c, desplazamiento: i - j })
-    }
-    for (let k = i - 1; k >= 0; k--) {
-      if (resultado[k].estatus === 'tarde') continue
-      const c = [...orden]
-      c.splice(i, 0, c.splice(k, 1)[0])
-      candidatos.push({ orden: c, desplazamiento: i - k })
-    }
-    let mejor = null
-    for (const c of candidatos) {
-      const res = simular(c.orden)
-      const a = atraso(res)
-      if (a < atrasoActual && (!mejor || a < mejor.atraso || (a === mejor.atraso && c.desplazamiento < mejor.desplazamiento))) {
-        mejor = { orden: c.orden, res, atraso: a, desplazamiento: c.desplazamiento }
+      // Dos tipos de movimiento: subir al incumplido, o bajar detrás de él a un
+      // Whimm anterior que no esté incumpliendo (le sobra margen o no tiene fecha).
+      const candidatos = []
+      for (let j = i - 1; j >= 0; j--) {
+        const c = [...orden]
+        c.splice(j, 0, c.splice(i, 1)[0])
+        candidatos.push({ orden: c, desplazamiento: i - j })
       }
+      for (let k = i - 1; k >= 0; k--) {
+        if (resultado[k].estatus === 'tarde') continue
+        const c = [...orden]
+        c.splice(i, 0, c.splice(k, 1)[0])
+        candidatos.push({ orden: c, desplazamiento: i - k })
+      }
+      let mejor = null
+      for (const c of candidatos) {
+        const res = simular(c.orden)
+        const a = atraso(res)
+        if (a < atrasoActual && (!mejor || a < mejor.atraso || (a === mejor.atraso && c.desplazamiento < mejor.desplazamiento))) {
+          mejor = { orden: c.orden, res, atraso: a, desplazamiento: c.desplazamiento }
+        }
+      }
+      if (!mejor) break
+      orden = mejor.orden
+      resultado = mejor.res
+      atrasoActual = mejor.atraso
     }
-    if (!mejor) break
-    orden = mejor.orden
-    resultado = mejor.res
-    atrasoActual = mejor.atraso
+    return resultado
+  }
+
+  let resultado = resolver()
+
+  // Si esta semana te pasaste del presupuesto, el exceso se "paga" desplazando
+  // primero a los Whimms SIN fecha límite, de menor score, que hoy ya se podían
+  // comprar: vuelven a estar disponibles el lunes. Solo ellos; si el exceso es
+  // mayor y toca a uno con fecha, `evaluarIntercambio` lo advierte.
+  const exceso = Math.max(gastoSemanaReal(gastos, semanaInicio, hoyISO) - presupuestoDe(presupuestoSemanal), 0)
+  if (exceso > 0) {
+    const candidatos = resultado.filter((r) => r.estatus === 'comprable_hoy' && !r.fechaLimite).sort((a, b) => a.score - b.score)
+    let cubierto = 0
+    for (const c of candidatos) {
+      if (cubierto >= exceso) break
+      bloqueados.add(c.id)
+      cubierto += c.faltante
+    }
+    if (bloqueados.size) resultado = resolver()
   }
   return resultado
 }
@@ -635,11 +665,12 @@ export function evaluarIntercambio({ gastoNuevo, ...base }) {
   const criticos = []
   const avisos = []
   const desplazados = []
+  const intercambiados = []
   despues.forEach((r) => {
     const a = previo.get(r.id)
     if (!a) return
     const seRetrasa = r.fechaProyectada !== a.fechaProyectada && (!r.fechaProyectada || (a.fechaProyectada && r.fechaProyectada > a.fechaProyectada))
-    if (!seRetrasa) return
+    if (!seRetrasa && !(r.intercambiado && !a.intercambiado)) return
     const item = {
       id: r.id,
       nombre: nombres.get(r.id),
@@ -648,7 +679,8 @@ export function evaluarIntercambio({ gastoNuevo, ...base }) {
       fechaLimite: r.fechaLimite,
       dejaDeSerComprableHoy: a.estatus === 'comprable_hoy',
     }
-    if (!r.fechaLimite) desplazados.push(item)
+    if (r.intercambiado && !a.intercambiado) intercambiados.push(item)
+    else if (!r.fechaLimite) desplazados.push(item)
     else if (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura') criticos.push(item)
     else avisos.push(item)
   })
@@ -661,6 +693,59 @@ export function evaluarIntercambio({ gastoNuevo, ...base }) {
     criticos,
     avisos,
     desplazados,
+    intercambiados,
     excedeSemana: Math.max(gastadoSemana - presupuesto, 0),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ocurrencias (para Vitalls y Calendar): incluyen las omitidas, marcadas, para
+// poder restaurarlas o cambiarles el monto.
+// ---------------------------------------------------------------------------
+export function ocurrenciasPagoFijo(pagoFijo, hastaISO, desdeISO) {
+  return fechasVencimientoBase(pagoFijo, hastaISO)
+    .filter((f) => !desdeISO || f >= desdeISO)
+    .map((f) => ({ fecha: f, monto: montoOcurrenciaPagoFijo(pagoFijo, f), omitida: !!excepcionDe(pagoFijo, f)?.omitida }))
+}
+
+export function ocurrenciasSueldo(sueldo, hastaISO, desdeISO) {
+  const fechaFin = sueldo?.fechaFin || null
+  const fechas = Array.isArray(sueldo?.fechasPago) ? sueldo.fechasPago : []
+  return fechas
+    .filter((f) => f && f <= hastaISO && (!fechaFin || f <= fechaFin) && (!desdeISO || f >= desdeISO))
+    .sort(compareISOAsc)
+    .map((f) => ({ fecha: f, monto: montoOcurrenciaSueldo(sueldo, f), omitida: !!excepcionDe(sueldo, f)?.omitida }))
+}
+
+// Cuántos pagos lleva un pago fijo/MSI y cuál es el siguiente.
+export function progresoPagoFijo(pagoFijo, hoyISO) {
+  const todas = fechasVencimientoBase(pagoFijo, addDaysISO(hoyISO, 3660))
+  const vivas = todas.filter((f) => !excepcionDe(pagoFijo, f)?.omitida)
+  return {
+    total: pagoFijo?.finito ? Number(pagoFijo.numPagos) || 1 : null,
+    pagados: vivas.filter((f) => f <= hoyISO).length,
+    siguiente: vivas.find((f) => f > hoyISO) || null,
+  }
+}
+
+// Fechas de pago de un sueldo fijo, SIEMPRE desde `fechaInicio` en adelante
+// (la UI vieja generaba fechas anteriores al inicio y las contaba).
+// Quincenal = días 15 y último de cada mes; Mensual = mismo día cada mes.
+export function generarFechasPago({ frecuencia, fechaInicio, meses = 36 }) {
+  const inicio = parseISODate(fechaInicio)
+  if (!inicio) return []
+  const fechas = []
+  if (frecuencia === 'Semanal') {
+    const fin = addMonthsISO(fechaInicio, meses)
+    for (let f = fechaInicio; f <= fin; f = addDaysISO(f, 7)) fechas.push(f)
+  } else if (frecuencia === 'Quincenal') {
+    for (let k = 0; k <= meses; k++) {
+      const y = inicio.getFullYear() + Math.floor((inicio.getMonth() + k) / 12)
+      const m = (inicio.getMonth() + k) % 12
+      fechas.push(toISO(new Date(y, m, 15)), toISO(new Date(y, m, daysInMonth(y, m))))
+    }
+  } else {
+    for (let k = 0; k <= meses; k++) fechas.push(addMonthsISO(fechaInicio, k))
+  }
+  return [...new Set(fechas)].filter((f) => f >= fechaInicio).sort(compareISOAsc)
 }
