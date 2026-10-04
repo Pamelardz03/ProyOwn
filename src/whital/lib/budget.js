@@ -89,9 +89,26 @@ function daysInMonth(year, monthIndex) {
 // deseo ahora 1-10 desde el inicio (antes 1-5 en producción), pero la
 // fórmula no asume ningún rango, así que no cambia nada aquí.
 // ---------------------------------------------------------------------------
+export const NIVEL_MIN = 1
+export const NIVEL_MAX = 5 // necesidad y deseo: 5 niveles (decisión 4 oct; antes 1-10)
+export const NIVEL_DEFAULT = 3
+
+export function normalizarNivel(valor) {
+  const n = Math.round(Number(valor))
+  if (!Number.isFinite(n)) return NIVEL_DEFAULT
+  return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
+}
+
+// Para datos viejos capturados con la escala 1-10 (cuenta real de producción).
+export function nivelDeEscala10(valor) {
+  const n = Number(valor)
+  if (!Number.isFinite(n)) return NIVEL_DEFAULT
+  return normalizarNivel(Math.ceil(n / 2))
+}
+
 export function computeWhimmScore({ necesidad, deseo, precio }) {
-  const n = Number(necesidad) || 5
-  const d = Number(deseo) || 5
+  const n = normalizarNivel(necesidad)
+  const d = normalizarNivel(deseo)
   const p = Math.max(Number(precio) || 1, 1)
   return (n * 2 + d) / Math.pow(p, 0.25)
 }
@@ -150,7 +167,7 @@ export function montoOcurrenciaSueldo(sueldo, fechaISO) {
 // Whimms, sección D / "MSI" en Entidades — NUNCA de Gastos ni de la reserva
 // Vitalls).
 // ---------------------------------------------------------------------------
-function fechasVencimientoVivas(pagoFijo, hastaISO) {
+function fechasVencimientoBase(pagoFijo, hastaISO) {
   if (pagoFijo?.activo === false) return []
   const freq = pagoFijo?.frecuencia
   const base = pagoFijo?.fecha
@@ -168,7 +185,11 @@ function fechasVencimientoVivas(pagoFijo, hastaISO) {
     else if (freq === 'Quincenal') f = addDaysISO(f, 15)
     else f = addMonthsISO(f, 1) // Mensual (default)
   }
-  return fechas.filter((fx) => !excepcionDe(pagoFijo, fx)?.omitida)
+  return fechas
+}
+
+function fechasVencimientoVivas(pagoFijo, hastaISO) {
+  return fechasVencimientoBase(pagoFijo, hastaISO).filter((fx) => !excepcionDe(pagoFijo, fx)?.omitida)
 }
 
 function addMonthsISO(iso, n) {
@@ -227,8 +248,14 @@ function gastoSemanaReal(gastos, semanaInicioISO, hastaISO) {
 // SECCIÓN A — Saldo Real en Banco (recálculo puro, igual que la fórmula del
 // doc Whital).
 // ---------------------------------------------------------------------------
-export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO }) {
+export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO }) {
   let saldo = Number(saldoInicial) || 0
+
+  // Ajustes de saldo ("Ajustar saldo a mi banco"): diferencias confirmadas
+  // contra el banco real; a futuro las generará la conexión con Nu.
+  ;(ajustesSaldo || []).forEach((a) => {
+    if (a?.fecha && a.fecha <= hoyISO) saldo += Number(a.monto) || 0
+  })
 
   ;(sueldosFijos || []).forEach((s) => {
     fechasPagoVivas(s, hoyISO).forEach((f) => { saldo += montoOcurrenciaSueldo(s, f) })
@@ -260,10 +287,10 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
 // horizonte, SIN contar compras de Whimms futuras. Hoy solo suma el gasto
 // esperado de hoy (los demás eventos de hoy ya están en el saldo real).
-function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, presupuestoSemanal, hoyISO }) {
+function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
-  const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, hoyISO })
+  const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
   const semanaInicio = startOfWeekISO(hoyISO)
   const restanteSemana = Math.max(presupuesto - gastoSemanaReal(gastos, semanaInicio, hoyISO), 0)
@@ -315,8 +342,8 @@ function apartadoTotalPendiente(whimms) {
 // El cierre semanal es implícito: lo no gastado de una semana se queda en el
 // saldo (bono) y lo gastado de más ya salió de él (déficit).
 // ---------------------------------------------------------------------------
-export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, presupuestoSemanal, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, presupuestoSemanal, hoyISO })
+export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
   const bolsaWhimms = minimosDesdeElFinal(linea.saldos)[0] - apartadoTotalPendiente(whimms)
 
   const semanaHoyInicio = startOfWeekISO(hoyISO)
@@ -427,8 +454,8 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // `montoApartado` (Apartar fondos extra) es dinero ya reservado: no se ofrece a
 // otros Whimms y reduce lo que le falta al suyo.
 // ---------------------------------------------------------------------------
-export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, presupuestoSemanal, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, presupuestoSemanal, hoyISO })
+export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
   const saldosBase = linea.saldos.map((s) => s - apartadoTotalPendiente(whimms))
 
   const porPrioridad = (whimms || [])
@@ -524,4 +551,116 @@ export const MODOS_AHORRO = {
 
 export function porcentajeDeModoAhorro(modoAhorro) {
   return MODOS_AHORRO[modoAhorro] ?? MODOS_AHORRO.Balanceado
+}
+
+// ---------------------------------------------------------------------------
+// Ajustar saldo a mi banco: devuelve el monto (puede ser negativo) que hay que
+// guardar como ajuste para que el saldo real del motor iguale al del banco.
+// Pasa en `...params` los mismos datos que saldoRealEnBanco (incluidos los
+// ajustes ya guardados). A futuro la conexión con Nu alimentará esto sola.
+// ---------------------------------------------------------------------------
+export function calcularAjusteSaldo({ saldoBancoReal, ...params }) {
+  const actual = saldoRealEnBanco(params)
+  return Math.round(((Number(saldoBancoReal) || 0) - actual) * 100) / 100
+}
+
+// ---------------------------------------------------------------------------
+// Vitalls: próximos vencimientos (incluye MSI) en los siguientes `dias`, con
+// las ocurrencias omitidas marcadas (para poder des-omitirlas desde la UI).
+// ---------------------------------------------------------------------------
+export function proximosVitalls({ pagosFijos, hoyISO, dias = 7 }) {
+  const hasta = addDaysISO(hoyISO, dias)
+  const items = []
+  ;(pagosFijos || []).forEach((p) => {
+    fechasVencimientoBase(p, hasta)
+      .filter((f) => f >= hoyISO)
+      .forEach((f) => {
+        items.push({
+          pagoId: p.id,
+          name: p.name,
+          tipo: p.tipo,
+          fecha: f,
+          monto: montoOcurrenciaPagoFijo(p, f),
+          omitida: !!excepcionDe(p, f)?.omitida,
+        })
+      })
+  })
+  return items.sort((a, b) => compareISOAsc(a.fecha, b.fecha))
+}
+
+export function proximoIngresoISO({ sueldosFijos, sueldosRapidos, hoyISO }) {
+  const horizonte = addDaysISO(hoyISO, 90)
+  const fechas = []
+  ;(sueldosFijos || []).forEach((s) => fechasPagoVivas(s, horizonte).filter((f) => f > hoyISO).forEach((f) => fechas.push(f)))
+  ;(sueldosRapidos || []).forEach((r) => { if (r?.fecha && r.fecha > hoyISO && r.fecha <= horizonte) fechas.push(r.fecha) })
+  return fechas.sort(compareISOAsc)[0] || null
+}
+
+// ---------------------------------------------------------------------------
+// Widget Cajitas Nu (solo guía informativa, sin conexión bancaria).
+//   - Cajita Vitalls: lo que vence (sin MSI) antes del siguiente cobro.
+//   - Cajita Whimms: dinero libre para Whimms + mensualidades MSI antes del
+//     siguiente cobro (el MSI sale de Whimms, nunca de Vitalls ni de Gastos).
+//   - Saldo Principal: lo que queda, para gastos de la semana.
+// ---------------------------------------------------------------------------
+export function distribucionCajitas({ saldoReal, bolsaWhimms, pagosFijos, sueldosFijos, sueldosRapidos, hoyISO }) {
+  const proximo = proximoIngresoISO({ sueldosFijos, sueldosRapidos, hoyISO }) || addDaysISO(hoyISO, 30)
+  const dueDeAntes = (pagosFijos || []).flatMap((p) =>
+    fechasVencimientoVivas(p, addDaysISO(proximo, -1))
+      .filter((f) => f > hoyISO)
+      .map((f) => ({ msi: p?.tipo === 'MSI', monto: montoOcurrenciaPagoFijo(p, f) }))
+  )
+  const vitalls = dueDeAntes.filter((x) => !x.msi).reduce((sum, x) => sum + x.monto, 0)
+  const msi = dueDeAntes.filter((x) => x.msi).reduce((sum, x) => sum + x.monto, 0)
+  const whimms = Math.max(bolsaWhimms, 0) + msi
+  return { cajitaVitalls: vitalls, cajitaWhimms: whimms, saldoPrincipal: saldoReal - vitalls - whimms, proximoCobro: proximo }
+}
+
+// ---------------------------------------------------------------------------
+// Intercambio gasto semanal <-> Whimm. Gastar de más esta semana sale del
+// dinero de Whimms, y lo primero que se desplaza es lo de menor prioridad.
+//   - Whimm SIN fecha límite que se desplaza: está bien, no es urgente.
+//   - Whimm CON fecha límite que quedaría tarde (o sin fecha segura):
+//     ADVERTENCIA, no se puede intercambiar sin romper esa fecha.
+//   - Whimm CON fecha límite que se retrasa pero sigue a tiempo: aviso suave.
+// `gastoNuevo` = { monto, reembolso?, fecha, categoria? }; se compara la
+// proyección antes y después de registrarlo.
+// ---------------------------------------------------------------------------
+export function evaluarIntercambio({ gastoNuevo, ...base }) {
+  const antes = proyectarColaWhimms(base)
+  const despues = proyectarColaWhimms({ ...base, gastos: [...(base.gastos || []), gastoNuevo] })
+  const previo = new Map(antes.map((r) => [r.id, r]))
+  const nombres = new Map((base.whimms || []).map((w) => [w.id, w.name || w.id]))
+
+  const criticos = []
+  const avisos = []
+  const desplazados = []
+  despues.forEach((r) => {
+    const a = previo.get(r.id)
+    if (!a) return
+    const seRetrasa = r.fechaProyectada !== a.fechaProyectada && (!r.fechaProyectada || (a.fechaProyectada && r.fechaProyectada > a.fechaProyectada))
+    if (!seRetrasa) return
+    const item = {
+      id: r.id,
+      nombre: nombres.get(r.id),
+      antes: a.fechaProyectada,
+      despues: r.fechaProyectada,
+      fechaLimite: r.fechaLimite,
+      dejaDeSerComprableHoy: a.estatus === 'comprable_hoy',
+    }
+    if (!r.fechaLimite) desplazados.push(item)
+    else if (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura') criticos.push(item)
+    else avisos.push(item)
+  })
+
+  const presupuesto = presupuestoDe(base.presupuestoSemanal)
+  const semanaInicio = startOfWeekISO(gastoNuevo?.fecha || base.hoyISO)
+  const gastadoSemana = gastoSemanaReal([...(base.gastos || []), gastoNuevo], semanaInicio, addDaysISO(semanaInicio, 6))
+  return {
+    puedeIntercambiar: criticos.length === 0,
+    criticos,
+    avisos,
+    desplazados,
+    excedeSemana: Math.max(gastadoSemana - presupuesto, 0),
+  }
 }
