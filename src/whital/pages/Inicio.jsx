@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Toggle from '../../components/Toggle'
 import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
-import { addUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import { addUserDoc } from '../../lib/firestoreCollections'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { calcularAjusteSaldo, todayISO } from '../lib/budget'
@@ -23,7 +22,7 @@ function leerDescartados() {
   }
 }
 
-function Avisos({ avisos, user, show }) {
+function Avisos({ avisos }) {
   const [descartados, setDescartados] = useState(leerDescartados)
   const visibles = avisos.filter((a) => !descartados.includes(a.id))
   if (visibles.length === 0) return null
@@ -37,21 +36,11 @@ function Avisos({ avisos, user, show }) {
       /* sin almacenamiento: solo se oculta en esta sesión */
     }
   }
-  const omitir = async (a) => {
-    try {
-      await updateUserDoc(user.uid, 'pagosFijos', a.vitall.pagoId, { [`excepciones.${a.vitall.fecha}`]: { omitida: true } })
-      show('Ocurrencia omitida')
-    } catch {
-      show('No se pudo omitir')
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {visibles.map((a) => (
         <div key={a.id} className="card" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ flex: 1, fontSize: 12, lineHeight: 1.4 }}>{a.texto}</div>
-          {a.tipo === 'vitall' && <button style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 700 }} onClick={() => omitir(a)}>Omitir</button>}
           <button style={{ fontSize: 11, color: 'var(--muted)' }} onClick={() => descartar(a.id)}>Listo</button>
         </div>
       ))}
@@ -121,24 +110,12 @@ export default function Inicio() {
   const avisos = useMemo(() => (vista ? calcularAvisos(datos, hoy, vista.bolsas) : []), [datos, hoy, vista])
   const nombre = user?.displayName?.split(' ')[0] || 'Pame'
 
-  const alternarVitall = async (v) => {
-    try {
-      await updateUserDoc(user.uid, 'pagosFijos', v.pagoId, { [`excepciones.${v.fecha}`]: { omitida: !v.omitida } })
-      show(v.omitida ? 'Ocurrencia restaurada' : 'Ocurrencia omitida')
-    } catch {
-      show('No se pudo actualizar')
-    }
-  }
-
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
-            <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
-          </div>
-          <Link to="/ajustes" style={{ fontSize: 12, color: 'var(--wine)', fontWeight: 600, paddingTop: 4 }}>Ajustes</Link>
+        <div>
+          <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
         </div>
 
         {error && <div className="card" style={{ padding: 12, fontSize: 12, color: 'var(--red)' }}>{error}</div>}
@@ -146,7 +123,7 @@ export default function Inicio() {
 
         {vista && (
           <>
-            <Avisos avisos={avisos} user={user} show={show} />
+            <Avisos avisos={avisos} />
 
             <div className="hero">
               <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Saldo real en banco</div>
@@ -257,7 +234,6 @@ export default function Inicio() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, textDecoration: v.omitida ? 'line-through' : 'none' }}>{v.name}</div>
                       <div className="mono" style={{ fontSize: 13 }}>{fmt(v.monto)}</div>
-                      <Toggle on={v.omitida} onClick={() => alternarVitall(v)} ariaLabel={v.omitida ? 'Restaurar ocurrencia' : 'Omitir ocurrencia'} />
                     </div>
                   ))}
                 </div>

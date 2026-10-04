@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { IconHome, IconReceipt, IconBag, IconVitall, IconCalendar } from '../../components/Icons'
+import { IconHome, IconReceipt, IconBag, IconVitall, IconCalendar, IconPerson } from '../../components/Icons'
 
 const ITEMS = [
   { to: '/', label: 'Inicio', Icon: IconHome, end: true },
@@ -7,6 +7,7 @@ const ITEMS = [
   { to: '/whimms', label: 'Whimms', Icon: IconBag },
   { to: '/vitalls', label: 'Vitalls', Icon: IconVitall },
   { to: '/calendar', label: 'Calendario', Icon: IconCalendar },
+  { to: '/perfil', label: 'Perfil', Icon: IconPerson },
 ]
 
 export default function WhitalNav() {

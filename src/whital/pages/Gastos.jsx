@@ -161,6 +161,8 @@ export default function Gastos() {
   const [ref, setRef] = useState(hoy)
   // El atajo del launcher ("Agregar gasto") y el aviso de recordatorio abren directo el formulario.
   const [sheet, setSheet] = useState(() => (location.state?.nuevo ? {} : null))
+  const [pendienteId, setPendienteId] = useState(location.state?.openGastoId || null)
+  const cerrar = () => { setSheet(null); setPendienteId(null) }
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const bolsas = useMemo(() => (base ? computeBolsas(base) : null), [base])
@@ -191,7 +193,7 @@ export default function Gastos() {
         await addUserDoc(user.uid, 'gastos', accion.datos)
         show('Gasto guardado')
       }
-      setSheet(null)
+      cerrar()
     } catch {
       show('No se pudo guardar')
     }
@@ -201,13 +203,17 @@ export default function Gastos() {
     try {
       await deleteUserDoc(user.uid, 'gastos', id)
       show('Gasto eliminado')
-      setSheet(null)
+      cerrar()
     } catch {
       show('No se pudo eliminar')
     }
   }
 
   const semanaActualVisible = periodo === 'semana' && esActual && bolsas
+  // Gasto que llegó por navegación (p. ej. desde Historial): se abre su edición.
+  const gastoEnlazado = !sheet && pendienteId ? datos.gastos.find((g) => g.id === pendienteId) : null
+  const hojaAbierta = !!sheet || !!gastoEnlazado
+  const gastoEnHoja = sheet ? sheet.gasto : gastoEnlazado
 
   return (
     <>
@@ -293,8 +299,8 @@ export default function Gastos() {
       </div>
 
       <button className="fab" onClick={() => setSheet({})} aria-label="Agregar gasto"><IconPlus /></button>
-      <Sheet abierto={!!sheet} onClose={() => setSheet(null)} titulo={sheet?.gasto ? 'Editar gasto' : 'Nuevo gasto'}>
-        {sheet && base && <GastoForm key={sheet.gasto?.id || 'nuevo'} inicial={sheet.gasto} datos={datos} hoy={hoy} onGuardar={guardar} onEliminar={eliminar} />}
+      <Sheet abierto={hojaAbierta} onClose={cerrar} titulo={gastoEnHoja ? 'Editar gasto' : 'Nuevo gasto'}>
+        {hojaAbierta && base && <GastoForm key={gastoEnHoja?.id || 'nuevo'} inicial={gastoEnHoja} datos={datos} hoy={hoy} onGuardar={guardar} onEliminar={eliminar} />}
       </Sheet>
       <Toast message={message} />
     </>

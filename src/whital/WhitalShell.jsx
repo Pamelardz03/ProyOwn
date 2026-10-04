@@ -2,10 +2,11 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AvisoRecordatorio from './components/AvisoRecordatorio'
 import WhitalNav from './components/WhitalNav'
-import Ajustes from './pages/Ajustes'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
+import Historial from './pages/Historial'
 import Inicio from './pages/Inicio'
+import Perfil from './pages/Perfil'
 import Vitalls from './pages/Vitalls'
 import Whimms from './pages/Whimms'
 
@@ -15,7 +16,7 @@ import Whimms from './pages/Whimms'
 // Atajos del launcher (manifest.webmanifest > shortcuts): abren la raíz con
 // ?ir=gastos&nuevo=1. Se resuelven aquí, navegando por dentro de la app, porque
 // un enlace directo a /gastos da 404 en GitHub Pages.
-const DESTINOS_ATAJO = ['gastos', 'whimms', 'vitalls', 'calendar', 'ajustes']
+const DESTINOS_ATAJO = ['gastos', 'whimms', 'vitalls', 'calendar', 'perfil']
 
 function useAtajoDelLauncher() {
   const location = useLocation()
@@ -38,9 +39,11 @@ export default function WhitalShell() {
         <Route path="/" element={<Inicio />} />
         <Route path="/gastos" element={<Gastos key={location.key} />} />
         <Route path="/whimms" element={<Whimms key={location.key} />} />
-        <Route path="/vitalls" element={<Vitalls />} />
+        <Route path="/vitalls" element={<Vitalls key={location.key} />} />
         <Route path="/calendar" element={<Calendar />} />
-        <Route path="/ajustes" element={<Ajustes />} />
+        <Route path="/perfil" element={<Perfil />} />
+        <Route path="/perfil/historial" element={<Historial />} />
+        <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <WhitalNav />

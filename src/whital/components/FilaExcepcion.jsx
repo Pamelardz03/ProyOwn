@@ -9,7 +9,7 @@ const num = (v) => (v === '' || v == null ? 0 : Number(v))
 // excepciones puntuales: omitir esa fecha y cambiar el monto de esa fecha.
 //   coleccion: 'pagosFijos' | 'sueldosFijos'      entidad: el documento de la serie
 //   ocurrencia: { fecha, monto, omitida }         nombre: texto opcional a la izquierda
-export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, user, show, nombre, verbo = 'esta fecha' }) {
+export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, user, show, nombre, verbo = 'esta fecha', leyenda }) {
   const [editando, setEditando] = useState(false)
   const [valor, setValor] = useState('')
   const exc = entidad.excepciones?.[ocurrencia.fecha] || {}
@@ -39,6 +39,7 @@ export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, use
           {tieneMonto && <div style={{ fontSize: 10, color: 'var(--amber)' }}>monto ajustado (base {fmt(entidad.monto)})</div>}
         </div>
         <button style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 600 }} onClick={() => { setEditando(!editando); setValor(String(ocurrencia.monto)) }}>Cambiar monto</button>
+        {leyenda && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{leyenda}</span>}
         <Toggle
           on={ocurrencia.omitida}
           onClick={() => escribir({ ...exc, omitida: !ocurrencia.omitida }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}

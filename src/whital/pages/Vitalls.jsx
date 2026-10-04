@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
 import { IconPlus } from '../../components/Icons'
@@ -6,10 +7,9 @@ import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import Campo, { Aviso } from '../components/Campo'
-import FilaExcepcion from '../components/FilaExcepcion'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
-import { addDaysISO, ocurrenciasPagoFijo, progresoPagoFijo, todayISO } from '../lib/budget'
+import { progresoPagoFijo, todayISO } from '../lib/budget'
 import { fechaCorta, fmt } from '../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
@@ -18,33 +18,17 @@ const num = (v) => (v === '' || v == null ? 0 : Number(v))
 const esMSI = (p) => p.tipo === 'MSI'
 const esPlazos = (p) => !!p.finito || esMSI(p)
 
-// Ocurrencias cercanas de una serie (2 recientes + 4 próximas) con sus
-// excepciones puntuales.
-function OcurrenciasSerie({ pago, hoy, user, show }) {
-  const ocurrencias = useMemo(() => {
-    const todas = ocurrenciasPagoFijo(pago, addDaysISO(hoy, 400), addDaysISO(hoy, -35))
-    return [...todas.filter((o) => o.fecha < hoy).slice(-2), ...todas.filter((o) => o.fecha >= hoy).slice(0, 4)]
-  }, [pago, hoy])
-
-  if (ocurrencias.length === 0) return <div style={{ fontSize: 11, color: 'var(--muted)' }}>Esta serie no tiene fechas próximas.</div>
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {ocurrencias.map((o) => <FilaExcepcion key={o.fecha} coleccion="pagosFijos" entidad={pago} ocurrencia={o} hoy={hoy} user={user} show={show} />)}
-    </div>
-  )
-}
-
-function VitallForm({ pago, datos, hoy, user, show, onCerrar }) {
+function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
   const nuevo = !pago?.id
   const msi = pago && esMSI(pago)
-  const [plazos, setPlazos] = useState(pago ? esPlazos(pago) : false)
+  const [plazos, setPlazos] = useState(pago ? esPlazos(pago) : !!plazosInicial)
   const [name, setName] = useState(pago?.name || '')
   const [monto, setMonto] = useState(pago?.monto != null ? String(pago.monto) : '')
   const [frecuencia, setFrecuencia] = useState(pago?.frecuencia || 'Mensual')
   const [fecha, setFecha] = useState(pago?.fecha || hoy)
   const [numPagos, setNumPagos] = useState(pago?.numPagos != null ? String(pago.numPagos) : '3')
   const [categoria, setCategoria] = useState(pago && pago.tipo !== 'Vitall' && !msi ? pago.tipo || '' : '')
-  const [activo, setActivo] = useState(pago ? pago.activo !== false : true)
+  const activo = pago ? pago.activo !== false : true // pausar/reanudar se hace con el interruptor de la lista
   const [confirmarEliminar, setConfirmarEliminar] = useState(false)
 
   const categorias = useMemo(() => [...new Set(datos.pagosFijos.map((p) => p.tipo).filter((t) => t && t !== 'Vitall' && t !== 'MSI'))], [datos.pagosFijos])
@@ -119,20 +103,11 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar }) {
         </div>
       )}
       {prog && <div style={{ fontSize: 11, color: 'var(--muted)' }}>Lleva {prog.pagados} de {prog.total} pagos{prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : ' · liquidado'}.</div>}
-      {!nuevo && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>Activo</span>
-          <Toggle on={activo} onClick={() => setActivo(!activo)} ariaLabel="Activo" />
-        </div>
-      )}
-
       <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar' : 'Guardar serie'}</button>
 
       {!nuevo && (
         <div style={{ borderTop: '1px solid var(--beige3)', paddingTop: 12 }}>
-          <div className="eyebrow" style={{ marginBottom: 6 }}>Fechas de esta serie</div>
-          <OcurrenciasSerie pago={pago} hoy={hoy} user={user} show={show} />
-          <div style={{ marginTop: 14 }}>
+          <div>
             <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>
               {confirmarEliminar ? 'Toca de nuevo para eliminar toda la serie' : 'Eliminar serie'}
             </button>
@@ -143,21 +118,22 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar }) {
   )
 }
 
-function Fila({ p, hoy, onClick }) {
+function Fila({ p, hoy, onClick, onPausar }) {
   const prog = progresoPagoFijo(p, hoy)
-  const inactivo = p.activo === false
+  const activo = p.activo !== false
   return (
-    <button className="row-list-item" style={{ textAlign: 'left', width: '100%', opacity: inactivo ? 0.5 : 1 }} onClick={onClick}>
+    <div className="row-list-item" onClick={onClick} style={{ cursor: 'pointer', opacity: activo ? 1 : 0.5 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>
           {p.frecuencia}
           {esPlazos(p) && prog.total ? ` · ${Math.min(prog.pagados, prog.total)} de ${prog.total} pagos` : ''}
-          {inactivo ? ' · pausado' : prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : esPlazos(p) ? ' · liquidado' : ''}
+          {!activo ? ' · pausado' : prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : esPlazos(p) ? ' · liquidado' : ''}
         </div>
       </div>
       <div className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{fmt(p.monto)}</div>
-    </button>
+      <Toggle on={activo} onClick={(e) => { e.stopPropagation(); onPausar(p) }} ariaLabel={activo ? 'Pausar' : 'Reanudar'} />
+    </div>
   )
 }
 
@@ -166,7 +142,18 @@ export default function Vitalls() {
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
-  const [sheet, setSheet] = useState(null)
+  const location = useLocation()
+  // Desde Perfil > "¿Qué quieres agregar?": abre el formulario ya en el tipo elegido.
+  const [sheet, setSheet] = useState(() => (location.state?.nuevo ? { plazos: location.state.nuevo === 'plazos' } : null))
+
+  const pausar = async (p) => {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', p.id, { activo: p.activo === false })
+      show(p.activo === false ? 'Reanudado' : 'Pausado')
+    } catch {
+      show('No se pudo actualizar')
+    }
+  }
 
   const suscripciones = datos.pagosFijos.filter((p) => !esPlazos(p))
   const plazos = datos.pagosFijos.filter(esPlazos)
@@ -183,13 +170,13 @@ export default function Vitalls() {
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Suscripciones y recurrentes</div>
               {suscripciones.length === 0
                 ? <div className="empty-state">Sin suscripciones</div>
-                : <div className="row-list">{suscripciones.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} />)}</div>}
+                : <div className="row-list">{suscripciones.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} onPausar={pausar} />)}</div>}
             </div>
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Pagos a plazos</div>
               {plazos.length === 0
                 ? <div className="empty-state">Sin pagos a plazos</div>
-                : <div className="row-list">{plazos.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} />)}</div>}
+                : <div className="row-list">{plazos.map((p) => <Fila key={p.id} p={p} hoy={hoy} onClick={() => setSheet({ pago: p })} onPausar={pausar} />)}</div>}
             </div>
           </>
         )}
@@ -197,7 +184,7 @@ export default function Vitalls() {
 
       <button className="fab" onClick={() => setSheet({})} aria-label="Agregar Vitall"><IconPlus /></button>
       <Sheet abierto={!!sheet} onClose={() => setSheet(null)} titulo={sheet?.pago ? sheet.pago.name : 'Nuevo Vitall'}>
-        {sheet && <VitallForm key={sheet.pago?.id || 'nuevo'} pago={sheet.pago} datos={datos} hoy={hoy} user={user} show={show} onCerrar={() => setSheet(null)} />}
+        {sheet && <VitallForm key={sheet.pago?.id || 'nuevo'} plazosInicial={sheet.plazos} pago={sheet.pago} datos={datos} hoy={hoy} user={user} show={show} onCerrar={() => setSheet(null)} />}
       </Sheet>
       <Toast message={message} />
     </>
