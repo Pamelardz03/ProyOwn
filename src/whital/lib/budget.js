@@ -429,31 +429,85 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // ---------------------------------------------------------------------------
 export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, presupuestoSemanal, hoyISO }) {
   const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, presupuestoSemanal, hoyISO })
-  const apartado = apartadoTotalPendiente(whimms)
-  const saldos = linea.saldos.map((s) => s - apartado)
+  const saldosBase = linea.saldos.map((s) => s - apartadoTotalPendiente(whimms))
 
-  const ordenados = (whimms || [])
+  const porPrioridad = (whimms || [])
     .filter(esWhimmPendiente)
     .map((w) => ({ w, score: computeWhimmScore(w), prioridad: computeWhimmPrioridad(w, hoyISO) }))
     .sort((a, b) => b.prioridad - a.prioridad || (Number(a.w.precio) || 0) - (Number(b.w.precio) || 0))
 
-  return ordenados.map(({ w, score, prioridad }) => {
-    const faltante = Math.max((Number(w.precio) || 0) - (Number(w.montoApartado) || 0), 0)
-    const minimos = minimosDesdeElFinal(saldos)
-    const idx = minimos.findIndex((m) => m + EPS >= faltante)
-    let fechaProyectada = null
-    if (idx >= 0) {
-      fechaProyectada = linea.fechas[idx]
-      for (let j = idx; j < saldos.length; j++) saldos[j] -= faltante
+  // Acomoda la fila en el orden dado y devuelve la fecha de cada Whimm.
+  const simular = (orden) => {
+    const saldos = [...saldosBase]
+    return orden.map(({ w, score, prioridad }) => {
+      const faltante = Math.max((Number(w.precio) || 0) - (Number(w.montoApartado) || 0), 0)
+      const minimos = minimosDesdeElFinal(saldos)
+      const idx = minimos.findIndex((m) => m + EPS >= faltante)
+      let fechaProyectada = null
+      if (idx >= 0) {
+        fechaProyectada = linea.fechas[idx]
+        for (let k = idx; k < saldos.length; k++) saldos[k] -= faltante
+      }
+      const diasMargen = fechaProyectada && w.fechaLimite ? diasEntreISO(fechaProyectada, w.fechaLimite) : null
+      let estatus = 'sin_fecha_segura'
+      if (fechaProyectada) {
+        if (diasMargen != null && diasMargen < 0) estatus = 'tarde'
+        else estatus = fechaProyectada === hoyISO ? 'comprable_hoy' : 'en_fecha'
+      }
+      return { id: w.id, score, prioridad, faltante, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus }
+    })
+  }
+
+  // Rescate por fecha límite: el score manda, pero si una fecha límite se
+  // incumpliría, ese Whimm sube lo MÍNIMO necesario en la fila (el menor
+  // desplazamiento) siempre que eso reduzca el atraso total. Whimms sin fecha
+  // no se penalizan, solo ceden el lugar si estorban a uno con fecha.
+  const atraso = (res) => res.reduce((sum, r) => {
+    if (!r.fechaLimite) return sum
+    if (!r.fechaProyectada) return sum + 1000
+    return sum + (r.diasMargen < 0 ? -r.diasMargen : 0)
+  }, 0)
+
+  let orden = porPrioridad
+  let resultado = simular(orden)
+  let atrasoActual = atraso(resultado)
+  for (let pasada = 0; pasada < 20 && atrasoActual > 0; pasada++) {
+    // Se atiende primero el Whimm incumplido con la fecha límite más cercana.
+    let i = -1
+    resultado.forEach((r, k) => {
+      const incumple = r.fechaLimite && (r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura')
+      if (incumple && (i < 0 || r.fechaLimite < resultado[i].fechaLimite)) i = k
+    })
+    if (i < 0) break
+
+    // Dos tipos de movimiento: subir al incumplido, o bajar detrás de él a un
+    // Whimm anterior que no esté incumpliendo (le sobra margen o no tiene fecha).
+    const candidatos = []
+    for (let j = i - 1; j >= 0; j--) {
+      const c = [...orden]
+      c.splice(j, 0, c.splice(i, 1)[0])
+      candidatos.push({ orden: c, desplazamiento: i - j })
     }
-    const diasMargen = fechaProyectada && w.fechaLimite ? diasEntreISO(fechaProyectada, w.fechaLimite) : null
-    let estatus = 'sin_fecha_segura'
-    if (fechaProyectada) {
-      if (diasMargen != null && diasMargen < 0) estatus = 'tarde'
-      else estatus = fechaProyectada === hoyISO ? 'comprable_hoy' : 'en_fecha'
+    for (let k = i - 1; k >= 0; k--) {
+      if (resultado[k].estatus === 'tarde') continue
+      const c = [...orden]
+      c.splice(i, 0, c.splice(k, 1)[0])
+      candidatos.push({ orden: c, desplazamiento: i - k })
     }
-    return { id: w.id, score, prioridad, faltante, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus }
-  })
+    let mejor = null
+    for (const c of candidatos) {
+      const res = simular(c.orden)
+      const a = atraso(res)
+      if (a < atrasoActual && (!mejor || a < mejor.atraso || (a === mejor.atraso && c.desplazamiento < mejor.desplazamiento))) {
+        mejor = { orden: c.orden, res, atraso: a, desplazamiento: c.desplazamiento }
+      }
+    }
+    if (!mejor) break
+    orden = mejor.orden
+    resultado = mejor.res
+    atrasoActual = mejor.atraso
+  }
+  return resultado
 }
 
 // ---------------------------------------------------------------------------
