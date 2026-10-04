@@ -7,6 +7,11 @@ import Gastos from './pages/Gastos'
 import Historial from './pages/Historial'
 import Inicio from './pages/Inicio'
 import Perfil from './pages/Perfil'
+import Agregar from './pages/perfil/Agregar'
+import Configuracion from './pages/perfil/Configuracion'
+import Metricas from './pages/perfil/Metricas'
+import PagosFijos from './pages/perfil/PagosFijos'
+import Sueldos from './pages/perfil/Sueldos'
 import Vitalls from './pages/Vitalls'
 import Whimms from './pages/Whimms'
 
@@ -43,6 +48,11 @@ export default function WhitalShell() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/perfil" element={<Perfil key={location.key} />} />
         <Route path="/perfil/historial" element={<Historial />} />
+        <Route path="/perfil/pagos-fijos" element={<PagosFijos />} />
+        <Route path="/perfil/sueldos" element={<Sueldos key={location.key} />} />
+        <Route path="/perfil/metricas" element={<Metricas />} />
+        <Route path="/perfil/agregar" element={<Agregar />} />
+        <Route path="/perfil/configuracion" element={<Configuracion />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

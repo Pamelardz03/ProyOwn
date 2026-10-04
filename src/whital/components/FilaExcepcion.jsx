@@ -31,7 +31,7 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
 
   const editarSerie = () => {
     if (coleccion === 'pagosFijos') navigate('/vitalls', { state: { openPagoId: entidad.id } })
-    else navigate('/perfil', { state: { openSueldoId: entidad.id } })
+    else navigate('/perfil/sueldos', { state: { openSueldoId: entidad.id } })
   }
 
   const eliminarSerie = async () => {
