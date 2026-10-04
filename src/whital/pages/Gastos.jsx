@@ -6,6 +6,7 @@ import { IconChevronLeft, IconChevronRight, IconEdit, IconPlus, IconReceipt } fr
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import Sheet from '../components/Sheet'
 import TileImagen from '../components/TileImagen'
@@ -30,7 +31,6 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
   const [compartido, setCompartido] = useState(Number(inicial?.reembolso) > 0)
   const [reembolso, setReembolso] = useState(Number(inicial?.reembolso) > 0 ? String(inicial.reembolso) : '')
   const [whimmId, setWhimmId] = useState('')
-  const [confirmarEliminar, setConfirmarEliminar] = useState(false)
 
   const pendientes = datos.whimms.filter((w) => w.estado === 'espera' || w.estado === 'apartando')
   const etiquetas = useMemo(() => [...new Set(datos.gastos.map((g) => g.etiqueta || g.categoriaWhimm).filter(Boolean))], [datos.gastos])
@@ -126,11 +126,7 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
       <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45, background: conAdvertencia ? 'var(--red)' : 'var(--wine)' }} onClick={guardar} disabled={!puedeGuardar}>
         {conAdvertencia ? 'Guardar de todos modos' : editando ? 'Guardar cambios' : 'Guardar'}
       </button>
-      {editando && (
-        <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? onEliminar(inicial.id) : setConfirmarEliminar(true))}>
-          {confirmarEliminar ? 'Toca de nuevo para eliminar' : 'Eliminar gasto'}
-        </button>
-      )}
+      {editando && <BotonEliminar mensaje="¿Eliminar este gasto? No se puede deshacer." onConfirmar={() => onEliminar(inicial.id)} />}
     </div>
   )
 }

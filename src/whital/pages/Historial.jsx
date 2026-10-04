@@ -5,6 +5,7 @@ import { IconChevronLeft, IconClose } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { deleteUserDoc } from '../../lib/firestoreCollections'
+import BotonEliminar from '../components/BotonEliminar'
 import FilaExcepcion from '../components/FilaExcepcion'
 import Modal from '../components/Modal'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -60,13 +61,13 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
         </div>
       )}
       {ev.tipo === 'sueldo' && ev.rapido && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button style={{ ...boton, background: 'var(--red-bg)', color: 'var(--red)' }} onClick={() => borrar('sueldosRapidos', ev.entidad.id, 'Ingreso eliminado')}>Eliminar ingreso</button>
+        <div style={{ marginTop: 16 }}>
+          <BotonEliminar mensaje="¿Eliminar este ingreso? No se puede deshacer." onConfirmar={() => borrar('sueldosRapidos', ev.entidad.id, 'Ingreso eliminado')} />
         </div>
       )}
       {ev.tipo === 'ajuste' && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button style={{ ...boton, background: 'var(--red-bg)', color: 'var(--red)' }} onClick={() => borrar('ajustesSaldo', ev.entidad.id, 'Ajuste eliminado')}>Quitar ajuste</button>
+        <div style={{ marginTop: 16 }}>
+          <BotonEliminar mensaje="¿Eliminar este ajuste de saldo? El saldo se vuelve a calcular sin él." onConfirmar={() => borrar('ajustesSaldo', ev.entidad.id, 'Ajuste eliminado')} />
         </div>
       )}
     </Modal>

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import Toast from '../../components/Toast'
-import { IconChevronLeft, IconChevronRight } from '../../components/Icons'
+import { IconChevronLeft, IconChevronRight, IconEdit } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc } from '../../lib/firestoreCollections'
 import Campo, { Aviso } from '../components/Campo'
+import DetalleEliminable from '../components/DetalleEliminable'
 import FilaExcepcion from '../components/FilaExcepcion'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -67,12 +68,14 @@ function IngresoRapido({ fecha, user, show, onListo }) {
 
 function DiaSheet({ fecha, evento, hoy, user, show }) {
   const [agregando, setAgregando] = useState(false)
+  const [rapido, setRapido] = useState(null)
   const vacio = !evento || (evento.ingresos.length === 0 && evento.compromisos.length === 0 && evento.compras.length === 0)
 
   const borrarRapido = async (id) => {
     try {
       await deleteUserDoc(user.uid, 'sueldosRapidos', id)
       show('Ingreso eliminado')
+      setRapido(null)
     } catch {
       show('No se pudo eliminar')
     }
@@ -92,7 +95,7 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
               <div key={i.entidad.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: '1px solid var(--beige2)' }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{i.nombre}</div>
                 <div className="mono" style={{ fontSize: 13 }}>{fmt(i.monto)}</div>
-                <button style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }} onClick={() => borrarRapido(i.entidad.id)}>Eliminar</button>
+                <button aria-label="Editar" onClick={() => setRapido(i)}><IconEdit /></button>
               </div>
             )
           )}
@@ -119,6 +122,8 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
           ))}
         </div>
       )}
+
+      {rapido && <DetalleEliminable titulo={rapido.nombre} sub={fechaCorta(rapido.fecha)} monto={rapido.monto} mensaje="¿Eliminar este ingreso? No se puede deshacer." onEliminar={() => borrarRapido(rapido.entidad.id)} onCerrar={() => setRapido(null)} />}
 
       {agregando ? (
         <IngresoRapido fecha={fecha} user={user} show={show} onListo={() => setAgregando(false)} />

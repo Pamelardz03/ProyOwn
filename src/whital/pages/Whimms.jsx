@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
-import { IconChevronLeft, IconClose, IconEdit, IconPlus, IconTrash } from '../../components/Icons'
+import { IconChevronLeft, IconClose, IconEdit, IconPlus } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
@@ -131,7 +132,6 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
   const [extra, setExtra] = useState('')
   const [numPagos, setNumPagos] = useState('3')
   const [primerPago, setPrimerPago] = useState(addMonthsISO(hoy, 1))
-  const [confirmarEliminar, setConfirmarEliminar] = useState(false)
 
   const estado = whimm.estado || 'espera'
   const enFila = estado === 'espera' || estado === 'apartando'
@@ -187,14 +187,12 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
   )
 
   const pie = (
-    <>
-      <button onClick={onEditar} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button onClick={onEditar} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
         <IconEdit color="var(--wine)" /> Editar
       </button>
-      <button onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--red-bg)', borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
-        <IconTrash size={13} color="var(--red)" /> {confirmarEliminar ? 'Confirmar' : 'Eliminar'}
-      </button>
-    </>
+      <BotonEliminar mensaje={`¿Eliminar "${whimm.name}"? No se puede deshacer.${estado === 'pagando' ? ' También se borra su plan de pagos.' : ''}`} onConfirmar={eliminar} />
+    </div>
   )
 
   return (
@@ -307,7 +305,7 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
         </div>
       )}
 
-      {estado === 'pagando' && <button onClick={cancelarMSI} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 14 }}>Cancelar los meses y regresar a la fila</button>}
+      {estado === 'pagando' && <div style={{ marginBottom: 14 }}><BotonEliminar texto="Cancelar los meses" mensaje="Se borra el plan de pagos y el Whimm vuelve a tu fila." onConfirmar={cancelarMSI} /></div>}
       {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 14 }}>Regresar a la fila</button>}
 
       {links.length > 0 && (

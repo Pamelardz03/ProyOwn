@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { IconClose, IconEdit } from '../../components/Icons'
 import { deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import { diaSemanaCorto, fechaCorta, fmt } from '../lib/vista'
+import BotonEliminar from './BotonEliminar'
 import Campo from './Campo'
 import Modal from './Modal'
 
@@ -17,7 +18,6 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
   const exc = entidad.excepciones?.[ocurrencia.fecha] || {}
   const tieneMonto = exc.montoReal != null || exc.monto != null
   const [valor, setValor] = useState(String(ocurrencia.monto))
-  const [confirmarSerie, setConfirmarSerie] = useState(false)
 
   const escribirExcepcion = async (nueva, mensaje) => {
     try {
@@ -77,9 +77,9 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
       <div className="eyebrow" style={{ marginBottom: 8 }}>Toda la serie</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={editarSerie}>Editar serie</button>
-        <button style={{ ...boton, background: 'var(--red-bg)', color: 'var(--red)' }} onClick={() => (confirmarSerie ? eliminarSerie() : setConfirmarSerie(true))}>
-          {confirmarSerie ? 'Toca de nuevo para eliminar toda la serie' : 'Eliminar serie'}
-        </button>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <BotonEliminar mensaje="¿Eliminar toda la serie? También se pierden sus pagos del historial." onConfirmar={eliminarSerie} />
       </div>
     </Modal>
   )

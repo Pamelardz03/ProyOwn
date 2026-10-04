@@ -5,7 +5,9 @@ import { IconCard, IconChevronRight, IconClock, IconHeart, IconPlus, IconReceipt
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
+import DetalleEliminable from '../components/DetalleEliminable'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { gastoNeto, generarFechasPago, ocurrenciasSueldo, todayISO } from '../lib/budget'
@@ -15,6 +17,8 @@ import { borrarDatos, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '
 import { calcularVistaInicio, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
+// Versión publicada (commit); sirve para saber si estás viendo lo último.
+const VERSION = typeof __WHITAL_VERSION__ !== 'undefined' ? __WHITAL_VERSION__ : 'local'
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 
 function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
@@ -23,7 +27,6 @@ function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
   const [monto, setMonto] = useState(sueldo?.monto != null ? String(sueldo.monto) : '')
   const [frecuencia, setFrecuencia] = useState(sueldo?.frecuencia || 'Quincenal')
   const [fechaInicio, setFechaInicio] = useState(sueldo?.fechaInicio || hoy)
-  const [confirmarEliminar, setConfirmarEliminar] = useState(false)
   const detenido = !!sueldo?.fechaFin
   const puedeGuardar = name.trim() && num(monto) > 0 && !!fechaInicio
 
@@ -75,7 +78,7 @@ function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
           {detenido
             ? <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={reanudar}>Reanudar (detenido desde {fechaCorta(sueldo.fechaFin)})</button>
             : <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={detener}>Detener a partir de hoy</button>}
-          <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>{confirmarEliminar ? 'Toca de nuevo para eliminar todo, incluido el historial' : 'Eliminar todo'}</button>
+          <BotonEliminar mensaje="¿Eliminar este sueldo? También se pierde su historial de cobros." onConfirmar={eliminar} />
         </>
       )}
     </div>
@@ -152,9 +155,7 @@ function DatosDePrueba({ datos, user, show }) {
       <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.5 : 1, background: confirmar === 'recargar' ? 'var(--red)' : 'var(--wine)' }} onClick={() => (confirmar === 'recargar' ? correr(true) : setConfirmar('recargar'))}>
         {trabajando ? 'Trabajando…' : confirmar === 'recargar' ? 'Toca de nuevo: borrar y cargar' : 'Borrar todo y cargar datos de prueba'}
       </button>
-      <button disabled={trabajando} style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmar === 'borrar' ? correr(false) : setConfirmar('borrar'))}>
-        {confirmar === 'borrar' ? 'Toca de nuevo para borrar todo' : 'Solo borrar todo'}
-      </button>
+      <BotonEliminar texto="Eliminar todo" mensaje="Se borran todos los gastos, Whimms, Vitalls y sueldos de esta cuenta." deshabilitado={trabajando} onConfirmar={() => correr(false)} />
     </div>
   )
 }
@@ -231,6 +232,7 @@ export default function Perfil() {
   const sueldoSheet = sueldoManual || (sueldoEnlazado ? { sueldo: sueldoEnlazado } : null)
   const cerrarSueldo = () => { setSueldoSheet(null); setPendienteSueldoId(null) }
   const [rapidoAbierto, setRapidoAbierto] = useState(false)
+  const [ajusteAbierto, setAjusteAbierto] = useState(null)
   const [editando, setEditando] = useState(null) // 'saldo' | 'presupuesto'
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
@@ -348,6 +350,29 @@ export default function Perfil() {
               </div>
 
               <div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Pagos fijos</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>{fmt(metricas.totalFijoMensual)} al mes</div>
+                </div>
+                {metricas.pagosFijosVigentes.length === 0 ? (
+                  <div className="empty-state">Sin pagos fijos</div>
+                ) : (
+                  <div className="row-list">
+                    {metricas.pagosFijosVigentes.map((p) => (
+                      <div key={p.id} className="row-list-item" onClick={() => navigate('/vitalls', { state: { openPagoId: p.id } })} style={{ cursor: 'pointer' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{p.frecuencia}{p.tipo && p.tipo !== 'Vitall' ? ` · ${p.tipo === 'MSI' ? 'a meses' : p.tipo}` : ''}</div>
+                        </div>
+                        <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(p.monto)}</div>
+                        <IconChevronRight />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Métricas principales</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   {grid.map(([etiqueta, valor, pista]) => (
@@ -378,13 +403,12 @@ export default function Perfil() {
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Ajustes de saldo a mi banco</div>
                   <div className="row-list">
                     {ajustes.map((a) => (
-                      <div key={a.id} className="row-list-item">
+                      <div key={a.id} className="row-list-item" onClick={() => setAjusteAbierto(a)} style={{ cursor: 'pointer' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 12, fontWeight: 600 }}>{fechaCorta(a.fecha)}</div>
                           <div style={{ fontSize: 10, color: 'var(--muted)' }}>{a.saldoBanco != null ? `banco ${fmt(a.saldoBanco)}` : 'Ajuste'}</div>
                         </div>
                         <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: a.monto < 0 ? 'var(--red)' : 'var(--green)' }}>{a.monto > 0 ? '+' : ''}{fmt(a.monto)}</div>
-                        <button style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600 }} onClick={() => borrarAjuste(a.id)}>Quitar</button>
                       </div>
                     ))}
                   </div>
@@ -408,6 +432,8 @@ export default function Perfil() {
                   <button onClick={() => logout()} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Cerrar sesión</button>
                 </div>
               </div>
+
+              <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--muted)' }}>Whital · versión {VERSION}</div>
             </>
           )}
         </div>
@@ -419,6 +445,16 @@ export default function Perfil() {
       <Sheet abierto={rapidoAbierto} onClose={() => setRapidoAbierto(false)} titulo="Ingreso rápido">
         {rapidoAbierto && <IngresoRapidoForm hoy={hoy} user={user} show={show} onCerrar={() => setRapidoAbierto(false)} />}
       </Sheet>
+      {ajusteAbierto && (
+        <DetalleEliminable
+          titulo="Ajuste a mi banco"
+          sub={`${fechaCorta(ajusteAbierto.fecha)}${ajusteAbierto.saldoBanco != null ? ` · banco ${fmt(ajusteAbierto.saldoBanco)}` : ''}`}
+          monto={ajusteAbierto.monto}
+          mensaje="¿Eliminar este ajuste de saldo? El saldo se vuelve a calcular sin él."
+          onEliminar={async () => { await borrarAjuste(ajusteAbierto.id); setAjusteAbierto(null) }}
+          onCerrar={() => setAjusteAbierto(null)}
+        />
+      )}
       <Toast message={message} />
     </>
   )

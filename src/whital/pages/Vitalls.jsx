@@ -6,6 +6,7 @@ import { IconPlus } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -29,7 +30,6 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
   const [numPagos, setNumPagos] = useState(pago?.numPagos != null ? String(pago.numPagos) : '3')
   const [categoria, setCategoria] = useState(pago && pago.tipo !== 'Vitall' && !msi ? pago.tipo || '' : '')
   const activo = pago ? pago.activo !== false : true // pausar/reanudar se hace con el interruptor de la lista
-  const [confirmarEliminar, setConfirmarEliminar] = useState(false)
 
   const categorias = useMemo(() => [...new Set(datos.pagosFijos.map((p) => p.tipo).filter((t) => t && t !== 'Vitall' && t !== 'MSI'))], [datos.pagosFijos])
   const prog = pago && plazos ? progresoPagoFijo(pago, hoy) : null
@@ -107,11 +107,7 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
 
       {!nuevo && (
         <div style={{ borderTop: '1px solid var(--beige3)', paddingTop: 12 }}>
-          <div>
-            <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>
-              {confirmarEliminar ? 'Toca de nuevo para eliminar toda la serie' : 'Eliminar serie'}
-            </button>
-          </div>
+          <BotonEliminar mensaje="¿Eliminar toda la serie? También se pierden sus pagos del historial." onConfirmar={eliminar} />
         </div>
       )}
     </div>
