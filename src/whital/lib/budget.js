@@ -192,7 +192,7 @@ function fechasVencimientoVivas(pagoFijo, hastaISO) {
   return fechasVencimientoBase(pagoFijo, hastaISO).filter((fx) => !excepcionDe(pagoFijo, fx)?.omitida)
 }
 
-function addMonthsISO(iso, n) {
+export function addMonthsISO(iso, n) {
   const date = parseISODate(iso)
   if (!date) return iso
   const dia = date.getDate()
