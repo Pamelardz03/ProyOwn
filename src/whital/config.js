@@ -14,7 +14,16 @@
 // escritura directa a Firestore), y esa UI real es justo la que este
 // gate esconde detrás del placeholder. En cuanto termine de copiar los
 // datos reales a la cuenta UDEM, este array vuelve a tener ese UID.
-export const WHITAL_UIDS = []
+//
+// Para VER Whital en tu máquina sin cambiar esta lista (y sin que se despliegue),
+// agrega a .env.local (no se sube a git):  VITE_WHITAL_UIDS=mXsSrvUK61NuVct4EUa4sZ2YbTP2
+// En producción esa variable no existe, así que solo cuenta la lista de abajo.
+const UIDS_LOCALES = String(import.meta.env.VITE_WHITAL_UIDS || '')
+  .split(',')
+  .map((x) => x.trim())
+  .filter(Boolean)
+
+export const WHITAL_UIDS = [...UIDS_LOCALES]
 
 export function esCuentaWhital(uid) {
   return !!uid && WHITAL_UIDS.includes(uid)
