@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import { IconChevronLeft, IconPlus } from '../../components/Icons'
@@ -9,6 +9,7 @@ import Campo, { Aviso } from '../components/Campo'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { PRESUPUESTO_SEMANAL_DEFAULT, generarFechasPago, ocurrenciasSueldo, todayISO } from '../lib/budget'
+import { borrarDatos, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '../lib/seed'
 import { fechaCorta, fmt } from '../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
@@ -76,6 +77,47 @@ function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
           <button style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmarEliminar ? eliminar() : setConfirmarEliminar(true))}>{confirmarEliminar ? 'Toca de nuevo para eliminar todo, incluido el historial' : 'Eliminar todo'}</button>
         </>
       )}
+    </div>
+  )
+}
+
+// Solo aparece en la cuenta de prueba (uid del archivo local de datos). Borra lo
+// que haya y escribe los datos de prueba con la sesión actual.
+function DatosDePrueba({ datos, user, show }) {
+  const [seed, setSeed] = useState(null)
+  const [trabajando, setTrabajando] = useState(false)
+  const [confirmar, setConfirmar] = useState(null) // 'recargar' | 'borrar'
+
+  useEffect(() => {
+    if (hayDatosDePrueba()) leerDatosDePrueba().then(setSeed)
+  }, [])
+  if (!seed || seed.uid !== user?.uid) return null
+
+  const correr = async (cargar) => {
+    setTrabajando(true)
+    try {
+      const borrados = await borrarDatos(user.uid, datos)
+      const escritos = cargar ? await sembrarDatos(user.uid, seed) : 0
+      show(cargar ? `Listo: ${borrados} borrados, ${escritos} cargados` : `${borrados} documentos borrados`)
+    } catch {
+      show('Algo falló a la mitad; revisa y vuelve a intentar')
+    }
+    setTrabajando(false)
+    setConfirmar(null)
+  }
+
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="eyebrow">Datos de prueba · solo esta cuenta</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>
+        Borra TODOS tus gastos, Whimms, Vitalls, sueldos y ajustes de esta cuenta y carga el escenario de prueba (tu historial real + el plan de Gemini).
+      </div>
+      <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.5 : 1, background: confirmar === 'recargar' ? 'var(--red)' : 'var(--wine)' }} onClick={() => (confirmar === 'recargar' ? correr(true) : setConfirmar('recargar'))}>
+        {trabajando ? 'Trabajando…' : confirmar === 'recargar' ? 'Toca de nuevo: borrar y cargar' : 'Borrar todo y cargar datos de prueba'}
+      </button>
+      <button disabled={trabajando} style={{ color: 'var(--red)', fontSize: 12, fontWeight: 600 }} onClick={() => (confirmar === 'borrar' ? correr(false) : setConfirmar('borrar'))}>
+        {confirmar === 'borrar' ? 'Toca de nuevo para borrar todo' : 'Solo borrar todo (dejar la cuenta en blanco)'}
+      </button>
     </div>
   )
 }
@@ -187,6 +229,8 @@ export default function Ajustes() {
                   </div>
                 )}
             </div>
+
+            <DatosDePrueba datos={datos} user={user} show={show} />
 
             <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
