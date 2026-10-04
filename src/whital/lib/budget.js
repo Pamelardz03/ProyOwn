@@ -31,7 +31,7 @@ export function parseISODate(iso) {
   return new Date(y, m - 1, d)
 }
 
-function toISO(d) {
+export function toISO(d) {
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }

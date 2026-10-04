@@ -1,15 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import WhitalNav from './components/WhitalNav'
+import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
 import Inicio from './pages/Inicio'
 import Vitalls from './pages/Vitalls'
 import Whimms from './pages/Whimms'
-import Pendiente from './pages/Pendiente'
 
 // App Shell de Whital: navegación propia (Inicio | Gastos | Whimms | Vitalls |
 // Calendar). Vive dentro del BrowserRouter de App.jsx; solo se renderiza para
-// las cuentas del gate (src/whital/config.js). Las pantallas que faltan son
-// placeholders hasta que se construyan una por una.
+// las cuentas del gate (src/whital/config.js).
 export default function WhitalShell() {
   return (
     <div className="app-shell">
@@ -18,7 +17,7 @@ export default function WhitalShell() {
         <Route path="/gastos" element={<Gastos />} />
         <Route path="/whimms" element={<Whimms />} />
         <Route path="/vitalls" element={<Vitalls />} />
-        <Route path="/calendar" element={<Pendiente titulo="Calendar" texto="Aquí irá el calendario de ingresos, compromisos y compras proyectadas." />} />
+        <Route path="/calendar" element={<Calendar />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <WhitalNav />

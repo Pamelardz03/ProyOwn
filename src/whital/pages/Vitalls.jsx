@@ -6,10 +6,11 @@ import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import Campo, { Aviso } from '../components/Campo'
+import FilaExcepcion from '../components/FilaExcepcion'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { addDaysISO, ocurrenciasPagoFijo, progresoPagoFijo, todayISO } from '../lib/budget'
-import { diaSemanaCorto, fechaCorta, fmt } from '../lib/vista'
+import { fechaCorta, fmt } from '../lib/vista'
 
 const FRECUENCIAS = ['Semanal', 'Quincenal', 'Mensual']
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
@@ -17,59 +18,18 @@ const num = (v) => (v === '' || v == null ? 0 : Number(v))
 const esMSI = (p) => p.tipo === 'MSI'
 const esPlazos = (p) => !!p.finito || esMSI(p)
 
-// Ocurrencias cercanas de una serie, con su excepción (omitir / monto real).
+// Ocurrencias cercanas de una serie (2 recientes + 4 próximas) con sus
+// excepciones puntuales.
 function OcurrenciasSerie({ pago, hoy, user, show }) {
-  const [editando, setEditando] = useState(null) // fecha cuyo monto se edita
-  const [valor, setValor] = useState('')
-
   const ocurrencias = useMemo(() => {
     const todas = ocurrenciasPagoFijo(pago, addDaysISO(hoy, 400), addDaysISO(hoy, -35))
-    const pasadas = todas.filter((o) => o.fecha < hoy).slice(-2)
-    const futuras = todas.filter((o) => o.fecha >= hoy).slice(0, 4)
-    return [...pasadas, ...futuras]
+    return [...todas.filter((o) => o.fecha < hoy).slice(-2), ...todas.filter((o) => o.fecha >= hoy).slice(0, 4)]
   }, [pago, hoy])
-
-  const escribir = async (fecha, exc, mensaje) => {
-    try {
-      await updateUserDoc(user.uid, 'pagosFijos', pago.id, { [`excepciones.${fecha}`]: exc })
-      show(mensaje)
-    } catch {
-      show('No se pudo guardar la excepción')
-    }
-  }
-
-  const excDe = (fecha) => pago.excepciones?.[fecha] || {}
 
   if (ocurrencias.length === 0) return <div style={{ fontSize: 11, color: 'var(--muted)' }}>Esta serie no tiene fechas próximas.</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {ocurrencias.map((o) => {
-        const exc = excDe(o.fecha)
-        const tieneMonto = exc.montoReal != null || exc.monto != null
-        return (
-          <div key={o.fecha} style={{ padding: '9px 0', borderTop: '1px solid var(--beige2)', opacity: o.omitida ? 0.55 : 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 52 }}>
-                <div style={{ fontSize: 11, fontWeight: 700 }}>{diaSemanaCorto(o.fecha)}</div>
-                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{fechaCorta(o.fecha)}{o.fecha < hoy ? ' · pasó' : ''}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="mono" style={{ fontSize: 13, textDecoration: o.omitida ? 'line-through' : 'none' }}>{fmt(o.monto)}</div>
-                {tieneMonto && <div style={{ fontSize: 10, color: 'var(--amber)' }}>monto ajustado (base {fmt(pago.monto)})</div>}
-              </div>
-              <button style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 600 }} onClick={() => { setEditando(editando === o.fecha ? null : o.fecha); setValor(String(o.monto)) }}>Cambiar monto</button>
-              <Toggle on={o.omitida} onClick={() => escribir(o.fecha, { ...exc, omitida: !o.omitida }, o.omitida ? 'Fecha restaurada' : 'Fecha omitida')} ariaLabel={o.omitida ? 'Restaurar esta fecha' : 'Omitir esta fecha'} />
-            </div>
-            {editando === o.fecha && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <input className="fld" type="number" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
-                <button className="segbtn" style={{ flex: 'none', padding: '0 14px', background: 'var(--wine)', color: '#fff' }} onClick={async () => { await escribir(o.fecha, { omitida: !!exc.omitida, montoReal: num(valor) }, 'Monto de esa fecha actualizado'); setEditando(null) }}>Guardar</button>
-                {tieneMonto && <button className="segbtn" style={{ flex: 'none', padding: '0 12px', background: 'var(--beige2)' }} onClick={async () => { await escribir(o.fecha, { omitida: !!exc.omitida }, 'Monto restablecido'); setEditando(null) }}>Restablecer</button>}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {ocurrencias.map((o) => <FilaExcepcion key={o.fecha} coleccion="pagosFijos" entidad={pago} ocurrencia={o} hoy={hoy} user={user} show={show} />)}
       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>El interruptor omite solo esa fecha; la serie sigue igual.</div>
     </div>
   )
