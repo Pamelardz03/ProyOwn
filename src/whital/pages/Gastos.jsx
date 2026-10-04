@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
 import { IconPlus } from '../../components/Icons'
@@ -9,7 +10,7 @@ import Campo, { Aviso } from '../components/Campo'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { addDaysISO, computeBolsas, evaluarIntercambio, gastoNeto, startOfWeekISO, todayISO } from '../lib/budget'
-import { fechaCorta, fmt, parametrosMotor } from '../lib/vista'
+import { fechaCorta, fmt, parametrosMotor, textoDias } from '../lib/vista'
 
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 const etiquetaDe = (g) => g.etiqueta || g.categoriaWhimm || ''
@@ -171,7 +172,9 @@ export default function Gastos() {
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
-  const [sheet, setSheet] = useState(null) // null | { gasto?: {...} }
+  const location = useLocation()
+  // El atajo del launcher ("Agregar gasto") abre directo el formulario.
+  const [sheet, setSheet] = useState(() => (location.state?.nuevo ? {} : null)) // null | { gasto?: {...} }
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const bolsas = useMemo(() => (base ? computeBolsas(base) : null), [base])
@@ -218,10 +221,10 @@ export default function Gastos() {
         {bolsas && (
           <>
             <div className="hero">
-              <div className="eyebrow" style={{ color: 'rgba(255,255,255,.65)' }}>Disponible esta semana</div>
-              <div className="stat-display mono" style={{ fontSize: 36, marginTop: 6 }}>{fmt(bolsas.disponibleSemana)}</div>
+              <div className="eyebrow" style={{ color: 'rgba(255,255,255,.65)' }}>{bolsas.disponibleSemana < 0 ? 'Te pasaste esta semana' : 'Disponible esta semana'}</div>
+              <div className="stat-display mono" style={{ fontSize: 36, marginTop: 6 }}>{fmt(Math.abs(bolsas.disponibleSemana))}</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)', marginTop: 4 }}>
-                {fmt(bolsas.gastadoSemanaActual)} gastados de {fmt(bolsas.presupuestoSemanaActual)} · quedan {bolsas.diasRestantesSemana} días
+                {fmt(bolsas.gastadoSemanaActual)} gastados de {fmt(bolsas.presupuestoSemanaActual)} · quedan {textoDias(bolsas.diasRestantesSemana)}
               </div>
             </div>
 

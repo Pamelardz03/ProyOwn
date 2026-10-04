@@ -9,6 +9,7 @@ import {
   computeBolsas,
   distribucionCajitas,
   gastoNeto,
+  ocurrenciasSueldo,
   parseISODate,
   proximosVitalls,
   proyectarColaWhimms,
@@ -22,8 +23,13 @@ const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 export function fmt(n) {
   const num = Number(n) || 0
   const abs = Math.abs(num)
-  const texto = abs.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: abs < 1000 && abs % 1 !== 0 ? 2 : 0 })
+  const centavos = Math.round(abs * 100) % 100 !== 0
+  const texto = abs.toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: centavos ? 2 : 0 })
   return (num < 0 ? '-$' : '$') + texto
+}
+
+export function textoDias(n) {
+  return `${n} ${n === 1 ? 'día' : 'días'}`
 }
 
 export function fechaCorta(iso) {
@@ -94,4 +100,58 @@ export function calcularVistaInicio(datos, hoyISO) {
     vitalls: proximosVitalls({ pagosFijos: base.pagosFijos, hoyISO, dias: 7 }),
     cajitas: distribucionCajitas({ saldoReal, bolsaWhimms: bolsas.bolsaWhimms, ...base }),
   }
+}
+
+// Avisos dentro de la app (banners de Inicio). Cada aviso trae un `id` estable
+// para poder descartarlo. `ahora` es un Date (se pasa para poder probarlo).
+export function calcularAvisos(datos, hoyISO, bolsas, ahora = new Date()) {
+  const avisos = []
+  const diaSemana = (parseISODate(hoyISO).getDay() + 6) % 7 // 0 = lunes
+  const semanaInicio = startOfWeekISO(hoyISO)
+
+  // Cierre de semana: lunes y martes.
+  const cierre = bolsas.cierreSemanaPasada
+  if (diaSemana <= 1 && cierre.gastado > 0) {
+    const sobro = cierre.resultado >= 0
+    avisos.push({
+      id: `cierre-${semanaInicio}`,
+      tipo: 'cierre',
+      texto: sobro
+        ? `Cerró la semana: te sobraron ${fmt(cierre.resultado)} de ${fmt(cierre.presupuesto)}. Ese dinero adelanta tu fila de Whimms.`
+        : `Cerró la semana: te pasaste ${fmt(-cierre.resultado)} de ${fmt(cierre.presupuesto)}. Eso retrasa un poco tu fila de Whimms.`,
+    })
+  }
+
+  // Cobros de hoy y de mañana.
+  const manana = addDaysISO(hoyISO, 1)
+  ;(datos.sueldosFijos || []).forEach((s) => {
+    ocurrenciasSueldo(s, manana, hoyISO)
+      .filter((o) => !o.omitida)
+      .forEach((o) => {
+        avisos.push({
+          id: `cobro-${s.id}-${o.fecha}`,
+          tipo: 'cobro',
+          texto: `${o.fecha === hoyISO ? 'Hoy' : 'Mañana'} te toca cobrar ${s.name || s.nombre || 'tu sueldo'}: ${fmt(o.monto)}.`,
+        })
+      })
+  })
+
+  // Vitalls que vencen hoy o en los próximos 2 días (con opción de omitir).
+  proximosVitalls({ pagosFijos: datos.pagosFijos, hoyISO, dias: 2 })
+    .filter((v) => !v.omitida)
+    .forEach((v) => {
+      avisos.push({
+        id: `vitall-${v.pagoId}-${v.fecha}`,
+        tipo: 'vitall',
+        vitall: v,
+        texto: `${v.fecha === hoyISO ? 'Hoy' : v.fecha === manana ? 'Mañana' : `El ${diaSemanaCorto(v.fecha)} ${fechaCorta(v.fecha)}`} vence ${v.name}: ${fmt(v.monto)}.`,
+      })
+    })
+
+  // Recordatorio del día: después de las 8 pm sin gastos registrados hoy.
+  const hayGastoHoy = (datos.gastos || []).some((g) => g.fecha === hoyISO)
+  if (ahora.getHours() >= 20 && !hayGastoHoy) {
+    avisos.push({ id: `registro-${hoyISO}`, tipo: 'registro', texto: 'Hoy no has registrado gastos. ¿Se te pasó alguno?' })
+  }
+  return avisos
 }

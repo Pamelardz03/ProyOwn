@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { calcularAjusteSaldo, todayISO } from '../lib/budget'
-import { calcularVistaInicio, diaSemanaCorto, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
+import { calcularAvisos, calcularVistaInicio, diaSemanaCorto, fechaCorta, fmt, parametrosMotor, textoDias } from '../lib/vista'
 
 const ETIQUETA_ESTATUS = {
   comprable_hoy: { texto: 'Comprable hoy', color: 'var(--green)', bg: 'var(--green-bg)' },
@@ -22,6 +22,55 @@ function Badge({ estatus, children }) {
     <span className="pill" style={{ background: e.bg, color: e.color, padding: '4px 10px', fontSize: 11 }}>
       {children || e.texto}
     </span>
+  )
+}
+
+// Avisos dentro de la app. Se pueden descartar (queda guardado en este
+// dispositivo); los de Vitall dejan omitir esa ocurrencia desde el mismo aviso.
+const CLAVE_DESCARTADOS = 'whital:avisos-descartados'
+
+function leerDescartados() {
+  try {
+    return JSON.parse(localStorage.getItem(CLAVE_DESCARTADOS) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function AvisosInicio({ avisos, user, show }) {
+  const [descartados, setDescartados] = useState(leerDescartados)
+  const visibles = avisos.filter((a) => !descartados.includes(a.id))
+  if (visibles.length === 0) return null
+
+  const descartar = (id) => {
+    const nuevos = [...descartados, id].slice(-60)
+    setDescartados(nuevos)
+    try {
+      localStorage.setItem(CLAVE_DESCARTADOS, JSON.stringify(nuevos))
+    } catch {
+      /* sin almacenamiento: el aviso solo se oculta en esta sesión */
+    }
+  }
+  const omitir = async (a) => {
+    try {
+      await updateUserDoc(user.uid, 'pagosFijos', a.vitall.pagoId, { [`excepciones.${a.vitall.fecha}`]: { omitida: true } })
+      show('Ocurrencia omitida')
+    } catch {
+      show('No se pudo omitir')
+    }
+  }
+
+  const color = { cierre: 'var(--wine)', cobro: 'var(--green)', vitall: 'var(--amber)', registro: 'var(--muted)' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {visibles.map((a) => (
+        <div key={a.id} className="card" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, borderLeft: `3px solid ${color[a.tipo]}` }}>
+          <div style={{ flex: 1, fontSize: 12, lineHeight: 1.4 }}>{a.texto}</div>
+          {a.tipo === 'vitall' && <button style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 700 }} onClick={() => omitir(a)}>Omitir</button>}
+          <button style={{ fontSize: 11, color: 'var(--muted)' }} onClick={() => descartar(a.id)} aria-label="Descartar aviso">Listo</button>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -83,7 +132,7 @@ function CardGastosSemana({ vista }) {
       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6, color: pasado ? 'var(--red)' : 'var(--text)' }}>
         {pasado
           ? `Te pasaste ${fmt(-bolsas.disponibleSemana)} esta semana`
-          : `Te quedan ${fmt(bolsas.disponibleSemana)} para los próximos ${bolsas.diasRestantesSemana} días`}
+          : `Te quedan ${fmt(bolsas.disponibleSemana)} para los próximos ${textoDias(bolsas.diasRestantesSemana)}`}
       </div>
       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
         Llevas {fmt(bolsas.gastadoSemanaActual)} de {fmt(presupuestoSemanal)}
@@ -142,7 +191,7 @@ function CardProximoWhimm({ vista }) {
         {w.imagenUrl ? (
           <img src={w.imagenUrl} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', background: 'var(--beige2)' }} />
         ) : (
-          <div className="icon-tile" style={{ width: 56, height: 56 }} />
+          <div className="icon-tile" style={{ width: 56, height: 56, fontSize: 22, fontWeight: 600 }}>{(w.name || '?').trim().charAt(0).toUpperCase()}</div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name || 'Whimm'}</div>
@@ -244,6 +293,7 @@ export default function Inicio() {
   const { message, show } = useToast()
   const hoy = todayISO()
   const vista = useMemo(() => (loading ? null : calcularVistaInicio(datos, hoy)), [datos, loading, hoy])
+  const avisos = useMemo(() => (vista ? calcularAvisos(datos, hoy, vista.bolsas) : []), [datos, hoy, vista])
 
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -260,6 +310,7 @@ export default function Inicio() {
 
       {vista && (
         <>
+          <AvisosInicio avisos={avisos} user={user} show={show} />
           <div className="hero">
             <div className="eyebrow" style={{ color: 'rgba(255,255,255,.65)' }}>Saldo real en banco</div>
             <div className="stat-display mono" style={{ fontSize: 40, marginTop: 6 }}>{fmt(vista.saldoReal)}</div>
