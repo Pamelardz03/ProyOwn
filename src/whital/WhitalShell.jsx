@@ -41,7 +41,7 @@ export default function WhitalShell() {
         <Route path="/whimms" element={<Whimms key={location.key} />} />
         <Route path="/vitalls" element={<Vitalls key={location.key} />} />
         <Route path="/calendar" element={<Calendar />} />
-        <Route path="/perfil" element={<Perfil />} />
+        <Route path="/perfil" element={<Perfil key={location.key} />} />
         <Route path="/perfil/historial" element={<Historial />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

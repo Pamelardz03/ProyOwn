@@ -44,7 +44,7 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
       </div>
 
       {recurrente ? (
-        <FilaExcepcion coleccion={ev.coleccion} entidad={ev.entidad} ocurrencia={ev.ocurrencia} hoy={hoy} user={user} show={show} leyenda="Dato atípico" />
+        <FilaExcepcion coleccion={ev.coleccion} entidad={ev.entidad} ocurrencia={ev.ocurrencia} hoy={hoy} user={user} show={show} />
       ) : (
         <div className="mono" style={{ fontSize: 22, fontWeight: 500 }}>{ev.monto > 0 ? '+' : ''}{fmt(ev.monto)}</div>
       )}

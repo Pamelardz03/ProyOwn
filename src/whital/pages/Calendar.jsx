@@ -17,19 +17,19 @@ const COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
 const FILTROS = [['todos', 'Todos'], ['servicio', 'Pagos fijos'], ['compra', 'Whimm'], ['nomina', 'Sueldos']]
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 
-// Borde del día: un color por categoría; con 2 o más, el borde se reparte en partes iguales.
+// Borde del día: un color por categoría; con 2 o más, el borde se reparte en partes
+// iguales SIN perder las esquinas redondeadas (degradado en el borde, relleno aparte).
 function estiloDia(cats, esHoy) {
   const unicas = [...new Set(cats)]
-  let borde = {}
-  if (unicas.length === 1) borde = { border: `2px solid ${COLOR[unicas[0]]}` }
-  else if (unicas.length > 1) {
-    const paso = 360 / unicas.length
-    const stops = unicas.map((c, i) => `${COLOR[c]} ${i * paso}deg ${(i + 1) * paso}deg`).join(', ')
-    borde = { border: '2px solid transparent', borderImage: `conic-gradient(${stops}) 1` }
+  const relleno = esHoy ? 'var(--red)' : 'var(--card-solid)'
+  const base = esHoy ? { color: '#fff', fontWeight: 700 } : unicas.length ? { fontWeight: 600 } : {}
+  if (unicas.length === 0) return esHoy ? { ...base, background: 'var(--red)' } : base
+  if (unicas.length === 1) {
+    return { ...base, border: `2px solid ${COLOR[unicas[0]]}`, ...(esHoy ? { background: 'var(--red)' } : { color: COLOR[unicas[0]] }) }
   }
-  if (esHoy) return { background: 'var(--red)', color: '#fff', fontWeight: 700, ...borde }
-  if (unicas.length === 0) return {}
-  return { ...borde, fontWeight: 600, ...(unicas.length === 1 ? { color: COLOR[unicas[0]] } : {}) }
+  const paso = 360 / unicas.length
+  const stops = unicas.map((c, i) => `${COLOR[c]} ${i * paso}deg ${(i + 1) * paso}deg`).join(', ')
+  return { ...base, border: '2px solid transparent', background: `linear-gradient(${relleno}, ${relleno}) padding-box, conic-gradient(${stops}) border-box` }
 }
 
 function Leyenda({ color, solido, texto }) {

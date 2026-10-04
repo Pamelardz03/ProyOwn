@@ -1,58 +1,115 @@
 import { useState } from 'react'
-import Toggle from '../../components/Toggle'
-import { updateUserDoc } from '../../lib/firestoreCollections'
+import { useNavigate } from 'react-router-dom'
+import { IconClose, IconEdit } from '../../components/Icons'
+import { deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import { diaSemanaCorto, fechaCorta, fmt } from '../lib/vista'
+import Campo from './Campo'
+import Modal from './Modal'
 
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
+const boton = { width: '100%', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, textAlign: 'center' }
 
-// Una ocurrencia de una serie recurrente (Vitall o sueldo fijo) con sus dos
-// excepciones puntuales: omitir esa fecha y cambiar el monto de esa fecha.
-//   coleccion: 'pagosFijos' | 'sueldosFijos'      entidad: el documento de la serie
-//   ocurrencia: { fecha, monto, omitida }         nombre: texto opcional a la izquierda
-export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, user, show, nombre, verbo = 'esta fecha', leyenda }) {
-  const [editando, setEditando] = useState(false)
-  const [valor, setValor] = useState('')
+// Ventana del lápiz: lo que se puede hacer con ESA fecha (cambiar el monto,
+// omitirla como dato atípico o restaurarla) y con TODA la serie (editarla o
+// eliminarla).
+function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, onCerrar }) {
+  const navigate = useNavigate()
   const exc = entidad.excepciones?.[ocurrencia.fecha] || {}
   const tieneMonto = exc.montoReal != null || exc.monto != null
+  const [valor, setValor] = useState(String(ocurrencia.monto))
+  const [confirmarSerie, setConfirmarSerie] = useState(false)
 
-  const escribir = async (nueva, mensaje) => {
+  const escribirExcepcion = async (nueva, mensaje) => {
     try {
       await updateUserDoc(user.uid, coleccion, entidad.id, { [`excepciones.${ocurrencia.fecha}`]: nueva })
       show(mensaje)
-      return true
+      onCerrar()
     } catch {
-      show('No se pudo guardar la excepción')
-      return false
+      show('No se pudo guardar')
+    }
+  }
+
+  const editarSerie = () => {
+    if (coleccion === 'pagosFijos') navigate('/vitalls', { state: { openPagoId: entidad.id } })
+    else navigate('/perfil', { state: { openSueldoId: entidad.id } })
+  }
+
+  const eliminarSerie = async () => {
+    try {
+      // Un pago a meses liga a su Whimm: al borrarlo el Whimm regresa a la fila.
+      if (coleccion === 'pagosFijos' && entidad.whimmId) {
+        await updateUserDoc(user.uid, 'whimms', entidad.whimmId, { estado: 'espera', pagoFijoMsiId: null, precioComprado: null })
+      }
+      await deleteUserDoc(user.uid, coleccion, entidad.id)
+      show('Serie eliminada')
+      onCerrar()
+    } catch {
+      show('No se pudo eliminar')
     }
   }
 
   return (
-    <div style={{ padding: '9px 0', borderTop: '1px solid var(--beige2)', opacity: ocurrencia.omitida ? 0.55 : 1 }}>
+    <Modal abierto onClose={onCerrar} nivel={1}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{nombre || entidad.name || entidad.nombre}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{diaSemanaCorto(ocurrencia.fecha)} {fechaCorta(ocurrencia.fecha)}</div>
+        </div>
+        <button aria-label="Cerrar" onClick={onCerrar} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <IconClose />
+        </button>
+      </div>
+
+      <div className="eyebrow" style={{ marginBottom: 8 }}>Esta fecha</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+        <Campo label={`Monto${tieneMonto ? ` · base ${fmt(entidad.monto)}` : ''}`}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="fld" type="number" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+            <button className="segbtn" style={{ flex: 'none', padding: '0 16px', background: 'var(--wine)', color: '#fff' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida, montoReal: num(valor) }, 'Monto actualizado')}>Guardar</button>
+          </div>
+        </Campo>
+        {tieneMonto && <button style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--wine)', fontWeight: 600, textDecoration: 'underline' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida }, 'Monto restablecido')}>Restablecer el monto base</button>}
+        <button style={{ ...boton, background: ocurrencia.omitida ? 'var(--green-bg)' : 'var(--beige2)', color: ocurrencia.omitida ? 'var(--green)' : 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: !ocurrencia.omitida }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}>
+          {ocurrencia.omitida ? 'Restaurar esta fecha' : 'Omitir esta fecha (dato atípico)'}
+        </button>
+      </div>
+
+      <div className="eyebrow" style={{ marginBottom: 8 }}>Toda la serie</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={editarSerie}>Editar serie</button>
+        <button style={{ ...boton, background: 'var(--red-bg)', color: 'var(--red)' }} onClick={() => (confirmarSerie ? eliminarSerie() : setConfirmarSerie(true))}>
+          {confirmarSerie ? 'Toca de nuevo para eliminar toda la serie' : 'Eliminar serie'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// Una ocurrencia de una serie recurrente (Vitall o sueldo fijo). El lápiz abre
+// todo lo que se puede hacer con esa fecha o con la serie.
+//   coleccion: 'pagosFijos' | 'sueldosFijos'      entidad: el documento de la serie
+//   ocurrencia: { fecha, monto, omitida }         nombre: texto opcional a la izquierda
+export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, user, show, nombre }) {
+  const [abierto, setAbierto] = useState(false)
+  const exc = entidad.excepciones?.[ocurrencia.fecha] || {}
+  const tieneMonto = exc.montoReal != null || exc.monto != null
+
+  return (
+    <div style={{ padding: '9px 0', borderTop: '1px solid var(--beige2)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 52 }}>
           <div style={{ fontSize: 11, fontWeight: 700 }}>{diaSemanaCorto(ocurrencia.fecha)}</div>
           <div style={{ fontSize: 10, color: 'var(--muted)' }}>{fechaCorta(ocurrencia.fecha)}{ocurrencia.fecha < hoy ? ' · pasó' : ''}</div>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, opacity: ocurrencia.omitida ? 0.55 : 1 }}>
           {nombre && <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</div>}
           <div className="mono" style={{ fontSize: 13, textDecoration: ocurrencia.omitida ? 'line-through' : 'none' }}>{fmt(ocurrencia.monto)}</div>
-          {tieneMonto && <div style={{ fontSize: 10, color: 'var(--amber)' }}>monto ajustado (base {fmt(entidad.monto)})</div>}
+          {ocurrencia.omitida && <div style={{ fontSize: 10, color: 'var(--amber)' }}>Dato atípico</div>}
+          {!ocurrencia.omitida && tieneMonto && <div style={{ fontSize: 10, color: 'var(--amber)' }}>monto ajustado (base {fmt(entidad.monto)})</div>}
         </div>
-        <button style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 600 }} onClick={() => { setEditando(!editando); setValor(String(ocurrencia.monto)) }}>Cambiar monto</button>
-        {leyenda && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{leyenda}</span>}
-        <Toggle
-          on={ocurrencia.omitida}
-          onClick={() => escribir({ ...exc, omitida: !ocurrencia.omitida }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}
-          ariaLabel={ocurrencia.omitida ? `Restaurar ${verbo}` : `Omitir ${verbo}`}
-        />
+        <button aria-label="Editar" onClick={() => setAbierto(true)}><IconEdit /></button>
       </div>
-      {editando && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <input className="fld" type="number" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
-          <button className="segbtn" style={{ flex: 'none', padding: '0 14px', background: 'var(--wine)', color: '#fff' }} onClick={async () => { if (await escribir({ omitida: !!exc.omitida, montoReal: num(valor) }, 'Monto de esa fecha actualizado')) setEditando(false) }}>Guardar</button>
-          {tieneMonto && <button className="segbtn" style={{ flex: 'none', padding: '0 12px', background: 'var(--beige2)' }} onClick={async () => { if (await escribir({ omitida: !!exc.omitida }, 'Monto restablecido')) setEditando(false) }}>Restablecer</button>}
-        </div>
-      )}
+      {abierto && <EditarOcurrencia coleccion={coleccion} entidad={entidad} ocurrencia={ocurrencia} nombre={nombre} user={user} show={show} onCerrar={() => setAbierto(false)} />}
     </div>
   )
 }

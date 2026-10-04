@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import { IconCard, IconChevronRight, IconClock, IconHeart, IconPlus, IconReceipt, IconSalary, IconVitall } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
@@ -220,10 +220,16 @@ const OPCIONES_AGREGAR = [
 export default function Perfil() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
-  const [sueldoSheet, setSueldoSheet] = useState(null) // null | {} | { sueldo }
+  const [sueldoManual, setSueldoSheet] = useState(null) // null | {} | { sueldo }
+  const [pendienteSueldoId, setPendienteSueldoId] = useState(location.state?.openSueldoId || null)
+  // Sueldo que llegó por navegación (lápiz de Calendario o Historial): se abre su edición.
+  const sueldoEnlazado = !sueldoManual && pendienteSueldoId ? datos.sueldosFijos.find((s) => s.id === pendienteSueldoId) : null
+  const sueldoSheet = sueldoManual || (sueldoEnlazado ? { sueldo: sueldoEnlazado } : null)
+  const cerrarSueldo = () => { setSueldoSheet(null); setPendienteSueldoId(null) }
   const [rapidoAbierto, setRapidoAbierto] = useState(false)
   const [editando, setEditando] = useState(null) // 'saldo' | 'presupuesto'
 
@@ -407,8 +413,8 @@ export default function Perfil() {
         </div>
       </div>
 
-      <Sheet abierto={!!sueldoSheet} onClose={() => setSueldoSheet(null)} titulo={sueldoSheet?.sueldo ? sueldoSheet.sueldo.name || 'Sueldo' : 'Nuevo sueldo fijo'}>
-        {sueldoSheet && <SueldoForm key={sueldoSheet.sueldo?.id || 'nuevo'} sueldo={sueldoSheet.sueldo} hoy={hoy} user={user} show={show} onCerrar={() => setSueldoSheet(null)} />}
+      <Sheet abierto={!!sueldoSheet} onClose={cerrarSueldo} titulo={sueldoSheet?.sueldo ? sueldoSheet.sueldo.name || 'Sueldo' : 'Nuevo sueldo fijo'}>
+        {sueldoSheet && <SueldoForm key={sueldoSheet.sueldo?.id || 'nuevo'} sueldo={sueldoSheet.sueldo} hoy={hoy} user={user} show={show} onCerrar={cerrarSueldo} />}
       </Sheet>
       <Sheet abierto={rapidoAbierto} onClose={() => setRapidoAbierto(false)} titulo="Ingreso rápido">
         {rapidoAbierto && <IngresoRapidoForm hoy={hoy} user={user} show={show} onCerrar={() => setRapidoAbierto(false)} />}

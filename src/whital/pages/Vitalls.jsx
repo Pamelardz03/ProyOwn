@@ -146,6 +146,9 @@ export default function Vitalls() {
   // Desde Perfil > "¿Qué quieres agregar?": abre el formulario ya en el tipo elegido.
   const [sheet, setSheet] = useState(() => (location.state?.nuevo ? { plazos: location.state.nuevo === 'plazos' } : null))
 
+  const [pendienteId, setPendienteId] = useState(location.state?.openPagoId || null)
+  const cerrar = () => { setSheet(null); setPendienteId(null) }
+
   const pausar = async (p) => {
     try {
       await updateUserDoc(user.uid, 'pagosFijos', p.id, { activo: p.activo === false })
@@ -154,6 +157,10 @@ export default function Vitalls() {
       show('No se pudo actualizar')
     }
   }
+
+  // Serie que llegó por navegación (lápiz de Calendario o Historial): se abre su edición.
+  const pagoEnlazado = !sheet && pendienteId ? datos.pagosFijos.find((p) => p.id === pendienteId) : null
+  const hoja = sheet || (pagoEnlazado ? { pago: pagoEnlazado } : null)
 
   const suscripciones = datos.pagosFijos.filter((p) => !esPlazos(p))
   const plazos = datos.pagosFijos.filter(esPlazos)
@@ -183,8 +190,8 @@ export default function Vitalls() {
       </div>
 
       <button className="fab" onClick={() => setSheet({})} aria-label="Agregar Vitall"><IconPlus /></button>
-      <Sheet abierto={!!sheet} onClose={() => setSheet(null)} titulo={sheet?.pago ? sheet.pago.name : 'Nuevo Vitall'}>
-        {sheet && <VitallForm key={sheet.pago?.id || 'nuevo'} plazosInicial={sheet.plazos} pago={sheet.pago} datos={datos} hoy={hoy} user={user} show={show} onCerrar={() => setSheet(null)} />}
+      <Sheet abierto={!!hoja} onClose={cerrar} titulo={hoja?.pago ? hoja.pago.name : 'Nuevo Vitall'}>
+        {hoja && <VitallForm key={hoja.pago?.id || 'nuevo'} plazosInicial={hoja.plazos} pago={hoja.pago} datos={datos} hoy={hoy} user={user} show={show} onCerrar={cerrar} />}
       </Sheet>
       <Toast message={message} />
     </>
