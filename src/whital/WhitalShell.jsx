@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import AvisoRecordatorio from './components/AvisoRecordatorio'
+import AvisosNotificaciones from './components/AvisosNotificaciones'
 import WhitalNav from './components/WhitalNav'
+import './whital.css'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
 import Historial from './pages/Historial'
@@ -10,6 +11,7 @@ import Perfil from './pages/Perfil'
 import Agregar from './pages/perfil/Agregar'
 import Configuracion from './pages/perfil/Configuracion'
 import Metricas from './pages/perfil/Metricas'
+import Notificaciones from './pages/perfil/Notificaciones'
 import PagosFijos from './pages/perfil/PagosFijos'
 import Sueldos from './pages/perfil/Sueldos'
 import Vitalls from './pages/Vitalls'
@@ -38,8 +40,8 @@ export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
   return (
-    <div className="app-shell">
-      <AvisoRecordatorio />
+    <div className="app-shell whital">
+      <AvisosNotificaciones />
       <Routes>
         <Route path="/" element={<Inicio />} />
         <Route path="/gastos" element={<Gastos key={location.key} />} />
@@ -51,6 +53,7 @@ export default function WhitalShell() {
         <Route path="/perfil/pagos-fijos" element={<PagosFijos />} />
         <Route path="/perfil/sueldos" element={<Sueldos key={location.key} />} />
         <Route path="/perfil/metricas" element={<Metricas />} />
+        <Route path="/perfil/notificaciones" element={<Notificaciones />} />
         <Route path="/perfil/agregar" element={<Agregar />} />
         <Route path="/perfil/configuracion" element={<Configuracion />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />

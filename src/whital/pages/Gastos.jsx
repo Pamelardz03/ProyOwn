@@ -69,7 +69,7 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
       {!editando && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="segbtn" style={chip(modo === 'gasto')} onClick={() => setModo('gasto')}>Gasto</button>
-          <button className="segbtn" style={chip(modo === 'whimm')} onClick={() => setModo('whimm')}>Compré un Whimm</button>
+          <button className="segbtn" style={chip(modo === 'whimm')} onClick={() => setModo('whimm')}>Whimm</button>
         </div>
       )}
 

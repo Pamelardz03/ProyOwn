@@ -1,10 +1,11 @@
 // Piezas compartidas por las pantallas de Perfil (sueldos, configuración).
 import { useEffect, useState } from 'react'
-import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../../lib/firestoreCollections'
+import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../../lib/firestoreCollections'
 import BotonEliminar from '../../components/BotonEliminar'
 import Campo, { Aviso } from '../../components/Campo'
+import SelectorRecordatorio from '../../components/SelectorRecordatorio'
+import { aNotif, deNotif } from '../../lib/notificaciones'
 import { generarFechasPago } from '../../lib/budget'
-import { CADENCIA_DEFAULT_MIN, OPCIONES_RECORDATORIO } from '../../lib/recordatorio'
 import { borrarDatos, completarImagenes, hayDatosDePrueba, leerDatosDePrueba, sembrarDatos } from '../../lib/seed'
 import { fechaCorta, fmt } from '../../lib/vista'
 
@@ -17,6 +18,7 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
   const [monto, setMonto] = useState(sueldo?.monto != null ? String(sueldo.monto) : '')
   const [frecuencia, setFrecuencia] = useState(sueldo?.frecuencia || 'Quincenal')
   const [fechaInicio, setFechaInicio] = useState(sueldo?.fechaInicio || hoy)
+  const [notif, setNotif] = useState(deNotif(sueldo?.notifCadaMin))
   const detenido = !!sueldo?.fechaFin
   const puedeGuardar = name.trim() && num(monto) > 0 && !!fechaInicio
 
@@ -32,7 +34,7 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
 
   const guardar = () =>
     ejecutar(async () => {
-      const base = { name: name.trim(), monto: num(monto), frecuencia, fechaInicio }
+      const base = { name: name.trim(), monto: num(monto), frecuencia, fechaInicio, notifCadaMin: aNotif(notif) }
       const cambioCalendario = nuevo || frecuencia !== sueldo.frecuencia || fechaInicio !== sueldo.fechaInicio
       if (nuevo) {
         await addUserDoc(user.uid, 'sueldosFijos', { ...base, fechasPago: generarFechasPago({ frecuencia, fechaInicio }), excepciones: {}, notifFormal: false, notifMini: false })
@@ -62,6 +64,7 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
       {!nuevo && (frecuencia !== sueldo.frecuencia || fechaInicio !== sueldo.fechaInicio) && (
         <Aviso tono="amber">Se recalcularán las fechas de cobro (las excepciones se conservan).</Aviso>
       )}
+      <SelectorRecordatorio valor={notif} onChange={setNotif} />
       <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar sueldo' : 'Guardar cambios'}</button>
       {!nuevo && (
         <>
@@ -76,42 +79,6 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
 }
 
 // Cada cuánto recordar que registres gastos. Suena mientras la app esté abierta o
-// en segundo plano; con la app cerrada del todo haría falta push (FCM).
-export function Recordatorios({ config, user, show }) {
-  const actual = config?.recordatorioCadaMin ?? CADENCIA_DEFAULT_MIN
-  const [permiso, setPermiso] = useState(typeof Notification === 'undefined' ? 'no-soportado' : Notification.permission)
-
-  const cambiar = async (min) => {
-    try {
-      await setUserDoc(user.uid, 'config', 'presupuesto', { recordatorioCadaMin: min })
-      show(min > 0 ? 'Recordatorio guardado' : 'Recordatorio apagado')
-    } catch {
-      show('No se pudo guardar')
-    }
-  }
-  const pedirPermiso = async () => {
-    if (typeof Notification === 'undefined') return
-    setPermiso(await Notification.requestPermission())
-  }
-
-  return (
-    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="eyebrow">Recordatorios</div>
-      <Campo label="Recordarme registrar mis gastos">
-        <select className="fld" value={actual} onChange={(e) => cambiar(Number(e.target.value))}>
-          {OPCIONES_RECORDATORIO.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
-        </select>
-      </Campo>
-      {permiso === 'granted' && <Aviso tono="green">Notificaciones activadas.</Aviso>}
-      {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Permitir notificaciones</button>}
-      {permiso === 'denied' && <Aviso tono="amber">Notificaciones bloqueadas en el navegador.</Aviso>}
-      {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no admite notificaciones.</Aviso>}
-      <div style={{ fontSize: 10, color: 'var(--muted)' }}>Con la app cerrada del todo no avisa (falta push).</div>
-    </div>
-  )
-}
-
-// Solo aparece en la cuenta de prueba (uid del archivo local de datos). Borra lo
 // que haya y escribe los datos de prueba con la sesión actual.
 export function DatosDePrueba({ datos, user, show }) {
   const [seed, setSeed] = useState(null)

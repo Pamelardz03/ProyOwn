@@ -8,7 +8,7 @@ import EncabezadoSub from '../../components/EncabezadoSub'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
 import { todayISO } from '../../lib/budget'
 import { fechaCorta, fmt, parametrosMotor } from '../../lib/vista'
-import { DatosDePrueba, LineaEditable, Recordatorios } from './piezas'
+import { DatosDePrueba, LineaEditable } from './piezas'
 
 export default function Configuracion() {
   const { user } = useAuth()
@@ -54,8 +54,6 @@ export default function Configuracion() {
                 <LineaEditable key={`saldo-${editando === 'saldo'}`} etiqueta="Saldo inicial" valorActual={Number(datos.config?.saldoInicial) || 0} editando={editando === 'saldo'} onAbrir={() => setEditando('saldo')} onCerrar={() => setEditando(null)} onGuardar={(n) => guardarConfig({ saldoInicial: n }, 'Saldo inicial guardado')} />
                 <LineaEditable key={`pres-${editando === 'presupuesto'}`} etiqueta="Presupuesto semanal" valorActual={base.presupuestoSemanal} editando={editando === 'presupuesto'} onAbrir={() => setEditando('presupuesto')} onCerrar={() => setEditando(null)} onGuardar={(n) => (n > 0 ? guardarConfig({ presupuestoSemanal: n }, 'Presupuesto guardado') : show('Debe ser mayor a 0'))} />
               </div>
-
-              <Recordatorios config={datos.config} user={user} show={show} />
 
               {ajustes.length > 0 && (
                 <div>

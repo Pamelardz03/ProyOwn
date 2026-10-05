@@ -9,6 +9,8 @@ import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
 import Modal from '../components/Modal'
+import SelectorRecordatorio from '../components/SelectorRecordatorio'
+import { aNotif, deNotif } from '../lib/notificaciones'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import {
@@ -21,7 +23,6 @@ import {
   ocurrenciasPagoFijo,
   progresoPagoFijo,
   proyectarColaWhimms,
-  repartoProgreso,
   todayISO,
 } from '../lib/budget'
 import { enDias, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
@@ -340,13 +341,14 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const [fechaLimite, setFechaLimite] = useState(whimm?.fechaLimite || '')
   const [precioPagado, setPrecioPagado] = useState(whimm?.precioComprado != null ? String(whimm.precioComprado) : '')
   const [fechaCompra, setFechaCompra] = useState(whimm?.compradoEn || '')
+  const [notif, setNotif] = useState(deNotif(whimm?.notifCadaMin))
 
   const categorias = useMemo(() => [...new Set(datos.whimms.map((w) => w.categoria).filter(Boolean))], [datos.whimms])
   const comprado = whimm?.estado === 'comprado'
   const puedeGuardar = name.trim() && num(precio) > 0
 
   const guardar = async () => {
-    const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: link.trim() ? [link.trim()] : [], necesidad, deseo, fechaLimite: fechaLimite || null }
+    const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: link.trim() ? [link.trim()] : [], necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
     try {
       if (nuevo) await addUserDoc(user.uid, 'whimms', { ...campos, estado: 'espera', montoApartado: 0, notifFormal: false, notifMini: false })
       else await updateUserDoc(user.uid, 'whimms', whimm.id, comprado ? { ...campos, precioComprado: num(precioPagado), compradoEn: fechaCompra || null } : campos)
@@ -393,6 +395,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
           <div style={{ flex: 1 }}><Campo label="Link"><input className="fld" value={link} onChange={(e) => setLink(e.target.value)} /></Campo></div>
         </div>
         <Campo label="Imagen (URL)"><input className="fld" value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} /></Campo>
+        <SelectorRecordatorio valor={notif} onChange={setNotif} />
         <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
       </div>
     </Modal>
@@ -443,15 +446,14 @@ export default function Whimms() {
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const cola = useMemo(() => (base ? proyectarColaWhimms(base) : []), [base])
   const libre = useMemo(() => (base ? computeBolsas(base).bolsaWhimms : 0), [base])
-  const simultaneos = Number(datos.config?.whimmsSimultaneos) || 3
-  const asignado = useMemo(() => repartoProgreso({ cola, libre, simultaneos }), [cola, libre, simultaneos])
+  const simultaneos = base?.whimmsSimultaneos || 1
   const porId = useMemo(() => new Map(datos.whimms.map((w) => [w.id, w])), [datos.whimms])
   const colaPorId = useMemo(() => new Map(cola.map((r, i) => [r.id, { r, posicion: i + 1 }])), [cola])
 
   const enFila = cola.map((r) => ({ r, w: porId.get(r.id) })).filter((x) => x.w)
   const pagando = datos.whimms.filter((w) => w.estado === 'pagando')
   const comprados = datos.whimms.filter((w) => w.estado === 'comprado').sort((a, b) => (b.compradoEn || '').localeCompare(a.compradoEn || ''))
-  const progresoDe = (w) => (Number(w.montoApartado) || 0) + (asignado.get(w.id) || 0)
+  const progresoDe = (w) => (Number(w.montoApartado) || 0) + (colaPorId.get(w.id)?.r.avanceHoy || 0)
 
   const detalle = detalleId ? porId.get(detalleId) : null
 

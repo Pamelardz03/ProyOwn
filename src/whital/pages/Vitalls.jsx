@@ -9,6 +9,8 @@ import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCol
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
+import SelectorRecordatorio from '../components/SelectorRecordatorio'
+import { aNotif, deNotif } from '../lib/notificaciones'
 import Sheet from '../components/Sheet'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { progresoPagoFijo, todayISO } from '../lib/budget'
@@ -29,6 +31,7 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
   const [frecuencia, setFrecuencia] = useState(pago?.frecuencia || 'Mensual')
   const [fecha, setFecha] = useState(pago?.fecha || hoy)
   const [numPagos, setNumPagos] = useState(pago?.numPagos != null ? String(pago.numPagos) : '3')
+  const [notif, setNotif] = useState(deNotif(pago?.notifCadaMin))
   const [categoria, setCategoria] = useState(pago && pago.tipo !== 'Vitall' && !msi ? pago.tipo || '' : '')
   const activo = pago ? pago.activo !== false : true // pausar/reanudar se hace con el interruptor de la lista
 
@@ -55,6 +58,7 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
     finito: plazos,
     numPagos: plazos ? Math.max(Math.round(num(numPagos)), 1) : null,
     tipo: msi ? 'MSI' : plazos ? categoria.trim() || 'Plazos' : 'Vitall',
+    notifCadaMin: aNotif(notif),
   })
 
   const guardar = () =>
@@ -104,6 +108,7 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
         </div>
       )}
       {prog && <div style={{ fontSize: 11, color: 'var(--muted)' }}>Lleva {prog.pagados} de {prog.total} pagos{prog.siguiente ? ` · siguiente ${fechaCorta(prog.siguiente)}` : ' · liquidado'}.</div>}
+      <SelectorRecordatorio valor={notif} onChange={setNotif} />
       <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar' : 'Guardar serie'}</button>
 
       {!nuevo && (

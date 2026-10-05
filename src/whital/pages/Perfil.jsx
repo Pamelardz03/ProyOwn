@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { IconBars, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
+import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
-import { calcularVistaInicio, fmt } from '../lib/vista'
+import { calcularVistaInicio, fechaCorta, fmt } from '../lib/vista'
 
 // Versión publicada (commit); sirve para saber si estás viendo lo último.
 const VERSION = typeof __WHITAL_VERSION__ !== 'undefined' ? __WHITAL_VERSION__ : 'local'
@@ -15,8 +15,12 @@ const PESTANAS = [
   { to: '/perfil/sueldos', Icon: IconSalary, titulo: 'Sueldos', pista: 'Sueldos fijos e ingresos rápidos' },
   { to: '/perfil/metricas', Icon: IconBars, titulo: 'Métricas', pista: 'Promedios, cantidades y gastos' },
   { to: '/perfil/agregar', Icon: IconPlus, titulo: 'Agregar', pista: 'Gasto, Whimm, Vitall, sueldo…' },
-  { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial, presupuesto y recordatorios' },
+  { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
+  { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
 ]
+
+const etiqueta = { fontSize: 10, color: 'var(--muted)', fontWeight: 500 }
+const cifra = { fontSize: 17, fontWeight: 500, marginTop: 4 }
 
 export default function Perfil() {
   const { user, logout } = useAuth()
@@ -24,6 +28,13 @@ export default function Perfil() {
   const hoy = todayISO()
   const vista = useMemo(() => (loading ? null : calcularVistaInicio(datos, hoy)), [datos, loading, hoy])
   const nombre = user?.displayName || 'Pame'
+
+  // El saldo real se reparte en tres: lo libre para Whimms, lo reservado para Vitalls
+  // y lo que queda para gastos hasta la quincena (el próximo cobro del sueldo principal).
+  const c = vista?.cajitas
+  const porDia = c ? c.saldoPrincipal / Math.max(c.dias, 1) : 0
+  const metaDia = vista ? vista.presupuestoSemanal / 7 : 0
+  const ritmo = porDia >= metaDia ? { texto: 'Vas bien', color: 'var(--green)' } : porDia >= metaDia * 0.7 ? { texto: 'Ajustado', color: 'var(--amber)' } : { texto: 'No alcanza', color: 'var(--red)' }
 
   return (
     <div className="screen">
@@ -37,20 +48,21 @@ export default function Perfil() {
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Métricas principales</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Saldo real</div>
-                <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4 }}>{fmt(vista.saldoReal)}</div>
+                <div style={etiqueta}>Saldo real</div>
+                <div className="mono" style={cifra}>{fmt(vista.saldoReal)}</div>
               </div>
               <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Libre para Whimms</div>
-                <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine4)' }}>{fmt(vista.bolsas.bolsaWhimms)}</div>
+                <div style={etiqueta}>Para Whimms</div>
+                <div className="mono" style={{ ...cifra, color: 'var(--wine4)' }}>{fmt(c.cajitaWhimms)}</div>
               </div>
               <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Reservado para Vitalls</div>
-                <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(vista.cajitas.cajitaVitalls)}</div>
+                <div style={etiqueta}>Para Vitalls</div>
+                <div className="mono" style={{ ...cifra, color: 'var(--wine3)' }}>{fmt(c.cajitaVitalls)}</div>
               </div>
               <div className="card" style={{ padding: 14 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{vista.bolsas.disponibleSemana < 0 ? 'Te pasaste esta semana' : 'Disponible esta semana'}</div>
-                <div className="mono" style={{ fontSize: 17, fontWeight: 500, marginTop: 4, color: vista.bolsas.disponibleSemana < 0 ? 'var(--red)' : 'var(--green)' }}>{fmt(Math.abs(vista.bolsas.disponibleSemana))}</div>
+                <div style={etiqueta}>Para gastos · hasta el {fechaCorta(c.proximoCobro)}</div>
+                <div className="mono" style={{ ...cifra, color: ritmo.color }}>{fmt(c.saldoPrincipal)}</div>
+                <div style={{ fontSize: 10, color: ritmo.color, marginTop: 2 }}>{fmt(porDia)}/día · {ritmo.texto}</div>
               </div>
             </div>
           </div>

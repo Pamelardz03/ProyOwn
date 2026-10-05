@@ -454,7 +454,7 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // `montoApartado` (Apartar fondos extra) es dinero ya reservado: no se ofrece a
 // otros Whimms y reduce lo que le falta al suyo.
 // ---------------------------------------------------------------------------
-export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, hoyISO }) {
+export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, whimmsSimultaneos = 1, hoyISO }) {
   const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
   const apartado = apartadoTotalPendiente(whimms)
   const saldosBase = linea.saldos.map((s) => s - apartado)
@@ -471,26 +471,79 @@ export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pago
   const idxLunes = Math.max(linea.fechas.findIndex((f) => f >= proximoLunes), 0)
   const bloqueados = new Set()
 
-  // Acomoda la fila en el orden dado y devuelve la fecha de cada Whimm.
+  // Dinero libre acumulado que se puede ir comprometiendo, día por día: el saldo
+  // más bajo que se proyecta de ese día en adelante (nunca baja). Cada día entra
+  // al reparto lo que subió respecto al día anterior.
+  const envolvente = minimosDesdeElFinal(saldosBase)
+  const entradas = []
+  let previo = 0
+  for (const m of envolvente) {
+    const positivo = Math.max(m, 0)
+    entradas.push(positivo - previo)
+    previo = positivo
+  }
+  const simultaneos = Math.max(Math.round(Number(whimmsSimultaneos)) || 1, 1)
+
+  // FINANCIAR A LA VEZ: el dinero se reparte en partes IGUALES entre los primeros
+  // `simultaneos` Whimms de la fila. Al que le falta menos que su parte se le da
+  // lo que necesita (se completa ese día) y el sobrante se reparte entre los
+  // demás; en cuanto uno se completa entra el siguiente de la fila. Con 1 a la
+  // vez es estrictamente de arriba hacia abajo. Devuelve fecha de compra y
+  // `avanceHoy` (lo que ya lleva hoy) de cada Whimm.
   const simular = (orden) => {
-    const saldos = [...saldosBase]
-    return orden.map(({ w, score, prioridad }) => {
-      const faltante = Math.max((Number(w.precio) || 0) - (Number(w.montoApartado) || 0), 0)
-      const desde = bloqueados.has(w.id) ? idxLunes : 0
-      const minimos = minimosDesdeElFinal(saldos)
-      const idx = minimos.findIndex((m, k) => k >= desde && m + EPS >= faltante)
-      let fechaProyectada = null
-      if (idx >= 0) {
-        fechaProyectada = linea.fechas[idx]
-        for (let k = idx; k < saldos.length; k++) saldos[k] -= faltante
+    const items = orden.map(({ w, score, prioridad }) => ({
+      w,
+      score,
+      prioridad,
+      faltante: Math.max((Number(w.precio) || 0) - (Number(w.montoApartado) || 0), 0),
+      avance: 0,
+      avanceHoy: 0,
+      fechaIdx: null,
+      desde: bloqueados.has(w.id) ? idxLunes : 0,
+    }))
+    let pool = 0
+    for (let dia = 0; dia < entradas.length; dia++) {
+      pool += entradas[dia]
+      for (;;) {
+        const activos = []
+        for (const it of items) {
+          if (it.fechaIdx != null || it.desde > dia) continue
+          activos.push(it)
+          if (activos.length >= simultaneos) break
+        }
+        if (!activos.length) break
+        const gratis = activos.find((it) => it.faltante - it.avance <= EPS)
+        if (gratis) {
+          gratis.avance = gratis.faltante
+          gratis.fechaIdx = dia
+          continue
+        }
+        if (pool <= EPS) break
+        const parte = pool / activos.length
+        const alcanza = activos.find((it) => it.faltante - it.avance <= parte + EPS)
+        if (alcanza) {
+          pool -= alcanza.faltante - alcanza.avance
+          alcanza.avance = alcanza.faltante
+          alcanza.fechaIdx = dia
+          continue
+        }
+        activos.forEach((it) => { it.avance += parte })
+        pool = 0
+        break
       }
+      if (dia === 0) items.forEach((it) => { it.avanceHoy = it.avance })
+      if (items.every((it) => it.fechaIdx != null)) break
+    }
+    return items.map((it) => {
+      const { w, score, prioridad, faltante } = it
+      const fechaProyectada = it.fechaIdx != null ? linea.fechas[it.fechaIdx] : null
       const diasMargen = fechaProyectada && w.fechaLimite ? diasEntreISO(fechaProyectada, w.fechaLimite) : null
       let estatus = 'sin_fecha_segura'
       if (fechaProyectada) {
         if (diasMargen != null && diasMargen < 0) estatus = 'tarde'
         else estatus = fechaProyectada === hoyISO ? 'comprable_hoy' : 'en_fecha'
       }
-      return { id: w.id, score, prioridad, faltante, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus, intercambiado: bloqueados.has(w.id) }
+      return { id: w.id, score, prioridad, faltante, avanceHoy: it.avanceHoy, fechaProyectada, fechaLimite: w.fechaLimite || null, diasMargen, estatus, intercambiado: bloqueados.has(w.id) }
     })
   }
 
@@ -633,8 +686,18 @@ export function proximoIngresoISO({ sueldosFijos, sueldosRapidos, hoyISO }) {
 //     siguiente cobro (el MSI sale de Whimms, nunca de Vitalls ni de Gastos).
 //   - Saldo Principal: lo que queda, para gastos de la semana.
 // ---------------------------------------------------------------------------
+// "La quincena": el próximo cobro del sueldo fijo más grande (el principal).
+export function proximoCobroPrincipalISO({ sueldosFijos, hoyISO }) {
+  const horizonte = addDaysISO(hoyISO, 90)
+  const candidatos = (sueldosFijos || [])
+    .map((s) => ({ monto: Number(s.monto) || 0, fecha: ocurrenciasSueldo(s, horizonte, addDaysISO(hoyISO, 1)).find((o) => !o.omitida)?.fecha }))
+    .filter((c) => c.fecha)
+    .sort((a, b) => b.monto - a.monto)
+  return candidatos[0]?.fecha || null
+}
+
 export function distribucionCajitas({ saldoReal, bolsaWhimms, pagosFijos, sueldosFijos, sueldosRapidos, hoyISO }) {
-  const proximo = proximoIngresoISO({ sueldosFijos, sueldosRapidos, hoyISO }) || addDaysISO(hoyISO, 30)
+  const proximo = proximoCobroPrincipalISO({ sueldosFijos, hoyISO }) || proximoIngresoISO({ sueldosFijos, sueldosRapidos, hoyISO }) || addDaysISO(hoyISO, 30)
   const dueDeAntes = (pagosFijos || []).flatMap((p) =>
     fechasVencimientoVivas(p, addDaysISO(proximo, -1))
       .filter((f) => f > hoyISO)
@@ -643,7 +706,7 @@ export function distribucionCajitas({ saldoReal, bolsaWhimms, pagosFijos, sueldo
   const vitalls = dueDeAntes.filter((x) => !x.msi).reduce((sum, x) => sum + x.monto, 0)
   const msi = dueDeAntes.filter((x) => x.msi).reduce((sum, x) => sum + x.monto, 0)
   const whimms = Math.max(bolsaWhimms, 0) + msi
-  return { cajitaVitalls: vitalls, cajitaWhimms: whimms, saldoPrincipal: saldoReal - vitalls - whimms, proximoCobro: proximo }
+  return { cajitaVitalls: vitalls, cajitaWhimms: whimms, saldoPrincipal: saldoReal - vitalls - whimms, proximoCobro: proximo, dias: diasEntreISO(hoyISO, proximo) }
 }
 
 // ---------------------------------------------------------------------------
@@ -748,26 +811,4 @@ export function generarFechasPago({ frecuencia, fechaInicio, meses = 36 }) {
     for (let k = 0; k <= meses; k++) fechas.push(addMonthsISO(fechaInicio, k))
   }
   return [...new Set(fechas)].filter((f) => f >= fechaInicio).sort(compareISOAsc)
-}
-
-// ---------------------------------------------------------------------------
-// Avance de cada Whimm (barra de progreso): el dinero libre de hoy se reparte de
-// arriba hacia abajo, en cascada, SOLO entre los primeros `simultaneos` de la fila
-// (los que esperan al lunes no cuentan). Con 1 a la vez solo avanza el #1; con 3,
-// los tres primeros se llenan juntos si alcanza el dinero. El avance que se muestra
-// es `montoApartado` + lo que devuelve esta función.
-// ---------------------------------------------------------------------------
-export function repartoProgreso({ cola, libre, simultaneos = 3 }) {
-  let restante = Math.max(Number(libre) || 0, 0)
-  const asignado = new Map((cola || []).map((r) => [r.id, 0]))
-  const n = Math.max(Math.round(Number(simultaneos)) || 1, 1)
-  ;(cola || [])
-    .filter((r) => !r.intercambiado)
-    .slice(0, n)
-    .forEach((r) => {
-      const parte = Math.min(restante, Math.max(Number(r.faltante) || 0, 0))
-      asignado.set(r.id, parte)
-      restante -= parte
-    })
-  return asignado
 }

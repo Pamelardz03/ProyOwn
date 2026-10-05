@@ -1,0 +1,8 @@
+/* Estilos propios de Whital (solo dentro de .whital; la app de siempre no cambia). */
+.whital .segbtn{border-radius:12px}
+.whital .fld{border-radius:12px}
+.whital button,.whital .pill{border-radius:inherit}
+.whital *{scrollbar-width:thin;scrollbar-color:var(--beige3) transparent}
+.whital ::-webkit-scrollbar{width:8px;height:8px}
+.whital ::-webkit-scrollbar-track{background:transparent}
+.whital ::-webkit-scrollbar-thumb{background:var(--beige3);border-radius:8px}
