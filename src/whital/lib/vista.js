@@ -118,8 +118,22 @@ export function calcularVistaInicio(datos, hoyISO) {
     ...cola.filter((r) => r.estatus === 'comprable_hoy').map((r) => ({ id: `whimm-${r.id}`, titulo: porId.get(r.id)?.name || 'Whimm', sub: 'Listo para comprar', monto: -r.faltante })),
   ]
 
+  const cajitas = distribucionCajitas({ saldoReal, bolsaWhimms: bolsas.bolsaWhimms, ...base })
+  // "Para gastar hoy": nunca más que el promedio diario del presupuesto (lo que no gastas no
+  // se acumula para el día siguiente: queda libre para Whimms al cerrar la semana), ni que lo
+  // que queda de la semana repartido entre los días que faltan, ni que el dinero real que hay
+  // para gastos hasta el próximo cobro. `limitadoPor` dice cuál de los tres manda ahora.
+  const topes = {
+    presupuesto: bolsas.presupuestoSemanaActual / 7,
+    semana: bolsas.promedioDiarioRestante,
+    dinero: cajitas.saldoPrincipal / Math.max(cajitas.dias, 1),
+  }
+  const limitadoPor = Object.keys(topes).reduce((a, k) => (topes[k] < topes[a] ? k : a), 'presupuesto')
+
   return {
     saldoReal,
+    paraHoy: topes[limitadoPor],
+    limitadoPor,
     proximaCompra,
     accionesHoy,
     colaDetallada: cola.map(itemCola),
@@ -132,7 +146,7 @@ export function calcularVistaInicio(datos, hoyISO) {
     whimmsIntercambiados: cola.filter((r) => r.intercambiado).map((r) => ({ ...r, whimm: porId.get(r.id) })),
     comprablesHoy: cola.filter((r) => r.estatus === 'comprable_hoy').length,
     vitalls: proximosVitalls({ pagosFijos: base.pagosFijos, hoyISO, dias: 7 }),
-    cajitas: distribucionCajitas({ saldoReal, bolsaWhimms: bolsas.bolsaWhimms, ...base }),
+    cajitas,
   }
 }
 

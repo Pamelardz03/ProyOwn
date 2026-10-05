@@ -37,7 +37,7 @@ export const datosWidget = onRequest({ region: 'us-central1', maxInstances: 3, m
   const proxima = vista.proximaCompra
   const tema = datos.config?.tema || {}
   res.json({
-    paraHoy: Math.round(vista.bolsas.promedioDiarioRestante),
+    paraHoy: Math.round(vista.paraHoy),
     restanteSemana: Math.round(vista.bolsas.disponibleSemana),
     diasSemana: vista.bolsas.diasRestantesSemana,
     // Sin nombres: el widget solo dice si hay un Whimm disponible hoy o cuánto falta para el próximo.

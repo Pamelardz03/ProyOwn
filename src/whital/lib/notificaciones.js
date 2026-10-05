@@ -106,7 +106,7 @@ export function generarAlertas({ datos, vista, hoyISO, ahoraMs, inicioMs, genera
 
   // --- Gastos de la semana ---
   const disponible = vista.bolsas.disponibleSemana
-  const paraHoy = vista.bolsas.promedioDiarioRestante
+  const paraHoy = vista.paraHoy
   agregar({ clave: 'gastoHoy', tipo: 'gastoHoy', texto: paraHoy >= 0 ? `Para gastar hoy: ${fmt(paraHoy)}` : `Hoy ya no te queda para gastar (te pasaste ${fmt(-paraHoy)})`, cadaMin: cadenciaEfectiva({ tipo: 'gastoHoy', general }), ir: { ruta: '/gastos', estado: null } })
   if (disponible < 0) {
     agregar({ clave: `gastoPasaste:${vista.bolsas.semanaInicio}`, tipo: 'gastoPasaste', texto: `Te pasaste ${fmt(-disponible)} del presupuesto de la semana`, cadaMin: cadenciaEfectiva({ tipo: 'gastoPasaste', general }), ir: { ruta: '/gastos', estado: null } })

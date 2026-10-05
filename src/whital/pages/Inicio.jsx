@@ -139,8 +139,8 @@ export default function Inicio() {
               <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
                 <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
                   <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Para gastar hoy</div>
-                  <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3, color: vista.bolsas.promedioDiarioRestante < 0 ? '#ffb4b4' : 'inherit' }}>
-                    {fmt(vista.bolsas.promedioDiarioRestante)}
+                  <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3, color: vista.paraHoy < 0 ? '#ffb4b4' : 'inherit' }}>
+                    {fmt(vista.paraHoy)}
                   </div>
                 </div>
                 {vista.proximaCompra ? (
