@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Widget de Whital"
+        android:textColor="@color/whital_vino"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Pega el código que sale en Whital, en Perfil &gt; Widget. Solo se hace una vez."
+        android:textColor="#7A7156"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/codigo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:hint="Código (48 caracteres)"
+        android:importantForAutofill="no"
+        android:inputType="textNoSuggestions|textMultiLine"
+        android:minLines="2" />
+
+    <Button
+        android:id="@+id/pegar"
+        style="?android:attr/buttonBarButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Pegar del portapapeles" />
+
+    <Button
+        android:id="@+id/guardar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="@color/whital_vino"
+        android:text="Guardar"
+        android:textColor="#FFFFFF" />
+</LinearLayout>

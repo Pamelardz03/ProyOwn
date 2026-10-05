@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Whital" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/whital_vino</item>
+        <item name="colorPrimaryDark">@color/whital_vino</item>
+        <item name="colorAccent">@color/whital_vino</item>
+        <item name="android:windowBackground">@color/whital_beige</item>
+    </style>
+</resources>

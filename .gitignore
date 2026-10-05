@@ -10,3 +10,8 @@ dist-ssr
 functions/whital/
 firebase-debug.log
 *-debug.log
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.keystore
