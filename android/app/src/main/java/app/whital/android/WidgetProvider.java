@@ -119,7 +119,7 @@ public class WidgetProvider extends AppWidgetProvider {
 
         // Colores del tema de la app (el relleno se tiñe; en Android < 12 queda el vino).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            v.setColorStateList(R.id.raiz, "setBackgroundTintList", ColorStateList.valueOf(Tema.relleno(p.getString("paleta", "vino"), p.getString("fondo", "beige"))));
+            v.setColorStateList(R.id.raiz, "setBackgroundTintList", ColorStateList.valueOf(Tema.fondoWidget(p.getString("fondoWidget", "auto"), p.getString("paleta", "vino"), p.getString("fondo", "beige"))));
         }
 
         if (sinCodigo || !hayDatos) {
@@ -143,8 +143,10 @@ public class WidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        // 1/3: lo gastado hoy (cambia cada vez que registras un gasto) y la semana.
-        v.setTextViewText(R.id.monto, dinero(p.getInt("gastoHoy", 0)));
+        // 1/3: lo que te queda para gastar hoy (baja cada vez que registras un gasto) y la semana.
+        int paraHoy = p.getInt("paraHoy", 0);
+        v.setTextViewText(R.id.monto, dinero(paraHoy));
+        v.setTextColor(R.id.monto, paraHoy < 0 ? Tema.alerta() : 0xFFFFFFFF);
         int gastoSemana = p.getInt("gastoSemana", 0);
         int presupuesto = p.getInt("presupuestoSemana", 0);
         v.setTextViewText(R.id.semanaValor, dinero(gastoSemana) + " de " + dinero(presupuesto));
@@ -169,12 +171,19 @@ public class WidgetProvider extends AppWidgetProvider {
         v.setTextViewText(R.id.whimmValor, whimm);
     }
 
-    private static void enlazar(Context c, RemoteViews v, boolean sinCodigo) {
-        // Tocar el widget: abre Whital (o pide el código si aún no hay).
-        Intent abrir = sinCodigo
+    private static PendingIntent abrirEn(Context c, int codigo, String destino, boolean sinCodigo) {
+        // Sin código guardado, cualquier toque pide el código. Con código: abre Whital en su pantalla.
+        Intent i = sinCodigo
                 ? new Intent(c, ConfigActivity.class)
-                : new Intent(Intent.ACTION_VIEW, Uri.parse(URL_APP)).setPackage(c.getPackageName());
-        v.setOnClickPendingIntent(R.id.raiz, PendingIntent.getActivity(c, 0, abrir, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+                : new Intent(Intent.ACTION_VIEW, Uri.parse(destino == null ? URL_APP : URL_APP + "?ir=" + destino)).setPackage(c.getPackageName());
+        return PendingIntent.getActivity(c, codigo, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    private static void enlazar(Context c, RemoteViews v, boolean sinCodigo) {
+        v.setOnClickPendingIntent(R.id.raiz, abrirEn(c, 0, null, sinCodigo));
+        v.setOnClickPendingIntent(R.id.bandaHoy, abrirEn(c, 2, "gastos", sinCodigo));
+        v.setOnClickPendingIntent(R.id.bandaUltimo, abrirEn(c, 3, "gastos", sinCodigo));
+        v.setOnClickPendingIntent(R.id.bandaWhimms, abrirEn(c, 4, "whimms", sinCodigo));
         Intent refrescar = new Intent(c, WidgetProvider.class).setAction(ACCION_REFRESCAR);
         v.setOnClickPendingIntent(R.id.refrescar, PendingIntent.getBroadcast(c, 1, refrescar, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
     }

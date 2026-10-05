@@ -6,9 +6,14 @@ import android.graphics.Color;
  * Colores del tema de Whital para el widget. Son los mismos rellenos que usa la app:
  * con fondo beige o blanco el relleno es el tono oscuro de la paleta; con gris oscuro,
  * el tono medio (el texto blanco se lee bien en ambos).
+ * El fondo del widget también se puede fijar a mano (todos son oscuros, para que el texto
+ * blanco siempre se lea).
  */
 final class Tema {
     private Tema() {}
+
+    /** Opciones de color del widget: "auto" = el de tu tema de la app. */
+    static final String[] OPCIONES = {"auto", "vino", "rosa", "salvia", "oceano", "ciruela", "terracota", "grafito"};
 
     // paleta -> { relleno sobre fondo claro, relleno sobre fondo oscuro }
     private static int[] rellenos(String paleta) {
@@ -25,6 +30,13 @@ final class Tema {
     static int relleno(String paleta, String fondo) {
         int[] c = rellenos(paleta == null ? "vino" : paleta);
         return "oscuro".equals(fondo) ? c[1] : c[0];
+    }
+
+    /** Color de fondo del widget según lo que elegiste ("auto" sigue al tema de la app). */
+    static int fondoWidget(String eleccion, String paleta, String fondo) {
+        if (eleccion == null || "auto".equals(eleccion)) return relleno(paleta, fondo);
+        if ("grafito".equals(eleccion)) return 0xFF2C2E33;
+        return rellenos(eleccion)[0];
     }
 
     /** Rojo claro para cuando te pasaste del día (legible sobre cualquier relleno). */

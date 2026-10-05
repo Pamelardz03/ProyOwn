@@ -15,6 +15,42 @@ import android.widget.Toast;
 public class ConfigActivity extends Activity {
     private int widgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
 
+    private int dp(int v) {
+        return Math.round(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    /** Fila de colores para el fondo del widget: "Tema" (el de la app) y los colores fijos. */
+    private void armarColores() {
+        final android.widget.LinearLayout fila = findViewById(R.id.colores);
+        fila.removeAllViews();
+        String actual = Datos.prefs(this).getString("fondoWidget", "auto");
+        android.content.SharedPreferences p = Datos.prefs(this);
+        for (final String opcion : Tema.OPCIONES) {
+            boolean auto = "auto".equals(opcion);
+            int color = Tema.fondoWidget(opcion, p.getString("paleta", "vino"), p.getString("fondo", "beige"));
+            android.graphics.drawable.GradientDrawable forma = new android.graphics.drawable.GradientDrawable();
+            forma.setColor(color);
+            forma.setCornerRadius(dp(16));
+            boolean elegido = opcion.equals(actual);
+            forma.setStroke(dp(elegido ? 3 : 1), elegido ? 0xFF1A1208 : 0x55000000);
+            android.widget.TextView t = new android.widget.TextView(this);
+            t.setBackground(forma);
+            t.setGravity(android.view.Gravity.CENTER);
+            t.setText(auto ? "Tema" : "");
+            t.setTextColor(0xFFFFFFFF);
+            t.setTextSize(11);
+            t.setContentDescription(auto ? "Color del tema de la app" : "Color " + opcion);
+            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(auto ? dp(52) : dp(32), dp(32));
+            lp.setMarginEnd(dp(6));
+            t.setOnClickListener(v -> {
+                p.edit().putString("fondoWidget", opcion).apply();
+                WidgetProvider.repintarTodos(getApplicationContext());
+                armarColores();
+            });
+            fila.addView(t, lp);
+        }
+    }
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -27,6 +63,7 @@ public class ConfigActivity extends Activity {
 
         EditText campo = findViewById(R.id.codigo);
         campo.setText(Datos.token(this));
+        armarColores();
 
         Button pegar = findViewById(R.id.pegar);
         pegar.setOnClickListener(v -> {

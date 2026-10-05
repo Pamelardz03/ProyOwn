@@ -123,16 +123,22 @@ export function calcularVistaInicio(datos, hoyISO) {
   // se acumula para el día siguiente: queda libre para Whimms al cerrar la semana), ni que lo
   // que queda de la semana repartido entre los días que faltan, ni que el dinero real que hay
   // para gastos hasta el próximo cobro. `limitadoPor` dice cuál de los tres manda ahora.
+  // Se calcula lo que te TOCABA hoy antes de gastar nada (le sumamos lo gastado hoy a lo que
+  // queda) y de ahí se resta lo gastado: así "para gastar hoy" baja 1 a 1 con cada gasto que
+  // registras y no se mueve solo porque cambie el promedio.
+  const gastoHoy = dias.find((d) => d.esHoy)?.gastado || 0
   const topes = {
     presupuesto: bolsas.presupuestoSemanaActual / 7,
-    semana: bolsas.promedioDiarioRestante,
-    dinero: cajitas.saldoPrincipal / Math.max(cajitas.dias, 1),
+    semana: (bolsas.disponibleSemana + gastoHoy) / Math.max(bolsas.diasRestantesSemana, 1),
+    dinero: (cajitas.saldoPrincipal + gastoHoy) / Math.max(cajitas.dias, 1),
   }
   const limitadoPor = Object.keys(topes).reduce((a, k) => (topes[k] < topes[a] ? k : a), 'presupuesto')
 
   return {
     saldoReal,
-    paraHoy: topes[limitadoPor],
+    asignadoHoy: topes[limitadoPor],
+    gastoHoy,
+    paraHoy: topes[limitadoPor] - gastoHoy,
     limitadoPor,
     proximaCompra,
     accionesHoy,
