@@ -34,7 +34,8 @@ export default function Perfil() {
   const c = vista?.cajitas
   const porDia = c ? c.saldoPrincipal / Math.max(c.dias, 1) : 0
   const metaDia = vista ? vista.presupuestoSemanal / 7 : 0
-  const ritmo = porDia >= metaDia ? { texto: 'Vas bien', color: 'var(--green)' } : porDia >= metaDia * 0.7 ? { texto: 'Ajustado', color: 'var(--amber)' } : { texto: 'No alcanza', color: 'var(--red)' }
+  // Lo que toca por día frente a tu presupuesto diario: Bajo (rojo), Medio o Alto.
+  const nivel = porDia >= metaDia ? { texto: 'Alto', color: 'var(--green)' } : porDia >= metaDia * 0.7 ? { texto: 'Medio', color: 'var(--amber)' } : { texto: 'Bajo', color: 'var(--red)' }
 
   return (
     <div className="screen">
@@ -61,8 +62,8 @@ export default function Perfil() {
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para gastos · hasta el {fechaCorta(c.proximoCobro)}</div>
-                <div className="mono" style={{ ...cifra, color: ritmo.color }}>{fmt(c.saldoPrincipal)}</div>
-                <div style={{ fontSize: 10, color: ritmo.color, marginTop: 2 }}>{fmt(porDia)}/día · {ritmo.texto}</div>
+                <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(c.saldoPrincipal)}</div>
+                <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>Por día: {nivel.texto}</div>
               </div>
             </div>
           </div>
