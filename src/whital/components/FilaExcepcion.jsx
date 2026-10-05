@@ -13,7 +13,7 @@ const boton = { width: '100%', borderRadius: 12, padding: 12, fontSize: 12, font
 // Ventana del lápiz: lo que se puede hacer con ESA fecha (cambiar el monto,
 // omitirla como dato atípico o restaurarla) y con TODA la serie (editarla o
 // eliminarla).
-function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, onCerrar }) {
+function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, hoy, onCerrar }) {
   const navigate = useNavigate()
   const exc = entidad.excepciones?.[ocurrencia.fecha] || {}
   const tieneMonto = exc.montoReal != null || exc.monto != null
@@ -69,8 +69,11 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
           </div>
         </Campo>
         {tieneMonto && <button style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--wine)', fontWeight: 600, textDecoration: 'underline' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida }, 'Monto restablecido')}>Restablecer el monto base</button>}
-        <button style={{ ...boton, background: ocurrencia.omitida ? 'var(--green-bg)' : 'var(--beige2)', color: ocurrencia.omitida ? 'var(--green)' : 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: !ocurrencia.omitida }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}>
-          {ocurrencia.omitida ? 'Restaurar esta fecha' : 'Omitir esta fecha (dato atípico)'}
+        {coleccion === 'sueldosFijos' && !ocurrencia.omitida && ocurrencia.fecha <= hoy && (
+          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: true, pendiente: true }, 'Se sumará cuando llegue')}>Aún no llega</button>
+        )}
+        <button style={{ ...boton, background: ocurrencia.omitida ? 'var(--green-bg)' : 'var(--beige2)', color: ocurrencia.omitida ? 'var(--green)' : 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: !ocurrencia.omitida, pendiente: false }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}>
+          {ocurrencia.pendiente ? 'Ya llegó' : ocurrencia.omitida ? 'Restaurar esta fecha' : 'Omitir esta fecha (dato atípico)'}
         </button>
       </div>
 
@@ -104,12 +107,12 @@ export default function FilaExcepcion({ coleccion, entidad, ocurrencia, hoy, use
         <div style={{ flex: 1, minWidth: 0, opacity: ocurrencia.omitida ? 0.55 : 1 }}>
           {nombre && <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</div>}
           <div className="mono" style={{ fontSize: 13, textDecoration: ocurrencia.omitida ? 'line-through' : 'none' }}>{fmt(ocurrencia.monto)}</div>
-          {ocurrencia.omitida && <div style={{ fontSize: 10, color: 'var(--amber)' }}>Dato atípico</div>}
+          {ocurrencia.omitida && <div style={{ fontSize: 10, color: 'var(--amber)' }}>{ocurrencia.pendiente ? 'Esperando el depósito' : 'Dato atípico'}</div>}
           {!ocurrencia.omitida && tieneMonto && <div style={{ fontSize: 10, color: 'var(--amber)' }}>monto ajustado (base {fmt(entidad.monto)})</div>}
         </div>
         <button aria-label="Editar" onClick={() => setAbierto(true)}><IconEdit /></button>
       </div>
-      {abierto && <EditarOcurrencia coleccion={coleccion} entidad={entidad} ocurrencia={ocurrencia} nombre={nombre} user={user} show={show} onCerrar={() => setAbierto(false)} />}
+      {abierto && <EditarOcurrencia coleccion={coleccion} entidad={entidad} ocurrencia={ocurrencia} nombre={nombre} user={user} show={show} hoy={hoy} onCerrar={() => setAbierto(false)} />}
     </div>
   )
 }

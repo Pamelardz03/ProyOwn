@@ -777,7 +777,11 @@ export function ocurrenciasSueldo(sueldo, hastaISO, desdeISO) {
   return fechas
     .filter((f) => f && f <= hastaISO && (!fechaFin || f <= fechaFin) && (!desdeISO || f >= desdeISO))
     .sort(compareISOAsc)
-    .map((f) => ({ fecha: f, monto: montoOcurrenciaSueldo(sueldo, f), omitida: !!excepcionDe(sueldo, f)?.omitida }))
+    .map((f) => {
+      const exc = excepcionDe(sueldo, f)
+      // `pendiente`: marcado como "aún no llega" (no cuenta en el saldo hasta que llegue)
+      return { fecha: f, monto: montoOcurrenciaSueldo(sueldo, f), omitida: !!exc?.omitida, pendiente: !!(exc?.omitida && exc?.pendiente) }
+    })
 }
 
 // Cuántos pagos lleva un pago fijo/MSI y cuál es el siguiente.

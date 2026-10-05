@@ -111,7 +111,7 @@ export default function Historial() {
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR[e.tipo], flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, textDecoration: e.omitida ? 'line-through' : 'none', opacity: e.omitida ? 0.6 : 1 }}>{e.titulo}</div>
-                      {e.omitida && <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 1 }}>Dato atípico</div>}
+                      {e.omitida && <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 1 }}>{e.ocurrencia?.pendiente ? 'Esperando el depósito' : 'Dato atípico'}</div>}
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>{fechaCorta(e.fecha)}</span>
                     <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: e.monto > 0 ? 'var(--green)' : 'var(--text)', textDecoration: e.omitida ? 'line-through' : 'none' }}>{e.monto > 0 ? '+' : ''}{fmt(e.monto)}</span>

@@ -9,7 +9,8 @@ import EncabezadoSub from '../../components/EncabezadoSub'
 import FilaDeslizable from '../../components/FilaDeslizable'
 import Sheet from '../../components/Sheet'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
-import { ocurrenciasSueldo, todayISO } from '../../lib/budget'
+import { addDaysISO, ocurrenciasSueldo, todayISO } from '../../lib/budget'
+import { marcarCobro } from '../../lib/cobros'
 import { enDias, fechaCorta, fmt } from '../../lib/vista'
 import { IngresoRapidoForm, SueldoForm } from './piezas'
 
@@ -31,6 +32,20 @@ export default function Sueldos() {
 
   const proximoCobro = (s) => ocurrenciasSueldo(s, `${new Date().getFullYear() + 3}-12-31`, hoy).find((o) => !o.omitida && o.fecha >= hoy)?.fecha
   const rapidos = useMemo(() => [...datos.sueldosRapidos].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 15), [datos.sueldosRapidos])
+
+  // Cobro que se puede marcar: uno pendiente (esperando el depósito) o el de hoy.
+  const cobroMarcable = (s) => {
+    const cercanos = ocurrenciasSueldo(s, hoy, addDaysISO(hoy, -14))
+    return cercanos.filter((o) => o.pendiente).pop() || cercanos.find((o) => o.fecha === hoy && !o.omitida) || null
+  }
+  const marcar = async (s, o) => {
+    try {
+      await marcarCobro(user.uid, s, o.fecha, o.pendiente)
+      show(o.pendiente ? 'Sueldo sumado a tu saldo' : 'Se sumará cuando llegue')
+    } catch {
+      show('No se pudo actualizar')
+    }
+  }
 
   const borrarSueldo = async (id) => {
     try {
@@ -77,10 +92,17 @@ export default function Sueldos() {
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name || s.nombre}</div>
                             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                              {s.frecuencia}{s.fechaFin ? ` · detenido ${fechaCorta(s.fechaFin)}` : proximoCobro(s) ? ` · próximo ${fechaCorta(proximoCobro(s))} · ${enDias(proximoCobro(s), hoy)}` : ''}
+                              {s.frecuencia}{s.fechaFin ? ` · detenido ${fechaCorta(s.fechaFin)}` : cobroMarcable(s)?.pendiente ? ` · esperando el depósito del ${fechaCorta(cobroMarcable(s).fecha)}` : proximoCobro(s) ? ` · próximo ${fechaCorta(proximoCobro(s))} · ${enDias(proximoCobro(s), hoy)}` : ''}
                             </div>
                           </div>
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(s.monto)}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(s.monto)}</div>
+                            {cobroMarcable(s) && (
+                              <span onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+                                <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcar(s, cobroMarcable(s))}>{cobroMarcable(s).pendiente ? 'Ya llegó' : 'Aún no llega'}</button>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </FilaDeslizable>
                     ))}

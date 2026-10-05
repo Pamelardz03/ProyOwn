@@ -108,7 +108,9 @@ export function calcularVistaInicio(datos, hoyISO) {
   // Lo que pasa HOY: cobros, vencimientos y Whimms listos para comprar.
   const accionesHoy = [
     ...(base.sueldosFijos || []).flatMap((s) =>
-      ocurrenciasSueldo(s, hoyISO, hoyISO).map((o) => ({ id: `sueldo-${s.id}`, sueldoId: s.id, fecha: o.fecha, pendiente: o.omitida, titulo: s.name || s.nombre || 'Sueldo', sub: o.omitida ? 'Sueldo · esperando el depósito' : 'Sueldo · ya está en tu saldo', monto: o.monto }))
+      ocurrenciasSueldo(s, hoyISO, addDaysISO(hoyISO, -14))
+        .filter((o) => (o.fecha === hoyISO && (!o.omitida || o.pendiente)) || (o.fecha < hoyISO && o.pendiente))
+        .map((o) => ({ id: `sueldo-${s.id}-${o.fecha}`, sueldoId: s.id, fecha: o.fecha, pendiente: o.pendiente, titulo: s.name || s.nombre || 'Sueldo', sub: o.pendiente ? `Sueldo · esperando el depósito${o.fecha < hoyISO ? ` (${fechaCorta(o.fecha)})` : ''}` : 'Sueldo · ya está en tu saldo', monto: o.monto }))
     ),
     ...(base.pagosFijos || []).flatMap((p) =>
       ocurrenciasPagoFijo(p, hoyISO, hoyISO).filter((o) => !o.omitida).map((o) => ({ id: `pago-${p.id}`, titulo: p.name, sub: p.tipo === 'MSI' ? 'Pago a meses' : p.tipo === 'Vitall' ? 'Vitall' : 'Pago fijo', monto: -o.monto }))

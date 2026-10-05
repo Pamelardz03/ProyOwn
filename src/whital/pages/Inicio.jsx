@@ -4,7 +4,8 @@ import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
-import { addUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
+import { addUserDoc } from '../../lib/firestoreCollections'
+import { marcarCobro } from '../lib/cobros'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -147,10 +148,9 @@ export default function Inicio() {
   // Un sueldo cuenta en tu saldo desde su día de cobro. Si todavía no te depositan,
   // "Aún no llega" lo resta hasta que le des "Ya llegó".
   const marcarSueldo = async (a) => {
-    const s = datos.sueldosFijos.find((x) => x.id === a.sueldoId)
-    const exc = s?.excepciones?.[a.fecha] || {}
+    const sueldo = datos.sueldosFijos.find((x) => x.id === a.sueldoId)
     try {
-      await updateUserDoc(user.uid, 'sueldosFijos', a.sueldoId, { [`excepciones.${a.fecha}`]: { ...exc, omitida: !a.pendiente } })
+      await marcarCobro(user.uid, sueldo, a.fecha, a.pendiente)
       show(a.pendiente ? 'Sueldo sumado a tu saldo' : 'Se sumará cuando llegue')
     } catch {
       show('No se pudo actualizar')
