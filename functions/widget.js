@@ -5,7 +5,8 @@ import { createHash, randomBytes } from 'node:crypto'
 import { getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { cargarDatos } from './datos.js'
-import { todayISO } from './whital/budget.js'
+import { gastoNeto, todayISO } from './whital/budget.js'
+import { aMillis } from './whital/recordatorio.js'
 import { calcularVistaInicio } from './whital/vista.js'
 
 const huella = (token) => createHash('sha256').update(token).digest('hex')
@@ -36,7 +37,18 @@ export const datosWidget = onRequest({ region: 'us-central1', maxInstances: 3, m
   const vista = calcularVistaInicio(datos, hoy)
   const proxima = vista.proximaCompra
   const tema = datos.config?.tema || {}
+
+  // Gastos de hoy (los Vitalls no cuentan, igual que en la app) y el último que registraste.
+  const deHoy = (datos.gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === hoy)
+  const ultimo = deHoy.reduce((m, g) => (!m || aMillis(g.creadoEn) >= aMillis(m.creadoEn) ? g : m), null)
+  const generico = (t) => !t || /^gasto$/i.test(String(t).trim())
+  const temaUltimo = ultimo ? (!generico(ultimo.concepto) ? ultimo.concepto : ultimo.etiqueta || ultimo.concepto || 'Gasto') : null
+
   res.json({
+    gastoHoy: Math.round(deHoy.reduce((s, g) => s + gastoNeto(g), 0)),
+    gastoSemana: Math.round(vista.bolsas.gastadoSemanaActual),
+    presupuestoSemana: Math.round(vista.bolsas.presupuestoSemanaActual),
+    ultimoGasto: ultimo ? { tema: String(temaUltimo).slice(0, 40), monto: Math.round(gastoNeto(ultimo)) } : null,
     paraHoy: Math.round(vista.paraHoy),
     restanteSemana: Math.round(vista.bolsas.disponibleSemana),
     diasSemana: vista.bolsas.diasRestantesSemana,

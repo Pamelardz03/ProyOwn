@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_descripcion">Lo que puedes gastar hoy, lo que queda de la semana y tus Whimms</string>
+    <string name="widget_descripcion">Lo gastado hoy, tu último gasto y tus Whimms</string>
 </resources>

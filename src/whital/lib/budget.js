@@ -313,7 +313,10 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
   let acumulado = saldoHoy
   for (let i = 0; i <= HORIZONTE_PROYECCION_DIAS; i++) {
     const f = addDaysISO(hoyISO, i)
-    const gastoEsperado = i < diasRestantes ? restanteSemana / diasRestantes : presupuesto / 7
+    // Cada día se aparta, como máximo, el promedio diario (presupuesto / 7). Si te pasaste,
+    // lo que queda de la semana se reparte entre los días que faltan (ese día aparta menos);
+    // si un día no gastas, NO se acumula para los siguientes: lo demás queda libre para Whimms.
+    const gastoEsperado = i < diasRestantes ? Math.min(restanteSemana / diasRestantes, presupuesto / 7) : presupuesto / 7
     acumulado += (delta.get(f) || 0) - gastoEsperado
     fechas.push(f)
     saldos.push(acumulado)

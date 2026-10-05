@@ -55,7 +55,14 @@ final class Datos {
             }
             JSONObject json = new JSONObject(sb.toString());
             JSONObject tema = json.optJSONObject("tema");
+            JSONObject ultimo = json.optJSONObject("ultimoGasto");
             prefs(c).edit()
+                    .putInt("gastoHoy", json.optInt("gastoHoy"))
+                    .putInt("gastoSemana", json.optInt("gastoSemana"))
+                    .putInt("presupuestoSemana", json.optInt("presupuestoSemana"))
+                    .putBoolean("hayUltimo", ultimo != null)
+                    .putString("ultimoTema", ultimo != null ? ultimo.optString("tema") : "")
+                    .putInt("ultimoMonto", ultimo != null ? ultimo.optInt("monto") : 0)
                     .putInt("paraHoy", json.optInt("paraHoy"))
                     .putInt("restanteSemana", json.optInt("restanteSemana"))
                     .putInt("diasSemana", json.optInt("diasSemana"))

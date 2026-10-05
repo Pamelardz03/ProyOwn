@@ -10,7 +10,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
-import android.util.SizeF;
 import android.widget.RemoteViews;
 
 import androidx.work.Constraints;
@@ -21,11 +20,7 @@ import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
 import java.text.NumberFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -93,7 +88,7 @@ public class WidgetProvider extends AppWidgetProvider {
 
     static void programarPeriodico(Context c) {
         Constraints red = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
-        PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(ActualizarWorker.class, 30, TimeUnit.MINUTES).setConstraints(red).build();
+        PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(ActualizarWorker.class, 15, TimeUnit.MINUTES).setConstraints(red).build();
         WorkManager.getInstance(c).enqueueUniquePeriodicWork(TRABAJO_PERIODICO, ExistingPeriodicWorkPolicy.KEEP, req);
     }
 
@@ -113,12 +108,9 @@ public class WidgetProvider extends AppWidgetProvider {
         return (n < 0 ? "-$" : "$") + nf.format(Math.abs(n));
     }
 
-    private static String textoDias(int dias) {
-        return dias == 1 ? "1 día" : dias + " días";
-    }
 
-    /** Rellena un diseño (el grande o el chico; comparten los mismos ids). */
-    private static void rellenar(Context c, RemoteViews v, boolean compacto) {
+    /** Rellena el widget: tres franjas (gastado hoy y semana / último gasto / Whimms). */
+    private static void rellenar(Context c, RemoteViews v) {
         SharedPreferences p = Datos.prefs(c);
         boolean sinCodigo = Datos.token(c).isEmpty();
         boolean hayDatos = p.getBoolean("hayDatos", false);
@@ -129,55 +121,51 @@ public class WidgetProvider extends AppWidgetProvider {
             v.setColorStateList(R.id.raiz, "setBackgroundTintList", ColorStateList.valueOf(Tema.relleno(p.getString("paleta", "vino"), p.getString("fondo", "beige"))));
         }
 
-        if (sinCodigo) {
-            v.setTextViewText(R.id.monto, "Falta el código");
-            v.setTextViewText(R.id.semanaValor, "");
-            v.setTextViewText(R.id.whimmValor, "Toca para pegarlo");
-            v.setTextViewText(R.id.actualizado, "");
-            return;
-        }
-        if (!hayDatos) {
-            // Aún sin datos: dice qué pasa en vez de quedarse en "Cargando" sin explicar.
+        if (sinCodigo || !hayDatos) {
+            // Sin datos todavía: dice qué pasa en vez de quedarse en blanco.
             v.setTextViewText(R.id.monto, "—");
-            if ("codigo".equals(error)) {
-                v.setTextViewText(R.id.semanaValor, "Código inválido");
+            v.setTextViewText(R.id.semanaValor, "");
+            v.setTextViewText(R.id.ultimoMonto, "");
+            if (sinCodigo) {
+                v.setTextViewText(R.id.ultimoTema, "Falta el código");
+                v.setTextViewText(R.id.whimmValor, "Toca para pegarlo");
+            } else if ("codigo".equals(error)) {
+                v.setTextViewText(R.id.ultimoTema, "Código inválido");
                 v.setTextViewText(R.id.whimmValor, "Pégalo de nuevo");
             } else if ("red".equals(error)) {
-                v.setTextViewText(R.id.semanaValor, "Sin conexión");
+                v.setTextViewText(R.id.ultimoTema, "Sin conexión");
                 v.setTextViewText(R.id.whimmValor, "Toca ↻ para reintentar");
             } else {
-                v.setTextViewText(R.id.semanaValor, "Cargando…");
+                v.setTextViewText(R.id.ultimoTema, "Cargando…");
                 v.setTextViewText(R.id.whimmValor, "");
             }
-            v.setTextViewText(R.id.actualizado, "");
             return;
         }
 
-        int hoy = p.getInt("paraHoy", 0);
-        v.setTextViewText(R.id.monto, dinero(hoy));
-        v.setTextColor(R.id.monto, hoy < 0 ? Tema.alerta() : 0xFFFFFFFF);
+        // 1/3: lo gastado hoy (cambia cada vez que registras un gasto) y la semana.
+        v.setTextViewText(R.id.monto, dinero(p.getInt("gastoHoy", 0)));
+        int gastoSemana = p.getInt("gastoSemana", 0);
+        int presupuesto = p.getInt("presupuestoSemana", 0);
+        v.setTextViewText(R.id.semanaValor, dinero(gastoSemana) + " de " + dinero(presupuesto));
+        v.setTextColor(R.id.semanaValor, gastoSemana > presupuesto ? Tema.alerta() : 0xFFFFFFFF);
 
-        int semana = p.getInt("restanteSemana", 0);
-        int dias = p.getInt("diasSemana", 0);
-        // El diseño angosto no tiene etiquetas encima, así que el texto lleva su propio nombre.
-        String textoSemana;
-        if (semana < 0) textoSemana = "Pasaste " + dinero(-semana);
-        else if (compacto) textoSemana = "Semana: " + dinero(semana);
-        else textoSemana = dinero(semana) + " · " + textoDias(Math.max(dias, 1));
-        v.setTextViewText(R.id.semanaValor, textoSemana);
-        v.setTextColor(R.id.semanaValor, semana < 0 ? Tema.alerta() : 0xFFFFFFFF);
+        // 2/3: el último gasto de hoy, solo tema y monto.
+        if (p.getBoolean("hayUltimo", false)) {
+            v.setTextViewText(R.id.ultimoTema, p.getString("ultimoTema", ""));
+            v.setTextViewText(R.id.ultimoMonto, dinero(p.getInt("ultimoMonto", 0)));
+        } else {
+            v.setTextViewText(R.id.ultimoTema, "Sin gastos hoy");
+            v.setTextViewText(R.id.ultimoMonto, "");
+        }
 
+        // 3/3: Whimms.
         int hoyWhimms = p.getInt("whimmsHoy", 0);
         int proximo = p.getInt("proximoWhimmDias", -1);
         String whimm;
-        if (hoyWhimms > 0) whimm = compacto ? (hoyWhimms == 1 ? "Whimm hoy" : hoyWhimms + " Whimms hoy") : (hoyWhimms == 1 ? "Disponible" : hoyWhimms + " disponibles");
-        else if (proximo > 0) whimm = compacto ? "Whimm en " + proximo + (proximo == 1 ? " día" : " d") : "En " + textoDias(proximo);
-        else whimm = compacto ? "Sin Whimms" : "Ninguno por ahora";
+        if (hoyWhimms > 0) whimm = hoyWhimms == 1 ? "Whimm hoy" : hoyWhimms + " Whimms hoy";
+        else if (proximo > 0) whimm = "Whimm en " + proximo + (proximo == 1 ? " día" : " d");
+        else whimm = "Sin Whimms";
         v.setTextViewText(R.id.whimmValor, whimm);
-        v.setTextViewText(R.id.whimmEtiqueta, !compacto && hoyWhimms > 0 ? "Whimm hoy" : "Whimm");
-
-        String hora = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(p.getLong("actualizado", 0)));
-        v.setTextViewText(R.id.actualizado, "red".equals(error) ? "Sin red · " + hora : hora);
     }
 
     private static void enlazar(Context c, RemoteViews v, boolean sinCodigo) {
@@ -190,32 +178,14 @@ public class WidgetProvider extends AppWidgetProvider {
         v.setOnClickPendingIntent(R.id.refrescar, PendingIntent.getBroadcast(c, 1, refrescar, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
-    static RemoteViews crearGrande(Context c) {
+    static RemoteViews crear(Context c) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
-        rellenar(c, v, false);
-        enlazar(c, v, Datos.token(c).isEmpty());
-        return v;
-    }
-
-    static RemoteViews crearChico(Context c) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_chico);
-        rellenar(c, v, true);
+        rellenar(c, v);
         enlazar(c, v, Datos.token(c).isEmpty());
         return v;
     }
 
     static void pintar(Context c, AppWidgetManager mgr, int id) {
-        RemoteViews grande = crearGrande(c);
-
-        RemoteViews resultado = grande;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+: un diseño para 2x2 y otro para 3x2; el sistema elige según el tamaño.
-            RemoteViews chico = crearChico(c);
-            Map<SizeF, RemoteViews> tamanos = new HashMap<>();
-            tamanos.put(new SizeF(110f, 110f), chico);
-            tamanos.put(new SizeF(240f, 110f), grande);
-            resultado = new RemoteViews(tamanos);
-        }
-        mgr.updateAppWidget(id, resultado);
+        mgr.updateAppWidget(id, crear(c));
     }
 }
