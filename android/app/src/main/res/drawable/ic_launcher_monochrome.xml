@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- La W de Whital (la del logo), centrada y dentro de la zona visible del ícono adaptable. -->
+<!-- Versión de un solo color de la W, para los íconos temáticos de Android 13+. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -13,12 +13,12 @@
         <path
             android:fillColor="#00000000"
             android:pathData="M15,19 L24,46 L32,28 L40,46 L49,19"
-            android:strokeColor="#F3EFE2"
+            android:strokeColor="#FFFFFFFF"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
             android:strokeWidth="5" />
         <path
-            android:fillColor="#A8B488"
+            android:fillColor="#FFFFFFFF"
             android:pathData="M45.6,19 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
     </group>
 </vector>
