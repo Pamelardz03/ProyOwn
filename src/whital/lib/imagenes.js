@@ -1,6 +1,6 @@
 // Fotos de los Whimms: se elige una de la galería/cámara (o se toma de un enlace) y se
 // guarda en Firebase Storage, así no dependes de enlaces externos que luego se rompen.
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { app } from '../../lib/firebase'
 import { storage } from '../../lib/storage'
@@ -36,4 +36,15 @@ export async function fotoDeEnlace(enlace) {
   const llamar = httpsCallable(getFunctions(app, 'us-central1'), 'imagenDeEnlace')
   const { data } = await llamar({ enlace })
   return data.url
+}
+
+// Borra del almacenamiento una foto que subiste tú (las de enlaces externos no se tocan).
+// Si ya no existe o falla, no pasa nada: la foto solo deja de usarse.
+export async function borrarFotoPropia(url, uid) {
+  if (!url || !url.includes('firebasestorage.googleapis.com') || !decodeURIComponent(url).includes(`/users/${uid}/`)) return
+  try {
+    await deleteObject(ref(storage, url))
+  } catch {
+    /* ya no está o no hay permiso: se ignora */
+  }
 }

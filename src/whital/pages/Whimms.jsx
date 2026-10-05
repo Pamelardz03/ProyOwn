@@ -8,7 +8,7 @@ import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
-import { fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
+import { borrarFotoPropia, fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
 import InputConSugerencias from '../components/InputConSugerencias'
 import Modal from '../components/Modal'
 import PestanasCompras from '../components/PestanasCompras'
@@ -183,6 +183,7 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
     ejecutar(async () => {
       if (whimm.pagoFijoMsiId) await deleteUserDoc(user.uid, 'pagosFijos', whimm.pagoFijoMsiId)
       await deleteUserDoc(user.uid, 'whimms', whimm.id)
+      borrarFotoPropia(whimm.imagenUrl, user.uid)
     }, 'Whimm eliminado')
 
   const botonAccion = (k, texto) => (
@@ -338,7 +339,8 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const [precio, setPrecio] = useState(whimm?.precio != null ? String(whimm.precio) : '')
   const [lugar, setLugar] = useState(whimm?.lugar || '')
   const [imagenUrl, setImagenUrl] = useState(whimm?.imagenUrl || '')
-  const [link, setLink] = useState(whimm?.links?.[0] || whimm?.link || '')
+  const [links, setLinks] = useState(() => (Array.isArray(whimm?.links) && whimm.links.length ? whimm.links : whimm?.link ? [whimm.link] : []).filter(Boolean))
+  const [subidas, setSubidas] = useState([]) // fotos que se subieron en esta edición (para limpiar las que no se usen)
   const [necesidad, setNecesidad] = useState(normalizarNivel(whimm?.necesidad ?? NIVEL_DEFAULT))
   const [deseo, setDeseo] = useState(normalizarNivel(whimm?.deseo ?? NIVEL_DEFAULT))
   const [fechaLimite, setFechaLimite] = useState(whimm?.fechaLimite || '')
@@ -356,7 +358,9 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const conFoto = async (obtener, errorTexto) => {
     setSubiendoFoto(true)
     try {
-      setImagenUrl(await obtener())
+      const url = await obtener()
+      setImagenUrl(url)
+      setSubidas((prev) => [...prev, url])
     } catch (e) {
       show(e?.message && !/internal|functions\//i.test(e.message) ? e.message : errorTexto)
     } finally {
@@ -369,11 +373,23 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
     if (archivo) conFoto(() => subirFotoWhimm(user.uid, archivo), 'No se pudo subir la foto')
   }
 
+  const linksLimpios = links.map((l) => l.trim()).filter(Boolean)
+
+  // Al cerrar sin guardar, las fotos subidas en esta edición se borran (nunca llegaron a usarse).
+  const cerrar = () => {
+    subidas.forEach((u) => borrarFotoPropia(u, user.uid))
+    onCerrar()
+  }
+
   const guardar = async () => {
-    const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: link.trim() ? [link.trim()] : [], necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
+    const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: linksLimpios, link: linksLimpios[0] || '', necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
     try {
       if (nuevo) await addUserDoc(user.uid, 'whimms', { ...campos, estado: 'espera', montoApartado: 0, notifFormal: false, notifMini: false })
       else await updateUserDoc(user.uid, 'whimms', whimm.id, comprado ? { ...campos, precioComprado: num(precioPagado), compradoEn: fechaCompra || null } : campos)
+      // Limpieza del almacenamiento: la foto anterior (si se cambió o quitó) y las subidas que no quedaron.
+      const final = imagenUrl.trim()
+      if (!nuevo && whimm.imagenUrl && whimm.imagenUrl !== final) borrarFotoPropia(whimm.imagenUrl, user.uid)
+      subidas.filter((u) => u !== final).forEach((u) => borrarFotoPropia(u, user.uid))
       show(nuevo ? 'Whimm agregado' : 'Whimm actualizado')
       onCerrar()
     } catch {
@@ -382,9 +398,9 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   }
 
   return (
-    <Modal abierto onClose={onCerrar} nivel={1}>
+    <Modal abierto onClose={cerrar} nivel={1}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <button aria-label="Atrás" onClick={onCerrar}><IconChevronLeft /></button>
+        <button aria-label="Atrás" onClick={cerrar}><IconChevronLeft /></button>
         <div style={{ fontSize: 15, fontWeight: 600 }}>{nuevo ? 'Nuevo Whimm' : 'Editar Whimm'}</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -411,31 +427,43 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
             {fechaLimite && <button className="pill" style={{ background: 'var(--beige2)' }} onClick={() => setFechaLimite('')}>Quitar</button>}
           </div>
         </Campo>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1 }}><Campo label="Lugar"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo></div>
-          <div style={{ flex: 1 }}><Campo label="Link"><input className="fld" value={link} onChange={(e) => setLink(e.target.value)} /></Campo></div>
+        <Campo label="Lugar de compra (opcional)"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo>
+
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Dónde lo encontré (opcional)</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {links.map((lk, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input className="fld" style={{ flex: 1, minWidth: 0 }} inputMode="url" placeholder="https://…" value={lk} onChange={(e) => setLinks((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))} />
+                {/^https:\/\//i.test(lk.trim()) && (
+                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '7px 10px', fontSize: 11 }} onClick={() => conFoto(() => fotoDeEnlace(lk.trim()), 'No pude sacar la foto de ese link. Elige una de tu galería')}>
+                    Traer su foto
+                  </button>
+                )}
+                <button type="button" aria-label="Quitar link" className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)', padding: '7px 11px' }} onClick={() => setLinks((prev) => prev.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', alignSelf: 'flex-start' }} onClick={() => setLinks((prev) => [...prev, ''])}>+ Agregar link</button>
+          </div>
         </div>
-        <Campo label="Foto">
+
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Foto (opcional)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <TileImagen url={imagenUrl} size={64} radius={14} icono={26} alt={name} />
+            <TileImagen url={imagenUrl} size={72} radius={14} icono={26} alt={name} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <label className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', cursor: 'pointer', opacity: subiendoFoto ? 0.5 : 1 }}>
-                  {subiendoFoto ? 'Subiendo…' : 'Elegir foto'}
+                  {subiendoFoto ? 'Subiendo…' : imagenUrl ? 'Cambiar foto' : 'Elegir foto'}
                   <input type="file" accept="image/*" disabled={subiendoFoto} onChange={elegirFoto} style={{ display: 'none' }} />
                 </label>
-                {link.trim() && (
-                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => conFoto(() => fotoDeEnlace(link.trim()), 'No pude sacar la foto de ese enlace. Elige una de tu galería')}>
-                    Foto del enlace
-                  </button>
-                )}
                 {imagenUrl && <button type="button" className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)' }} onClick={() => setImagenUrl('')}>Quitar</button>}
               </div>
-              <button type="button" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'left' }} onClick={() => setPegarUrl((v) => !v)}>{pegarUrl ? 'Ocultar enlace de imagen' : 'o pegar enlace de imagen'}</button>
+              <button type="button" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'left' }} onClick={() => setPegarUrl((v) => !v)}>{pegarUrl ? 'Ocultar enlace de imagen' : 'o pegar el enlace de una imagen'}</button>
             </div>
           </div>
           {pegarUrl && <input className="fld" style={{ marginTop: 8 }} value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} placeholder="https://…" />}
-        </Campo>
+        </div>
         <SelectorRecordatorio valor={notif} onChange={setNotif} />
         <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
       </div>
@@ -502,6 +530,7 @@ export default function Whimms() {
     try {
       if (w.pagoFijoMsiId) await deleteUserDoc(user.uid, 'pagosFijos', w.pagoFijoMsiId)
       await deleteUserDoc(user.uid, 'whimms', w.id)
+      borrarFotoPropia(w.imagenUrl, user.uid)
       show('Whimm eliminado')
     } catch {
       show('No se pudo eliminar')
