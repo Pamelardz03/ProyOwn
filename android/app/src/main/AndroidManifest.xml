@@ -45,7 +45,7 @@
             android:name=".ConfigActivity"
             android:exported="true"
             android:label="Widget de Whital"
-            android:theme="@style/Theme.Whital">
+            android:theme="@style/Theme.Whital.Config">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

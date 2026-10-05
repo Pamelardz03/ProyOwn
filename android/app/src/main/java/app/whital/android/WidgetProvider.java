@@ -140,10 +140,11 @@ public class WidgetProvider extends AppWidgetProvider {
         int hoyWhimms = p.getInt("whimmsHoy", 0);
         int proximo = p.getInt("proximoWhimmDias", -1);
         String whimm;
-        if (hoyWhimms > 0) whimm = compacto ? (hoyWhimms == 1 ? "Whimm hoy" : hoyWhimms + " Whimms hoy") : (hoyWhimms == 1 ? "Disponible hoy" : hoyWhimms + " disponibles hoy");
-        else if (proximo > 0) whimm = compacto ? "Whimm en " + proximo + (proximo == 1 ? " día" : " d") : "Próximo en " + textoDias(proximo);
+        if (hoyWhimms > 0) whimm = compacto ? (hoyWhimms == 1 ? "Whimm hoy" : hoyWhimms + " Whimms hoy") : (hoyWhimms == 1 ? "Disponible" : hoyWhimms + " disponibles");
+        else if (proximo > 0) whimm = compacto ? "Whimm en " + proximo + (proximo == 1 ? " día" : " d") : "En " + textoDias(proximo);
         else whimm = compacto ? "Sin Whimms" : "Ninguno por ahora";
         v.setTextViewText(R.id.whimmValor, whimm);
+        v.setTextViewText(R.id.whimmEtiqueta, !compacto && hoyWhimms > 0 ? "Whimm hoy" : "Whimm");
 
         String hora = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(p.getLong("actualizado", 0)));
         v.setTextViewText(R.id.actualizado, "red".equals(error) ? "Sin red · " + hora : hora);
@@ -159,18 +160,27 @@ public class WidgetProvider extends AppWidgetProvider {
         v.setOnClickPendingIntent(R.id.refrescar, PendingIntent.getBroadcast(c, 1, refrescar, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
+    static RemoteViews crearGrande(Context c) {
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
+        rellenar(c, v, false);
+        enlazar(c, v, Datos.token(c).isEmpty());
+        return v;
+    }
+
+    static RemoteViews crearChico(Context c) {
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_chico);
+        rellenar(c, v, true);
+        enlazar(c, v, Datos.token(c).isEmpty());
+        return v;
+    }
+
     static void pintar(Context c, AppWidgetManager mgr, int id) {
-        boolean sinCodigo = Datos.token(c).isEmpty();
-        RemoteViews grande = new RemoteViews(c.getPackageName(), R.layout.widget);
-        rellenar(c, grande, false);
-        enlazar(c, grande, sinCodigo);
+        RemoteViews grande = crearGrande(c);
 
         RemoteViews resultado = grande;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+: un diseño para 2x2 y otro para 3x2; el sistema elige según el tamaño.
-            RemoteViews chico = new RemoteViews(c.getPackageName(), R.layout.widget_chico);
-            rellenar(c, chico, true);
-            enlazar(c, chico, sinCodigo);
+            RemoteViews chico = crearChico(c);
             Map<SizeF, RemoteViews> tamanos = new HashMap<>();
             tamanos.put(new SizeF(110f, 110f), chico);
             tamanos.put(new SizeF(240f, 110f), grande);
