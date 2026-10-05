@@ -1,18 +1,16 @@
 package app.whital.android;
 
-import android.view.WindowManager;
-
 import androidx.browser.trusted.TrustedWebActivityDisplayMode;
 
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 
 /**
- * Abre Whital en pantalla completa: sin barra de estado ni de navegación (se ven al
- * deslizar desde el borde), así la app llega hasta los bordes con el color del tema.
+ * Abre Whital sin la barra del navegador. Con la verificación del dominio (assetlinks.json)
+ * Chrome la quita; la barra de estado (hora, batería) se queda visible.
  */
 public class MainActivity extends LauncherActivity {
     @Override
     protected TrustedWebActivityDisplayMode getDisplayMode() {
-        return new TrustedWebActivityDisplayMode.ImmersiveMode(true, WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES);
+        return new TrustedWebActivityDisplayMode.DefaultMode();
     }
 }
