@@ -58,6 +58,7 @@ public class ConfigActivity extends Activity {
                     }
                     WidgetProvider.repintarTodos(app);
                     WidgetProvider.programarPeriodico(app);
+                    Datos.asegurarFcm(app);
                     if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
                         setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
                     }

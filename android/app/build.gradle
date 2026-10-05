@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'com.google.gms.google-services'
 }
 
 android {
@@ -32,4 +33,7 @@ dependencies {
     // Actualización periódica del widget.
     implementation 'androidx.work:work-runtime:2.10.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Avisos del servidor para que el widget se actualice al registrar un gasto.
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
 }

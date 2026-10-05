@@ -36,6 +36,7 @@ public class WidgetProvider extends AppWidgetProvider {
     public void onUpdate(Context c, AppWidgetManager mgr, int[] ids) {
         for (int id : ids) pintar(c, mgr, id);
         programarPeriodico(c);
+        Datos.asegurarFcm(c);
         descargarAhora(c);
     }
 

@@ -15,6 +15,7 @@ public class ActualizarWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        Datos.asegurarFcm(getApplicationContext());
         Datos.actualizar(getApplicationContext());
         WidgetProvider.repintarTodos(getApplicationContext());
         return Result.success();

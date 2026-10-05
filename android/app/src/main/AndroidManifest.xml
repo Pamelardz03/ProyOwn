@@ -40,6 +40,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Aviso del servidor cuando registras un gasto: actualiza el widget al instante. -->
+        <service
+            android:name=".WhitalMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Pantalla para pegar el código del widget (se abre al agregarlo o al tocarlo sin código). -->
         <activity
             android:name=".ConfigActivity"
