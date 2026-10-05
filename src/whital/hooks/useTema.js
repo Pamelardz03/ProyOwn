@@ -47,7 +47,17 @@ export function useTema() {
     const metaAntes = meta?.getAttribute('content')
     document.body.style.background = f.fondo
     document.documentElement.style.background = f.fondo
-    meta?.setAttribute('content', f.barra)
+    if (meta) {
+      // Chrome (app de Android) repinta la barra de estado cuando el color CAMBIA después de
+      // cargar; si ya venía puesto desde el inicio (lo pone index.html), nunca se enteraba.
+      // Por eso, si es el mismo valor, se cambia un instante y se vuelve a poner.
+      if (meta.getAttribute('content') === f.barra) {
+        meta.setAttribute('content', '#010101')
+        setTimeout(() => meta.setAttribute('content', f.barra), 80)
+      } else {
+        meta.setAttribute('content', f.barra)
+      }
+    }
     return () => {
       document.body.style.background = anterior
       document.documentElement.style.background = anteriorHtml
