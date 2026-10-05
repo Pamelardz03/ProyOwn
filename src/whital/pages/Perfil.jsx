@@ -63,7 +63,7 @@ export default function Perfil() {
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para gastos · hasta el {fechaCorta(c.proximoCobro)}</div>
                 <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(c.saldoPrincipal)}</div>
-                <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>Por día: {nivel.texto}</div>
+                <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>{fmt(Math.round(porDia))}/día · {nivel.texto}</div>
               </div>
             </div>
           </div>

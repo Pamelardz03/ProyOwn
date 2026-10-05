@@ -4,7 +4,7 @@ import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
-import { addUserDoc } from '../../lib/firestoreCollections'
+import { addUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -144,6 +144,19 @@ export default function Inicio() {
   const nombre = user?.displayName?.split(' ')[0] || 'Pame'
   const [diaAbierto, setDiaAbierto] = useState(null)
 
+  // Un sueldo cuenta en tu saldo desde su día de cobro. Si todavía no te depositan,
+  // "Aún no llega" lo resta hasta que le des "Ya llegó".
+  const marcarSueldo = async (a) => {
+    const s = datos.sueldosFijos.find((x) => x.id === a.sueldoId)
+    const exc = s?.excepciones?.[a.fecha] || {}
+    try {
+      await updateUserDoc(user.uid, 'sueldosFijos', a.sueldoId, { [`excepciones.${a.fecha}`]: { ...exc, omitida: !a.pendiente } })
+      show(a.pendiente ? 'Sueldo sumado a tu saldo' : 'Se sumará cuando llegue')
+    } catch {
+      show('No se pudo actualizar')
+    }
+  }
+
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -220,7 +233,10 @@ export default function Inicio() {
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{a.titulo}</div>
                         <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{a.sub}</div>
                       </div>
-                      <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: a.monto > 0 ? 'var(--green)' : 'var(--text)' }}>{signo(a.monto)}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: a.pendiente ? 'var(--muted)' : a.monto > 0 ? 'var(--green)' : 'var(--text)', textDecoration: a.pendiente ? 'line-through' : 'none' }}>{signo(a.monto)}</span>
+                        {a.sueldoId && <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcarSueldo(a)}>{a.pendiente ? 'Ya llegó' : 'Aún no llega'}</button>}
+                      </div>
                     </div>
                   ))}
                 </div>
