@@ -11,7 +11,7 @@ import { todayISO } from './whital/budget.js'
 import { generarAlertas } from './whital/notificaciones.js'
 import { calcularVistaInicio } from './whital/vista.js'
 
-initializeApp()
+initializeApp({ storageBucket: 'admin-gastos-985f7.firebasestorage.app' })
 const db = getFirestore()
 
 const HORA_DESDE = 8 // no avisar antes de las 8:00
@@ -94,3 +94,5 @@ export const avisosWhital = onSchedule({ schedule: 'every 30 minutes', timeZone:
     }
   }
 })
+
+export { imagenDeEnlace } from './imagen.js'

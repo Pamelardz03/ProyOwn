@@ -3,7 +3,12 @@
     {
       "source": "functions",
       "codebase": "default",
-      "predeploy": ["node functions/scripts/copiar-lib.mjs"]
+      "predeploy": [
+        "node functions/scripts/copiar-lib.mjs"
+      ]
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

@@ -8,6 +8,7 @@ import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
+import { fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
 import Modal from '../components/Modal'
 import SelectorRecordatorio from '../components/SelectorRecordatorio'
 import { aNotif, deNotif } from '../lib/notificaciones'
@@ -342,10 +343,29 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const [precioPagado, setPrecioPagado] = useState(whimm?.precioComprado != null ? String(whimm.precioComprado) : '')
   const [fechaCompra, setFechaCompra] = useState(whimm?.compradoEn || '')
   const [notif, setNotif] = useState(deNotif(whimm?.notifCadaMin))
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [pegarUrl, setPegarUrl] = useState(false)
 
   const categorias = useMemo(() => [...new Set(datos.whimms.map((w) => w.categoria).filter(Boolean))], [datos.whimms])
   const comprado = whimm?.estado === 'comprado'
   const puedeGuardar = name.trim() && num(precio) > 0
+
+  // Foto: desde la galería/cámara del celular o tomada del enlace de la tienda.
+  const conFoto = async (obtener, errorTexto) => {
+    setSubiendoFoto(true)
+    try {
+      setImagenUrl(await obtener())
+    } catch (e) {
+      show(e?.message && !/internal|functions\//i.test(e.message) ? e.message : errorTexto)
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+  const elegirFoto = (e) => {
+    const archivo = e.target.files?.[0]
+    e.target.value = ''
+    if (archivo) conFoto(() => subirFotoWhimm(user.uid, archivo), 'No se pudo subir la foto')
+  }
 
   const guardar = async () => {
     const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: link.trim() ? [link.trim()] : [], necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
@@ -394,7 +414,27 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
           <div style={{ flex: 1 }}><Campo label="Lugar"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo></div>
           <div style={{ flex: 1 }}><Campo label="Link"><input className="fld" value={link} onChange={(e) => setLink(e.target.value)} /></Campo></div>
         </div>
-        <Campo label="Imagen (URL)"><input className="fld" value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} /></Campo>
+        <Campo label="Foto">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <TileImagen url={imagenUrl} size={64} radius={14} icono={26} alt={name} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <label className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', cursor: 'pointer', opacity: subiendoFoto ? 0.5 : 1 }}>
+                  {subiendoFoto ? 'Subiendo…' : 'Elegir foto'}
+                  <input type="file" accept="image/*" disabled={subiendoFoto} onChange={elegirFoto} style={{ display: 'none' }} />
+                </label>
+                {link.trim() && (
+                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => conFoto(() => fotoDeEnlace(link.trim()), 'No pude sacar la foto de ese enlace. Elige una de tu galería')}>
+                    Foto del enlace
+                  </button>
+                )}
+                {imagenUrl && <button type="button" className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)' }} onClick={() => setImagenUrl('')}>Quitar</button>}
+              </div>
+              <button type="button" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'left' }} onClick={() => setPegarUrl((v) => !v)}>{pegarUrl ? 'Ocultar enlace de imagen' : 'o pegar enlace de imagen'}</button>
+            </div>
+          </div>
+          {pegarUrl && <input className="fld" style={{ marginTop: 8 }} value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} placeholder="https://…" />}
+        </Campo>
         <SelectorRecordatorio valor={notif} onChange={setNotif} />
         <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
       </div>
