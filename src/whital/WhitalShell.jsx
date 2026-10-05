@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import AvisosNotificaciones from './components/AvisosNotificaciones'
 import Bienvenida from './components/Bienvenida'
 import WhitalNav from './components/WhitalNav'
+import { useTema } from './hooks/useTema'
 import './whital.css'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
@@ -11,6 +12,7 @@ import Inicio from './pages/Inicio'
 import Perfil from './pages/Perfil'
 import Agregar from './pages/perfil/Agregar'
 import Configuracion from './pages/perfil/Configuracion'
+import Apariencia from './pages/perfil/Apariencia'
 import Metricas from './pages/perfil/Metricas'
 import Notificaciones from './pages/perfil/Notificaciones'
 import PagosFijos from './pages/perfil/PagosFijos'
@@ -40,6 +42,7 @@ function useAtajoDelLauncher() {
 export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
+  const tema = useTema()
   useEffect(() => {
     try {
       localStorage.setItem('whital:login', '1') // la próxima vez, el inicio de sesión ya es el de Whital
@@ -48,7 +51,7 @@ export default function WhitalShell() {
     }
   }, [])
   return (
-    <div className="app-shell whital">
+    <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo}>
       <Bienvenida />
       <AvisosNotificaciones />
       <Routes>
@@ -65,6 +68,7 @@ export default function WhitalShell() {
         <Route path="/perfil/notificaciones" element={<Notificaciones />} />
         <Route path="/perfil/agregar" element={<Agregar />} />
         <Route path="/perfil/configuracion" element={<Configuracion />} />
+        <Route path="/perfil/apariencia" element={<Apariencia />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

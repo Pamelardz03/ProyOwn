@@ -14,7 +14,7 @@ import { MESES, casillasDelMes, eventosDelMes, proximosEventos } from '../lib/ca
 import { diaSemanaCorto, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
 const DIAS = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA']
-const COLOR = { nomina: '#3a0f1f', servicio: '#7c8c5a', compra: '#b8783f' }
+const COLOR = { nomina: 'var(--wine)', servicio: 'var(--wine4)', compra: 'var(--amber)' }
 const FILTROS = [['todos', 'Todos'], ['servicio', 'Pagos fijos'], ['compra', 'Whimm'], ['nomina', 'Sueldos']]
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 

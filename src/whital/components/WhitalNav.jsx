@@ -16,7 +16,7 @@ export default function WhitalNav() {
       {ITEMS.map(({ to, label, Icon, end }) => (
         <NavLink key={to} to={to} end={end}>
           {({ isActive }) => {
-            const color = isActive ? '#3a0f1f' : '#b3ad8e'
+            const color = isActive ? 'var(--wine)' : 'var(--beige4)'
             return (
               <>
                 <Icon color={color} />

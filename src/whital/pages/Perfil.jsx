@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
+import IconPaleta from '../components/IconPaleta'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
 import { calcularVistaInicio, fechaCorta, fmt } from '../lib/vista'
@@ -16,6 +17,7 @@ const PESTANAS = [
   { to: '/perfil/metricas', Icon: IconBars, titulo: 'Métricas', pista: 'Promedios, cantidades y gastos' },
   { to: '/perfil/agregar', Icon: IconPlus, titulo: 'Agregar', pista: 'Gasto, Whimm, Vitall, sueldo…' },
   { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
+  { to: '/perfil/apariencia', Icon: IconPaleta, titulo: 'Apariencia', pista: 'Paleta de colores y fondo' },
   { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
 ]
 
