@@ -12,7 +12,7 @@ import Inicio from './pages/Inicio'
 import Perfil from './pages/Perfil'
 import Agregar from './pages/perfil/Agregar'
 import Configuracion from './pages/perfil/Configuracion'
-import Apariencia from './pages/perfil/Apariencia'
+import Temas from './pages/perfil/Temas'
 import Metricas from './pages/perfil/Metricas'
 import Notificaciones from './pages/perfil/Notificaciones'
 import PagosFijos from './pages/perfil/PagosFijos'
@@ -69,7 +69,8 @@ export default function WhitalShell() {
         <Route path="/perfil/notificaciones" element={<Notificaciones />} />
         <Route path="/perfil/agregar" element={<Agregar />} />
         <Route path="/perfil/configuracion" element={<Configuracion />} />
-        <Route path="/perfil/apariencia" element={<Apariencia />} />
+        <Route path="/perfil/temas" element={<Temas />} />
+        <Route path="/perfil/apariencia" element={<Navigate to="/perfil/temas" replace />} />
         <Route path="/perfil/widget" element={<Widget />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

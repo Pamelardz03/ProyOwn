@@ -8,11 +8,11 @@ import { FONDOS, PALETAS } from '../../lib/temas'
 
 const opcion = (activa) => ({
   display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 14,
-  background: 'var(--card)', border: `2px solid ${activa ? 'var(--wine)' : 'transparent'}`,
+  background: 'var(--card)', border: `2px solid ${activa ? 'var(--acento)' : 'transparent'}`,
 })
 
 // Paleta de acento y color de fondo. Se aplica al instante y se guarda en tu cuenta.
-export default function Apariencia() {
+export default function Temas() {
   const { user } = useAuth()
   const tema = useTema()
   const { message, show } = useToast()
@@ -31,7 +31,7 @@ export default function Apariencia() {
     <>
       <div className="screen">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          <EncabezadoSub titulo="Apariencia" />
+          <EncabezadoSub titulo="Temas" />
 
           <div>
             <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Paleta</div>
@@ -42,7 +42,7 @@ export default function Apariencia() {
                     {p.muestra.map((c, i) => <span key={c} style={{ width: 24, height: 24, borderRadius: 12, background: c, marginLeft: i ? -8 : 0, border: '2px solid var(--card-solid)' }} />)}
                   </div>
                   <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{p.nombre}</div>
-                  {tema.paleta === p.id && <span style={{ fontSize: 11, color: 'var(--wine)', fontWeight: 700 }}>Activa</span>}
+                  {tema.paleta === p.id && <span style={{ fontSize: 11, color: 'var(--acento)', fontWeight: 700 }}>Activa</span>}
                 </button>
               ))}
             </div>

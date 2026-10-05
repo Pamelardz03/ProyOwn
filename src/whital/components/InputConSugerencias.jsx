@@ -9,7 +9,7 @@ export default function InputConSugerencias({ value, onChange, opciones }) {
       {sugeridas.length > 0 && (
         <div className="chiprow" style={{ marginTop: 6 }}>
           {sugeridas.map((o) => (
-            <button key={o} type="button" className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', padding: '5px 10px', fontSize: 11 }} onClick={() => onChange(o)}>{o}</button>
+            <button key={o} type="button" className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '5px 10px', fontSize: 11 }} onClick={() => onChange(o)}>{o}</button>
           ))}
         </div>
       )}

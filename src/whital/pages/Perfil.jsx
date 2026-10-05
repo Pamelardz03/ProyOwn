@@ -18,7 +18,7 @@ const PESTANAS = [
   { to: '/perfil/metricas', Icon: IconBars, titulo: 'Métricas', pista: 'Promedios, cantidades y gastos' },
   { to: '/perfil/agregar', Icon: IconPlus, titulo: 'Agregar', pista: 'Gasto, Whimm, Vitall, sueldo…' },
   { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
-  { to: '/perfil/apariencia', Icon: IconPaleta, titulo: 'Apariencia', pista: 'Paleta de colores y fondo' },
+  { to: '/perfil/temas', Icon: IconPaleta, titulo: 'Temas', pista: 'Paleta de colores y fondo' },
   { to: '/perfil/widget', Icon: IconWidget, titulo: 'Widget', pista: 'Código para la app de Android' },
   { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
 ]
@@ -55,7 +55,7 @@ export default function Perfil() {
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Saldo real</div>
                 <div className="mono" style={cifra}>{fmt(vista.saldoReal)}</div>
-                <Link to="/perfil/configuracion" style={{ fontSize: 10, color: 'var(--wine)', fontWeight: 600, textDecoration: 'underline', marginTop: 2, display: 'inline-block' }}>Ajustar a mi banco</Link>
+                <Link to="/perfil/configuracion" style={{ fontSize: 10, color: 'var(--acento)', fontWeight: 600, textDecoration: 'underline', marginTop: 2, display: 'inline-block' }}>Ajustar a mi banco</Link>
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para Whimms</div>
@@ -78,7 +78,7 @@ export default function Perfil() {
           {PESTANAS.map(({ to, Icon, titulo, pista }) => (
             <Link key={to} to={to} className="row-list-item">
               <div className="icon-tile" style={{ width: 36, height: 36 }}>
-                <Icon size={17} color="var(--wine)" />
+                <Icon size={17} color="var(--acento)" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{titulo}</div>

@@ -3,8 +3,9 @@
 // aquí solo están los nombres, las muestras para elegir y el valor por defecto.
 export const PALETAS = [
   { id: 'vino', nombre: 'Vino y oliva', muestra: ['#3a0f1f', '#5c2536', '#7c8c5a', '#a8b488'] },
+  { id: 'rosa', nombre: 'Rosa', muestra: ['#8c1d4f', '#b8467a', '#e07aa3', '#f3b7cf'] },
+  { id: 'salvia', nombre: 'Salvia', muestra: ['#2f4a47', '#4f736e', '#6f948a', '#b4c9c1'] },
   { id: 'oceano', nombre: 'Océano', muestra: ['#0f2a3f', '#24506f', '#3f7f8c', '#8fbfc4'] },
-  { id: 'bosque', nombre: 'Bosque', muestra: ['#17382a', '#2d5f48', '#4f9a7a', '#9ccdb5'] },
   { id: 'ciruela', nombre: 'Ciruela', muestra: ['#2b1a4a', '#4b3180', '#8a6bbf', '#c4aee6'] },
   { id: 'terracota', nombre: 'Terracota', muestra: ['#4a1f12', '#7d3a24', '#c0693f', '#e3a98a'] },
 ]
@@ -18,5 +19,7 @@ export const FONDOS = [
 
 export const TEMA_DEFECTO = { paleta: 'vino', fondo: 'beige' }
 
+// 'bosque' se llamaba así antes: ahora es 'salvia'.
+export const normalizarPaleta = (id) => (id === 'bosque' ? 'salvia' : id)
 export const paletaValida = (id) => PALETAS.some((p) => p.id === id)
 export const fondoValido = (id) => FONDOS.some((f) => f.id === id)

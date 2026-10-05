@@ -96,7 +96,7 @@ function RepartoPrioridad({ libre, n, user, show }) {
       show('No se pudo guardar')
     }
   }
-  const paso = { width: 40, height: 40, borderRadius: 20, background: 'var(--beige2)', fontSize: 20, fontWeight: 600, color: 'var(--wine)', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+  const paso = { width: 40, height: 40, borderRadius: 20, background: 'var(--beige2)', fontSize: 20, fontWeight: 600, color: 'var(--acento)', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
   return (
     <>
@@ -106,7 +106,7 @@ function RepartoPrioridad({ libre, n, user, show }) {
           <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(libre)} libres · {n} a la vez</div>
         </div>
         <button aria-label="Editar reparto y prioridad" onClick={() => { setValor(n); setAbierto(true) }} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <IconEdit size={14} color="var(--wine)" />
+          <IconEdit size={14} color="var(--acento)" />
         </button>
       </div>
       <Modal abierto={abierto} onClose={() => setAbierto(false)}>
@@ -191,8 +191,8 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
 
   const pie = (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <button onClick={onEditar} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>
-        <IconEdit color="var(--wine)" /> Editar
+      <button onClick={onEditar} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>
+        <IconEdit color="var(--acento)" /> Editar
       </button>
       <BotonEliminar mensaje={`¿Eliminar "${whimm.name}"? No se puede deshacer.${estado === 'pagando' ? ' También se borra su plan de pagos.' : ''}`} onConfirmar={eliminar} />
     </div>
@@ -309,7 +309,7 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
       )}
 
       {estado === 'pagando' && <div style={{ marginBottom: 14 }}><BotonEliminar texto="Cancelar los meses" mensaje="Se borra el plan de pagos y el Whimm vuelve a tu fila." onConfirmar={cancelarMSI} /></div>}
-      {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--wine)', marginBottom: 14 }}>Regresar a la fila</button>}
+      {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--acento)', marginBottom: 14 }}>Regresar a la fila</button>}
 
       {links.length > 0 && (
         <>
@@ -420,12 +420,12 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
             <TileImagen url={imagenUrl} size={64} radius={14} icono={26} alt={name} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <label className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', cursor: 'pointer', opacity: subiendoFoto ? 0.5 : 1 }}>
+                <label className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', cursor: 'pointer', opacity: subiendoFoto ? 0.5 : 1 }}>
                   {subiendoFoto ? 'Subiendo…' : 'Elegir foto'}
                   <input type="file" accept="image/*" disabled={subiendoFoto} onChange={elegirFoto} style={{ display: 'none' }} />
                 </label>
                 {link.trim() && (
-                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => conFoto(() => fotoDeEnlace(link.trim()), 'No pude sacar la foto de ese enlace. Elige una de tu galería')}>
+                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => conFoto(() => fotoDeEnlace(link.trim()), 'No pude sacar la foto de ese enlace. Elige una de tu galería')}>
                     Foto del enlace
                   </button>
                 )}

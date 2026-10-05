@@ -14,7 +14,7 @@ import { MESES, casillasDelMes, eventosDelMes, proximosEventos } from '../lib/ca
 import { diaSemanaCorto, fechaCorta, fmt, parametrosMotor } from '../lib/vista'
 
 const DIAS = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA']
-const COLOR = { nomina: 'var(--wine)', servicio: 'var(--wine4)', compra: 'var(--amber)' }
+const COLOR = { nomina: 'var(--acento)', servicio: 'var(--wine4)', compra: 'var(--amber)' }
 const FILTROS = [['todos', 'Todos'], ['servicio', 'Pagos fijos'], ['compra', 'Whimm'], ['nomina', 'Sueldos']]
 const num = (v) => (v === '' || v == null ? 0 : Number(v))
 
@@ -128,7 +128,7 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
       {agregando ? (
         <IngresoRapido fecha={fecha} user={user} show={show} onListo={() => setAgregando(false)} />
       ) : (
-        <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => setAgregando(true)}>+ Ingreso rápido</button>
+        <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => setAgregando(true)}>+ Ingreso rápido</button>
       )}
     </div>
   )
@@ -172,7 +172,7 @@ export default function Calendar() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <button aria-label="Mes anterior" onClick={() => mover(-1)} style={flecha}><IconChevronLeft size={14} /></button>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{MESES[vista.mes][0].toUpperCase() + MESES[vista.mes].slice(1)} {vista.anio}</div>
-                  <button aria-label="Mes siguiente" onClick={() => mover(1)} style={flecha}><IconChevronRight size={14} color="var(--wine)" /></button>
+                  <button aria-label="Mes siguiente" onClick={() => mover(1)} style={flecha}><IconChevronRight size={14} color="var(--acento)" /></button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, fontSize: 10, color: 'var(--muted)', fontWeight: 600, textAlign: 'center', marginBottom: 6 }}>
                   {DIAS.map((d) => <div key={d}>{d}</div>)}
@@ -226,7 +226,7 @@ export default function Calendar() {
                   {mostrados.length === 0 && <div className="empty-state">Sin eventos próximos para este filtro</div>}
                 </div>
                 {filtrados.length > mostrados.length && (
-                  <button onClick={() => setVisibles((n) => n + 20)} style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>Ver más</button>
+                  <button onClick={() => setVisibles((n) => n + 20)} style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>Ver más</button>
                 )}
               </div>
             </>

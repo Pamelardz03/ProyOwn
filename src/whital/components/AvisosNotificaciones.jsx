@@ -55,7 +55,7 @@ export default function AvisosNotificaciones() {
       {visibles.map((a) => (
         <div key={a.clave} className="card card-solid" style={{ position: 'relative', overflow: 'hidden', padding: '10px 12px 12px', display: 'flex', alignItems: 'center', gap: 10, borderLeft: '3px solid var(--wine)', boxShadow: '0 6px 16px rgba(0,0,0,.18)' }}>
           <div style={{ flex: 1, fontSize: 12, lineHeight: 1.4 }}>{a.texto}</div>
-          {a.ir && <button style={{ fontSize: 12, color: 'var(--wine)', fontWeight: 700 }} onClick={() => ir(a)}>{a.tipo === 'registro' ? 'Registrar' : 'Ver'}</button>}
+          {a.ir && <button style={{ fontSize: 12, color: 'var(--acento)', fontWeight: 700 }} onClick={() => ir(a)}>{a.tipo === 'registro' ? 'Registrar' : 'Ver'}</button>}
           <button style={{ fontSize: 11, color: 'var(--muted)' }} onClick={() => descartar(a.clave)}>Listo</button>
           <div style={{ position: 'absolute', left: 0, bottom: 0, height: 2, background: 'var(--wine4)', animation: `whital-barra ${DURACION_MS}ms linear forwards` }} />
         </div>

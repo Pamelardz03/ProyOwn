@@ -4,6 +4,6 @@
         <item name="colorPrimary">@color/whital_vino</item>
         <item name="colorPrimaryDark">@color/whital_vino</item>
         <item name="colorAccent">@color/whital_vino</item>
-        <item name="android:windowBackground">@color/whital_beige</item>
+        <item name="android:windowBackground">@color/whital_vino</item>
     </style>
 </resources>

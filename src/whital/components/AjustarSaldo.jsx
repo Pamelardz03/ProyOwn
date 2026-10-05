@@ -33,7 +33,7 @@ export default function AjustarSaldo({ datos, hoy, user, show, saldoReal }) {
           <div className="eyebrow">Saldo real en la app</div>
           <div className="mono" style={{ fontSize: 20, fontWeight: 500, marginTop: 4 }}>{fmt(saldoReal)}</div>
         </div>
-        {!abierto && <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => setAbierto(true)}>Ajustar a mi banco</button>}
+        {!abierto && <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => setAbierto(true)}>Ajustar a mi banco</button>}
       </div>
       {abierto && (
         <>

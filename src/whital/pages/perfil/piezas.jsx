@@ -69,8 +69,8 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
       {!nuevo && (
         <>
           {detenido
-            ? <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={reanudar}>Reanudar (detenido desde {fechaCorta(sueldo.fechaFin)})</button>
-            : <button style={{ color: 'var(--wine)', fontSize: 12, fontWeight: 600 }} onClick={detener}>Detener a partir de hoy</button>}
+            ? <button style={{ color: 'var(--acento)', fontSize: 12, fontWeight: 600 }} onClick={reanudar}>Reanudar (detenido desde {fechaCorta(sueldo.fechaFin)})</button>
+            : <button style={{ color: 'var(--acento)', fontSize: 12, fontWeight: 600 }} onClick={detener}>Detener a partir de hoy</button>}
           <BotonEliminar mensaje="¿Eliminar este sueldo? También se pierde su historial de cobros." onConfirmar={eliminar} />
         </>
       )}
@@ -123,7 +123,7 @@ export function DatosDePrueba({ datos, user, show }) {
       <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.5 : 1, background: confirmar === 'recargar' ? 'var(--red)' : 'var(--wine)' }} onClick={() => (confirmar === 'recargar' ? correr(true) : setConfirmar('recargar'))}>
         {trabajando ? 'Trabajando…' : confirmar === 'recargar' ? 'Toca de nuevo: borrar y cargar' : 'Borrar todo y cargar datos de prueba'}
       </button>
-      <button className="segbtn" disabled={trabajando} style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={imagenes}>Solo agregar imágenes faltantes</button>
+      <button className="segbtn" disabled={trabajando} style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={imagenes}>Solo agregar imágenes faltantes</button>
       <BotonEliminar texto="Eliminar todo" mensaje="Se borran todos los gastos, Whimms, Vitalls y sueldos de esta cuenta." deshabilitado={trabajando} onConfirmar={() => correr(false)} />
     </div>
   )

@@ -13,7 +13,7 @@ import { todayISO } from '../lib/budget'
 import { FILTROS_HISTORIAL, construirHistorial } from '../lib/historial'
 import { fechaCorta, fmt } from '../lib/vista'
 
-const COLOR = { gasto: 'var(--wine)', whimm: 'var(--amber)', vitall: 'var(--wine4)', sueldo: 'var(--green)', ajuste: 'var(--muted)' }
+const COLOR = { gasto: 'var(--acento)', whimm: 'var(--amber)', vitall: 'var(--wine4)', sueldo: 'var(--green)', ajuste: 'var(--muted)' }
 const boton = { flex: 1, borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, textAlign: 'center' }
 
 // Detalle de un movimiento. Los cobros y pagos que se repiten (sueldos fijos,
@@ -52,12 +52,12 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
 
       {ev.tipo === 'gasto' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => navigate('/gastos', { state: { openGastoId: ev.entidad.id } })}>Editar o eliminar</button>
+          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => navigate('/gastos', { state: { openGastoId: ev.entidad.id } })}>Editar o eliminar</button>
         </div>
       )}
       {ev.tipo === 'whimm' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => navigate('/whimms', { state: { openWhimmId: ev.entidad.id } })}>Ver Whimm</button>
+          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => navigate('/whimms', { state: { openWhimmId: ev.entidad.id } })}>Ver Whimm</button>
         </div>
       )}
       {ev.tipo === 'sueldo' && ev.rapido && (
@@ -120,7 +120,7 @@ export default function Historial() {
                 {mostrados.length === 0 && <div className="empty-state">Sin movimientos</div>}
               </div>
               {filtrados.length > mostrados.length && (
-                <button onClick={() => setVisibles((n) => n + 30)} style={{ display: 'block', margin: '0 auto', fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>Ver más</button>
+                <button onClick={() => setVisibles((n) => n + 30)} style={{ display: 'block', margin: '0 auto', fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>Ver más</button>
               )}
             </>
           )}

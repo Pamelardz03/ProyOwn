@@ -68,9 +68,9 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
             <button className="segbtn" style={{ flex: 'none', padding: '0 16px', background: 'var(--wine)', color: '#fff' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida, montoReal: num(valor) }, 'Monto actualizado')}>Guardar</button>
           </div>
         </Campo>
-        {tieneMonto && <button style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--wine)', fontWeight: 600, textDecoration: 'underline' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida }, 'Monto restablecido')}>Restablecer el monto base</button>}
+        {tieneMonto && <button style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--acento)', fontWeight: 600, textDecoration: 'underline' }} onClick={() => escribirExcepcion({ omitida: !!exc.omitida }, 'Monto restablecido')}>Restablecer el monto base</button>}
         {coleccion === 'sueldosFijos' && !ocurrencia.omitida && ocurrencia.fecha <= hoy && (
-          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: true, pendiente: true }, 'Se sumará cuando llegue')}>Aún no llega</button>
+          <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => escribirExcepcion({ ...exc, omitida: true, pendiente: true }, 'Se sumará cuando llegue')}>Aún no llega</button>
         )}
         <button style={{ ...boton, background: ocurrencia.omitida ? 'var(--green-bg)' : 'var(--beige2)', color: ocurrencia.omitida ? 'var(--green)' : 'var(--wine)' }} onClick={() => escribirExcepcion({ ...exc, omitida: !ocurrencia.omitida, pendiente: false }, ocurrencia.omitida ? 'Fecha restaurada' : 'Fecha omitida')}>
           {ocurrencia.pendiente ? 'Ya llegó' : ocurrencia.omitida ? 'Restaurar esta fecha' : 'Omitir esta fecha (dato atípico)'}
@@ -79,7 +79,7 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
 
       <div className="eyebrow" style={{ marginBottom: 8 }}>Toda la serie</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--wine)' }} onClick={editarSerie}>Editar serie</button>
+        <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={editarSerie}>Editar serie</button>
       </div>
       <div style={{ marginTop: 8 }}>
         <BotonEliminar mensaje="¿Eliminar toda la serie? También se pierden sus pagos del historial." onConfirmar={eliminarSerie} />

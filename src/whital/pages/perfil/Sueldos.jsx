@@ -77,7 +77,7 @@ export default function Sueldos() {
             <>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="segbtn" style={{ background: 'var(--wine)', color: '#fff' }} onClick={() => setManual({})}>+ Sueldo fijo</button>
-                <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--wine)' }} onClick={() => setRapidoAbierto(true)}>+ Ingreso rápido</button>
+                <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => setRapidoAbierto(true)}>+ Ingreso rápido</button>
               </div>
 
               <div>
@@ -99,7 +99,7 @@ export default function Sueldos() {
                             <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+{fmt(s.monto)}</div>
                             {cobroMarcable(s) && (
                               <span onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
-                                <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcar(s, cobroMarcable(s))}>{cobroMarcable(s).pendiente ? 'Ya llegó' : 'Aún no llega'}</button>
+                                <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcar(s, cobroMarcable(s))}>{cobroMarcable(s).pendiente ? 'Ya llegó' : 'Aún no llega'}</button>
                               </span>
                             )}
                           </div>

@@ -16,27 +16,37 @@
 /* Barra de tiempo de los avisos flotantes. */
 @keyframes whital-barra{from{width:100%}to{width:0}}
 
-/* ===== Temas (Perfil > Apariencia): paleta de acento + fondo ===== */
+/* ===== Temas (Perfil > Temas): paleta de acento + fondo ===== */
 /* El color del texto se toma de las variables del tema (el body queda fuera de ellas). */
 .whital{color:var(--text)}
-/* El beige de siempre es el valor por defecto (variables de :root). */
-.whital[data-paleta=vino]{--wine:#3a0f1f;--wine2:#4f1626;--wine3:#5c2536;--wine4:#7c8c5a;--wine5:#a8b488}
-.whital[data-paleta=oceano]{--wine:#0f2a3f;--wine2:#173a55;--wine3:#24506f;--wine4:#3f7f8c;--wine5:#8fbfc4}
-.whital[data-paleta=bosque]{--wine:#17382a;--wine2:#214a37;--wine3:#2d5f48;--wine4:#4f9a7a;--wine5:#9ccdb5}
-.whital[data-paleta=ciruela]{--wine:#2b1a4a;--wine2:#3a2463;--wine3:#4b3180;--wine4:#8a6bbf;--wine5:#c4aee6}
-.whital[data-paleta=terracota]{--wine:#4a1f12;--wine2:#632a19;--wine3:#7d3a24;--wine4:#c0693f;--wine5:#e3a98a}
+/* --acento: color de texto e íconos de acento (sobre el fondo). --wine: relleno (botones, encabezado). */
+.whital[data-paleta=vino]{--wine:#3a0f1f;--wine2:#4f1626;--wine3:#5c2536;--wine4:#7c8c5a;--wine5:#a8b488;--acento:#3a0f1f}
+.whital[data-paleta=oceano]{--wine:#0f2a3f;--wine2:#173a55;--wine3:#24506f;--wine4:#3f7f8c;--wine5:#8fbfc4;--acento:#0f2a3f}
+.whital[data-paleta=salvia]{--wine:#2f4a47;--wine2:#3d5c58;--wine3:#4f736e;--wine4:#577d73;--wine5:#b4c9c1;--acento:#2f4a47}
+.whital[data-paleta=ciruela]{--wine:#2b1a4a;--wine2:#3a2463;--wine3:#4b3180;--wine4:#8a6bbf;--wine5:#c4aee6;--acento:#2b1a4a}
+.whital[data-paleta=terracota]{--wine:#4a1f12;--wine2:#632a19;--wine3:#7d3a24;--wine4:#b05a33;--wine5:#e3a98a;--acento:#4a1f12}
+.whital[data-paleta=rosa]{--wine:#8c1d4f;--wine2:#a3305f;--wine3:#b8467a;--wine4:#be3f78;--wine5:#f3b7cf;--acento:#8c1d4f}
 
 /* Fondo blanco */
 .whital[data-fondo=blanco]{--beige:#ffffff;--beige2:#efefef;--beige3:#dcdcdc;--beige4:#b5b5b5;--text:#141414;--muted:#6b6b6b;--card:#f5f5f5;--card-solid:#ffffff;--green-bg:#e4efe4;--red-bg:#f5e4e1}
 .whital[data-fondo=blanco] .card{border-color:#e6e6e6}
 
-/* Fondo gris oscuro: los acentos se aclaran para que se lean sobre el fondo. */
+/* Fondo gris oscuro: los rellenos se oscurecen (texto blanco encima) y los acentos de texto se aclaran. */
 .whital[data-fondo=oscuro]{--beige:#1e1f22;--beige2:#2c2e33;--beige3:#3d4047;--beige4:#8b8f99;--text:#ecebe6;--muted:#a3a39c;--card:rgba(255,255,255,.06);--card-solid:#26282c;--green:#7bc48a;--green-bg:#23342a;--red:#e57c70;--red-bg:#3a2523;--amber:#e0a06a;color-scheme:dark}
-.whital[data-fondo=oscuro][data-paleta=vino]{--wine:#6e2641;--wine2:#8a3553;--wine3:#9a4660;--wine4:#9db36f;--wine5:#c4d19d}
-.whital[data-fondo=oscuro][data-paleta=oceano]{--wine:#2c6a8f;--wine2:#3a7fa6;--wine3:#5aa0c4;--wine4:#6cc0c8;--wine5:#a6dde0}
-.whital[data-fondo=oscuro][data-paleta=bosque]{--wine:#2f7a58;--wine2:#3b8f68;--wine3:#55ac85;--wine4:#7fd0a8;--wine5:#b5e6cf}
-.whital[data-fondo=oscuro][data-paleta=ciruela]{--wine:#6a46b0;--wine2:#7b58c4;--wine3:#9172d6;--wine4:#b79be8;--wine5:#d8c8f3}
-.whital[data-fondo=oscuro][data-paleta=terracota]{--wine:#a8502f;--wine2:#bd6340;--wine3:#cf7a56;--wine4:#e8a07c;--wine5:#f3c4aa}
+.whital[data-fondo=oscuro][data-paleta=vino]{--wine:#6e2641;--wine2:#8a3553;--wine3:#c68297;--wine4:#9db36f;--acento:#e6b3c4}
+.whital[data-fondo=oscuro][data-paleta=oceano]{--wine:#2c6a8f;--wine2:#387ba1;--wine3:#5aa0c4;--wine4:#6cc0c8;--acento:#a6dde0}
+.whital[data-fondo=oscuro][data-paleta=salvia]{--wine:#4d7772;--wine2:#547c77;--wine3:#78a39c;--wine4:#9dbdb3;--acento:#c6dbd4}
+.whital[data-fondo=oscuro][data-paleta=ciruela]{--wine:#6a46b0;--wine2:#7b58c4;--wine3:#a288dc;--wine4:#b79be8;--acento:#d8c8f3}
+.whital[data-fondo=oscuro][data-paleta=terracota]{--wine:#a8502f;--wine2:#b25d3c;--wine3:#d1805e;--wine4:#e8a07c;--acento:#f3c4aa}
+.whital[data-fondo=oscuro][data-paleta=rosa]{--wine:#b0366b;--wine2:#c04a7d;--wine3:#d5789e;--wine4:#e68db0;--acento:#f4bcd2}
 .whital[data-fondo=oscuro] .card{border-color:rgba(255,255,255,.08)}
 .whital[data-fondo=oscuro] .toast{background:rgba(60,63,70,.95);color:var(--text)}
 .whital[data-fondo=oscuro] .sheet-backdrop{background:rgba(0,0,0,.6)}
+
+/* Pantalla completa: la app llega hasta los bordes (con el color del tema) y respeta la
+   muesca, la barra de estado y la barra de gestos. */
+.whital.app-shell{padding-top:env(safe-area-inset-top)}
+.whital nav.bottom-nav{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+.whital .fab{bottom:calc(84px + env(safe-area-inset-bottom))}
+.whital .toast{bottom:calc(78px + env(safe-area-inset-bottom))}
+.whital .screen{padding-bottom:calc(112px + env(safe-area-inset-bottom))}

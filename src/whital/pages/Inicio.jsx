@@ -173,7 +173,7 @@ export default function Inicio() {
                       <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end' }}>
                         <div style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--wine)' : 'var(--wine4)' }} />
                       </div>
-                      <span style={{ fontSize: 9, color: d.esHoy ? 'var(--wine)' : 'var(--muted)', fontWeight: d.esHoy ? 700 : 500 }}>{d.label}</span>
+                      <span style={{ fontSize: 9, color: d.esHoy ? 'var(--acento)' : 'var(--muted)', fontWeight: d.esHoy ? 700 : 500 }}>{d.label}</span>
                     </button>
                   ))
                 })()}
@@ -192,7 +192,7 @@ export default function Inicio() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: a.pendiente ? 'var(--muted)' : a.monto > 0 ? 'var(--green)' : 'var(--text)', textDecoration: a.pendiente ? 'line-through' : 'none' }}>{signo(a.monto)}</span>
-                        {a.sueldoId && <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--wine)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcarSueldo(a)}>{a.pendiente ? 'Ya llegó' : 'Aún no llega'}</button>}
+                        {a.sueldoId && <button className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '5px 10px', fontSize: 11 }} onClick={() => marcarSueldo(a)}>{a.pendiente ? 'Ya llegó' : 'Aún no llega'}</button>}
                       </div>
                     </div>
                   ))}
@@ -204,7 +204,7 @@ export default function Inicio() {
 
             <div>
               <Encabezado eyebrow="Lista de espera" titulo="Whimms">
-                <Link to="/whimms" style={{ fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>Ver todos ›</Link>
+                <Link to="/whimms" style={{ fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>Ver todos ›</Link>
               </Encabezado>
               {vista.colaDetallada.length > 0 ? (
                 <div className="row-list">
@@ -229,7 +229,7 @@ export default function Inicio() {
 
             <div>
               <Encabezado eyebrow="Próximos" titulo="Vitalls · 7 días">
-                <Link to="/vitalls" style={{ fontSize: 12, fontWeight: 600, color: 'var(--wine)' }}>Ver todos ›</Link>
+                <Link to="/vitalls" style={{ fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>Ver todos ›</Link>
               </Encabezado>
               {vista.vitalls.length > 0 ? (
                 <div className="row-list">

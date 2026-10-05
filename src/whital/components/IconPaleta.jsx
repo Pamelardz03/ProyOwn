@@ -1,4 +1,4 @@
-// Ícono de paleta de pintura (para Perfil > Apariencia).
+// Ícono de paleta de pintura (para Perfil > Temas).
 export default function IconPaleta({ size = 20, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">

@@ -19,7 +19,7 @@ export default function WhitalNav() {
         <NavLink key={to} to={compras ? ultimaCompras() : to} end={end}>
           {({ isActive }) => {
             const activo = compras ? pathname === '/whimms' || pathname === '/vitalls' : isActive
-            const color = activo ? 'var(--wine)' : 'var(--beige4)'
+            const color = activo ? 'var(--acento)' : 'var(--beige4)'
             return (
               <>
                 <Icon color={color} />
