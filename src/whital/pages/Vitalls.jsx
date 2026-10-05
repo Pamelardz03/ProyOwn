@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import InputConSugerencias from '../components/InputConSugerencias'
 import PestanasCompras from '../components/PestanasCompras'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
@@ -99,10 +100,9 @@ function VitallForm({ pago, datos, hoy, user, show, onCerrar, plazosInicial }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}><Campo label="Número de pagos"><input className="fld" type="number" inputMode="numeric" value={numPagos} onChange={(e) => setNumPagos(e.target.value)} /></Campo></div>
           {!msi && (
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Campo label="Categoría">
-                <input className="fld" list="cats-plazos" value={categoria} onChange={(e) => setCategoria(e.target.value)} />
-                <datalist id="cats-plazos">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+                <InputConSugerencias value={categoria} onChange={setCategoria} opciones={categorias} />
               </Campo>
             </div>
           )}

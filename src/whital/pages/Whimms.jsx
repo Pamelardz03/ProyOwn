@@ -9,6 +9,7 @@ import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
 import { fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
+import InputConSugerencias from '../components/InputConSugerencias'
 import Modal from '../components/Modal'
 import PestanasCompras from '../components/PestanasCompras'
 import SelectorRecordatorio from '../components/SelectorRecordatorio'
@@ -390,10 +391,9 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
         <Campo label="Nombre"><input className="fld" value={name} onChange={(e) => setName(e.target.value)} /></Campo>
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}><Campo label="Precio"><input className="fld" type="number" inputMode="decimal" value={precio} onChange={(e) => setPrecio(e.target.value)} /></Campo></div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Campo label="Categoría">
-              <input className="fld" list="cats-whimm" value={categoria} onChange={(e) => setCategoria(e.target.value)} />
-              <datalist id="cats-whimm">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+              <InputConSugerencias value={categoria} onChange={setCategoria} opciones={categorias} />
             </Campo>
           </div>
         </div>

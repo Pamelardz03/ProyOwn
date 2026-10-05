@@ -7,6 +7,7 @@ import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
+import InputConSugerencias from '../components/InputConSugerencias'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
 import Sheet from '../components/Sheet'
@@ -85,10 +86,9 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
           <Campo label="Concepto"><input className="fld" value={concepto} onChange={(e) => setConcepto(e.target.value)} /></Campo>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}><Campo label="Lugar"><input className="fld" value={lugar} onChange={(e) => setLugar(e.target.value)} /></Campo></div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <Campo label="Categoría">
-                <input className="fld" list="etiquetas-gasto" value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} />
-                <datalist id="etiquetas-gasto">{etiquetas.map((e) => <option key={e} value={e} />)}</datalist>
+                <InputConSugerencias value={etiqueta} onChange={setEtiqueta} opciones={etiquetas} />
               </Campo>
             </div>
           </div>

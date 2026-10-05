@@ -17,6 +17,7 @@ import Metricas from './pages/perfil/Metricas'
 import Notificaciones from './pages/perfil/Notificaciones'
 import PagosFijos from './pages/perfil/PagosFijos'
 import Sueldos from './pages/perfil/Sueldos'
+import Widget from './pages/perfil/Widget'
 import Vitalls from './pages/Vitalls'
 import Whimms from './pages/Whimms'
 
@@ -69,6 +70,7 @@ export default function WhitalShell() {
         <Route path="/perfil/agregar" element={<Agregar />} />
         <Route path="/perfil/configuracion" element={<Configuracion />} />
         <Route path="/perfil/apariencia" element={<Apariencia />} />
+        <Route path="/perfil/widget" element={<Widget />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

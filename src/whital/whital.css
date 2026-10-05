@@ -1,10 +1,17 @@
 /* Estilos propios de Whital (solo dentro de .whital; la app de siempre no cambia). */
 .whital .segbtn{border-radius:12px}
 .whital .fld{border-radius:12px}
-.whital *{scrollbar-width:thin;scrollbar-color:var(--beige3) transparent}
-.whital ::-webkit-scrollbar{width:8px;height:8px}
-.whital ::-webkit-scrollbar-track{background:transparent}
-.whital ::-webkit-scrollbar-thumb{background:var(--beige3);border-radius:8px}
+/* Sin barras de desplazamiento visibles (se sigue pudiendo hacer scroll). */
+.whital *{scrollbar-width:none}
+.whital *::-webkit-scrollbar{display:none}
+
+/* Selectores: flecha propia con margen respecto al borde. */
+.whital select.fld{appearance:none;-webkit-appearance:none;padding-right:40px;background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a7156' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.whital[data-fondo=blanco] select.fld{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b6b6b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.whital[data-fondo=oscuro] select.fld{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a3a39c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+
+/* DM Mono solo trae pesos 300-500: pedir 600/700 la deformaba (negrita falsa). */
+.whital .mono{font-weight:500!important}
 
 /* Barra de tiempo de los avisos flotantes. */
 @keyframes whital-barra{from{width:100%}to{width:0}}

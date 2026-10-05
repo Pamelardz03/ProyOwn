@@ -7,6 +7,7 @@ import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
+import { cargarDatos } from './datos.js'
 import { todayISO } from './whital/budget.js'
 import { generarAlertas } from './whital/notificaciones.js'
 import { calcularVistaInicio } from './whital/vista.js'
@@ -18,27 +19,13 @@ const HORA_DESDE = 8 // no avisar antes de las 8:00
 const HORA_HASTA = 22 // ni a partir de las 22:00
 const MAX_POR_CORRIDA = 3
 const TOLERANCIA_MS = 2 * 60000 // la corrida puede llegar unos segundos antes de tiempo
-const COLECCIONES = ['gastos', 'sueldosFijos', 'sueldosRapidos', 'pagosFijos', 'whimms', 'ajustesSaldo']
-
-const lista = async (uid, nombre) => {
-  const snap = await db.collection('users').doc(uid).collection(nombre).get()
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-}
-
-async function cargarDatos(uid) {
-  const [listas, config] = await Promise.all([
-    Promise.all(COLECCIONES.map((n) => lista(uid, n))),
-    db.collection('users').doc(uid).collection('config').doc('presupuesto').get(),
-  ])
-  const datos = Object.fromEntries(COLECCIONES.map((n, i) => [n, listas[i]]))
-  datos.config = config.exists ? config.data() : null
-  return datos
-}
-
 const urlDe = (a) => (a.ir?.ruta === '/gastos' && a.ir.estado?.nuevo ? './?ir=gastos&nuevo=1' : './')
 
 async function avisarUsuario(uid, dispositivos, ahora) {
   const datos = await cargarDatos(uid)
+  // Horario de avisos de la persona (por defecto 8:00 a 22:00; "todo" = sin límite).
+  const hora = new Date(ahora).getHours()
+  if (datos.config?.horarioAvisos !== 'todo' && (hora < HORA_DESDE || hora >= HORA_HASTA)) return 0
   const hoy = todayISO()
   const vista = calcularVistaInicio(datos, hoy)
   const general = { ...(datos.config?.recordatorioCadaMin != null ? { registro: datos.config.recordatorioCadaMin } : {}), ...(datos.config?.notificaciones || {}) }
@@ -73,8 +60,6 @@ async function avisarUsuario(uid, dispositivos, ahora) {
 
 export const avisosWhital = onSchedule({ schedule: 'every 30 minutes', timeZone: 'America/Monterrey', region: 'us-central1', timeoutSeconds: 120, memory: '256MiB' }, async () => {
   const ahora = Date.now()
-  const hora = new Date(ahora).getHours()
-  if (hora < HORA_DESDE || hora >= HORA_HASTA) return
 
   const snap = await db.collectionGroup('dispositivos').get()
   const porUsuario = new Map()
@@ -96,3 +81,4 @@ export const avisosWhital = onSchedule({ schedule: 'every 30 minutes', timeZone:
 })
 
 export { imagenDeEnlace } from './imagen.js'
+export { crearTokenWidget, datosWidget } from './widget.js'
