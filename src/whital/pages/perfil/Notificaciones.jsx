@@ -7,6 +7,7 @@ import { Aviso } from '../../components/Campo'
 import EncabezadoSub from '../../components/EncabezadoSub'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
 import { FRECUENCIAS, GRUPOS, TIPOS, cadenciaEfectiva } from '../../lib/notificaciones'
+import { activarPush } from '../../lib/push'
 
 // Qué avisar y cada cuánto. La frecuencia de aquí es la GENERAL de cada tipo; un
 // Whimm, Vitall o sueldo puede tener la suya en su ficha y esa manda sobre esta.
@@ -28,7 +29,14 @@ export default function Notificaciones() {
   }
   const pedirPermiso = async () => {
     if (typeof Notification === 'undefined') return
-    setPermiso(await Notification.requestPermission())
+    try {
+      const r = await activarPush(user.uid)
+      setPermiso(Notification.permission)
+      show(r === 'activado' ? 'Avisos activados en este dispositivo' : r === 'denegado' ? 'Permiso denegado' : 'Este navegador no admite avisos')
+    } catch {
+      setPermiso(Notification.permission)
+      show('No se pudo activar. Intenta de nuevo')
+    }
   }
 
   return (
@@ -44,8 +52,8 @@ export default function Notificaciones() {
                 Frecuencia general de cada aviso. Cada Whimm, Vitall o sueldo puede tener la suya en su ficha (Recordarme) y esa manda.
               </div>
 
-              {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Permitir notificaciones del sistema</button>}
-              {permiso === 'granted' && <Aviso tono="green">Notificaciones del sistema activadas.</Aviso>}
+              {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Activar avisos en este dispositivo</button>}
+              {permiso === 'granted' && <Aviso tono="green">Avisos activados. Llegan aunque la app esté cerrada (de 8:00 a 22:00).</Aviso>}
               {permiso === 'denied' && <Aviso tono="amber">Notificaciones bloqueadas en el navegador.</Aviso>}
               {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no admite notificaciones.</Aviso>}
 
@@ -65,7 +73,6 @@ export default function Notificaciones() {
                 </div>
               ))}
 
-              <div style={{ fontSize: 10, color: 'var(--muted)' }}>Con la app cerrada del todo no avisa (falta push).</div>
             </>
           )}
         </div>

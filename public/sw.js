@@ -51,3 +51,26 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
+// Push de FCM (mensajes solo con `data`). Si la app está a la vista, el aviso ya sale
+// dentro de la app y no se duplica; si no, se muestra la notificación del sistema.
+self.addEventListener('push', (event) => {
+  let carga = {}
+  try {
+    carga = event.data ? event.data.json() : {}
+  } catch {
+    carga = {}
+  }
+  const d = carga.data || carga
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ventanas) => {
+      if (ventanas.some((v) => v.visibilityState === 'visible')) return undefined
+      return self.registration.showNotification(d.title || 'Whital', {
+        body: d.body || '',
+        tag: d.tag || 'whital',
+        icon: new URL('icon-192.png', self.registration.scope).href,
+        data: { url: d.url || './' },
+      })
+    })
+  )
+})

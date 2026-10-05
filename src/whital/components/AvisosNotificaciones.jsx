@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../lib/AuthContext'
+import { activarPush } from '../lib/push'
 import { useNotificaciones } from '../hooks/useNotificaciones'
 
 // Segundos que dura un aviso flotante antes de quitarse solo.
@@ -11,6 +13,7 @@ const DURACION_MS = 8000
 export default function AvisosNotificaciones() {
   const { visibles, descartar } = useNotificaciones()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const temporizadores = useRef(new Map())
 
   useEffect(() => {
@@ -34,6 +37,11 @@ export default function AvisosNotificaciones() {
     const mapa = temporizadores.current
     return () => mapa.forEach((t) => clearTimeout(t))
   }, [])
+
+  // Si ya diste permiso, se renueva el token de este dispositivo (sin pedir nada).
+  useEffect(() => {
+    if (user?.uid && typeof Notification !== 'undefined' && Notification.permission === 'granted') activarPush(user.uid, { pedirPermiso: false }).catch(() => {})
+  }, [user?.uid])
 
   if (!visibles.length) return null
 

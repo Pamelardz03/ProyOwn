@@ -7,3 +7,6 @@ dist-ssr
 .DS_Store
 *.local.md
 *.local.js
+functions/whital/
+firebase-debug.log
+*-debug.log
