@@ -22,6 +22,7 @@ import {
   addDaysISO,
   addMonthsISO,
   computeBolsas,
+  diasEntreISO,
   evaluarImpactoWhimm,
   normalizarNivel,
   ocurrenciasPagoFijo,
@@ -377,6 +378,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const linksLimpios = links.map((l) => l.trim()).filter(Boolean)
 
   // Cómo afecta este Whimm a los demás de la fila (se recalcula al cambiar precio, nivel o fecha).
+  // Al editar uno ya guardado, también se compara SU fecha con la que tenía.
   const valores = useDeferredValue({ name: name.trim(), precio: num(precio), necesidad, deseo, fechaLimite })
   const enFila = !comprado && whimm?.estado !== 'pagando'
   const impacto = useMemo(() => {
@@ -399,6 +401,14 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
     subidas.forEach((u) => borrarFotoPropia(u, user.uid))
     onCerrar()
   }
+
+  const textoFecha = (f) => (f.estatus === 'comprable_hoy' ? 'hoy' : f.fecha ? fechaCorta(f.fecha) : 'sin fecha segura')
+  const pa = impacto?.actual.propioAntes
+  const pn = impacto?.actual.propio
+  const cambioPropio = pa && pn && (pa.fecha !== pn.fecha || pa.estatus !== pn.estatus)
+    ? { antes: textoFecha(pa), ahora: textoFecha(pn), dias: pa.fecha && pn.fecha ? diasEntreISO(pa.fecha, pn.fecha) : null }
+    : null
+  const propioSeAtrasa = !!cambioPropio && (!pn.fecha || (pa.fecha && pn.fecha > pa.fecha))
 
   const guardar = async () => {
     const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: linksLimpios, link: linksLimpios[0] || '', necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
@@ -479,7 +489,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
           {pegarUrl && <input className="fld" style={{ marginTop: 8 }} value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} placeholder="https://…" />}
         </div>
         {impacto && (
-          <Aviso tono={impacto.actual.criticos.length ? 'red' : impacto.total ? 'amber' : 'green'}>
+          <Aviso tono={impacto.actual.criticos.length ? 'red' : impacto.total || propioSeAtrasa ? 'amber' : 'green'}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>Cómo afecta a tu fila</div>
             <div>
               {impacto.actual.propio?.fecha
@@ -487,6 +497,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
                 : 'Todavía sin fecha segura.'}
               {fechaLimite && ['tarde', 'sin_fecha_segura'].includes(impacto.actual.propio?.estatus) && ' No alcanza para su fecha límite.'}
             </div>
+            {cambioPropio && <div style={{ marginTop: 4 }}>Su fecha cambia: {cambioPropio.antes} → {cambioPropio.ahora}{cambioPropio.dias ? ` (${cambioPropio.dias > 0 ? '+' : ''}${cambioPropio.dias} días)` : ''}.</div>}
             {impacto.total === 0 ? (
               <div style={{ marginTop: 4 }}>No atrasa a ningún otro Whimm.</div>
             ) : (

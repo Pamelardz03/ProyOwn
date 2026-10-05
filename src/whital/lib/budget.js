@@ -779,6 +779,7 @@ export function evaluarImpactoWhimm({ whimm, whimmOriginal = null, ...base }) {
   const previo = new Map(antes.map((r) => [r.id, r]))
   const nombres = new Map(otros.map((w) => [w.id, w.name || w.id]))
   const propio = despues.find((r) => r.id === whimm.id)
+  const propioAntes = whimmOriginal ? antes.find((r) => r.id === whimm.id) : null
 
   const movidos = []
   const criticos = []
@@ -801,7 +802,12 @@ export function evaluarImpactoWhimm({ whimm, whimmOriginal = null, ...base }) {
     else movidos.push(item)
   })
   movidos.sort((x, y) => (y.dias ?? 9999) - (x.dias ?? 9999))
-  return { propio: propio ? { fecha: propio.fechaProyectada, estatus: propio.estatus } : null, movidos, criticos }
+  return {
+    propio: propio ? { fecha: propio.fechaProyectada, estatus: propio.estatus } : null,
+    propioAntes: propioAntes ? { fecha: propioAntes.fechaProyectada, estatus: propioAntes.estatus } : null,
+    movidos,
+    criticos,
+  }
 }
 
 // ---------------------------------------------------------------------------
