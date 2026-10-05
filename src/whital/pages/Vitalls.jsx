@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import PestanasCompras from '../components/PestanasCompras'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
 import { IconPlus } from '../../components/Icons'
@@ -188,7 +189,7 @@ export default function Vitalls() {
   return (
     <>
       <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <h1>Vitalls</h1>
+        <PestanasCompras activa="vitalls" />
         {error && <Aviso tono="red">{error}</Aviso>}
         {loading && !error && <div className="empty-state">Cargando…</div>}
         {!loading && (

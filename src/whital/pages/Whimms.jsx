@@ -10,6 +10,7 @@ import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
 import { fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
 import Modal from '../components/Modal'
+import PestanasCompras from '../components/PestanasCompras'
 import SelectorRecordatorio from '../components/SelectorRecordatorio'
 import { aNotif, deNotif } from '../lib/notificaciones'
 import TileImagen from '../components/TileImagen'
@@ -517,7 +518,7 @@ export default function Whimms() {
     <>
       <div className="screen">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h1>Whimms</h1>
+          <PestanasCompras activa="whimms" />
           {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
           {!base && !error && <div className="empty-state">Cargando…</div>}
           {base && (
