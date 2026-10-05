@@ -4,6 +4,8 @@ import AvisosNotificaciones from './components/AvisosNotificaciones'
 import Bienvenida from './components/Bienvenida'
 import WhitalNav from './components/WhitalNav'
 import { useTema } from './hooks/useTema'
+import { repintarBarra } from './lib/barra'
+import { FONDOS } from './lib/temas'
 import './whital.css'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
@@ -44,6 +46,10 @@ export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
   const tema = useTema()
+  // Chrome reinicia el color de la barra de estado al cambiar de pantalla: se vuelve a pintar.
+  useEffect(() => {
+    repintarBarra(FONDOS.find((f) => f.id === tema.fondo)?.barra || '#f3efe2')
+  }, [location.pathname, tema.fondo])
   useEffect(() => {
     try {
       localStorage.setItem('whital:login', '1') // la próxima vez, el inicio de sesión ya es el de Whital
