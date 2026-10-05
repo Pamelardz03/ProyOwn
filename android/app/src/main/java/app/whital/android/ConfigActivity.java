@@ -43,12 +43,27 @@ public class ConfigActivity extends Activity {
                 return;
             }
             Datos.guardarToken(this, codigo);
-            WidgetProvider.repintarTodos(this);
-            WidgetProvider.pedirActualizacion(this);
-            if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
-            }
-            finish();
+            guardar.setEnabled(false);
+            guardar.setText("Conectando…");
+            // Se comprueba el código ahora mismo: así el widget nace ya con datos (o con el aviso claro).
+            final android.content.Context app = getApplicationContext();
+            new Thread(() -> {
+                Datos.actualizar(app);
+                runOnUiThread(() -> {
+                    if ("codigo".equals(Datos.prefs(app).getString("error", ""))) {
+                        Toast.makeText(this, "Ese código no es válido. Cópialo de nuevo desde Whital > Perfil > Widget.", Toast.LENGTH_LONG).show();
+                        guardar.setEnabled(true);
+                        guardar.setText("Guardar");
+                        return;
+                    }
+                    WidgetProvider.repintarTodos(app);
+                    WidgetProvider.programarPeriodico(app);
+                    if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                        setResult(RESULT_OK, new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));
+                    }
+                    finish();
+                });
+            }).start();
         });
     }
 }

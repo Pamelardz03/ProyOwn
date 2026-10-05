@@ -40,7 +40,25 @@ public class WidgetProvider extends AppWidgetProvider {
     @Override
     public void onUpdate(Context c, AppWidgetManager mgr, int[] ids) {
         for (int id : ids) pintar(c, mgr, id);
-        pedirActualizacion(c);
+        programarPeriodico(c);
+        descargarAhora(c);
+    }
+
+    /**
+     * Baja los datos en el momento (sin esperar a que Android programe una tarea) y repinta.
+     * Si falla, queda el aviso en el widget y la tarea periódica lo reintenta.
+     */
+    private void descargarAhora(Context c) {
+        final Context app = c.getApplicationContext();
+        final PendingResult pendiente = goAsync();
+        new Thread(() -> {
+            try {
+                Datos.actualizar(app);
+                repintarTodos(app);
+            } finally {
+                pendiente.finish();
+            }
+        }).start();
     }
 
     @Override
@@ -67,7 +85,10 @@ public class WidgetProvider extends AppWidgetProvider {
     @Override
     public void onReceive(Context c, Intent intent) {
         super.onReceive(c, intent);
-        if (ACCION_REFRESCAR.equals(intent.getAction())) pedirActualizacion(c);
+        if (ACCION_REFRESCAR.equals(intent.getAction())) {
+            programarPeriodico(c);
+            descargarAhora(c);
+        }
     }
 
     static void programarPeriodico(Context c) {
@@ -116,10 +137,19 @@ public class WidgetProvider extends AppWidgetProvider {
             return;
         }
         if (!hayDatos) {
-            v.setTextViewText(R.id.monto, "Cargando…");
-            v.setTextViewText(R.id.semanaValor, "");
-            v.setTextViewText(R.id.whimmValor, "");
-            v.setTextViewText(R.id.actualizado, "codigo".equals(error) ? "El código no es válido" : "");
+            // Aún sin datos: dice qué pasa en vez de quedarse en "Cargando" sin explicar.
+            v.setTextViewText(R.id.monto, "—");
+            if ("codigo".equals(error)) {
+                v.setTextViewText(R.id.semanaValor, "Código inválido");
+                v.setTextViewText(R.id.whimmValor, "Pégalo de nuevo");
+            } else if ("red".equals(error)) {
+                v.setTextViewText(R.id.semanaValor, "Sin conexión");
+                v.setTextViewText(R.id.whimmValor, "Toca ↻ para reintentar");
+            } else {
+                v.setTextViewText(R.id.semanaValor, "Cargando…");
+                v.setTextViewText(R.id.whimmValor, "");
+            }
+            v.setTextViewText(R.id.actualizado, "");
             return;
         }
 
