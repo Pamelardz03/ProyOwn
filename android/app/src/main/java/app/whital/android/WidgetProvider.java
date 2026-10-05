@@ -97,7 +97,7 @@ public class WidgetProvider extends AppWidgetProvider {
     }
 
     /** Rellena un diseño (el grande o el chico; comparten los mismos ids). */
-    private static void rellenar(Context c, RemoteViews v) {
+    private static void rellenar(Context c, RemoteViews v, boolean compacto) {
         SharedPreferences p = Datos.prefs(c);
         boolean sinCodigo = Datos.token(c).isEmpty();
         boolean hayDatos = p.getBoolean("hayDatos", false);
@@ -129,15 +129,20 @@ public class WidgetProvider extends AppWidgetProvider {
 
         int semana = p.getInt("restanteSemana", 0);
         int dias = p.getInt("diasSemana", 0);
-        v.setTextViewText(R.id.semanaValor, semana < 0 ? "Pasaste " + dinero(-semana) : dinero(semana) + " · " + textoDias(Math.max(dias, 1)));
+        // El diseño angosto no tiene etiquetas encima, así que el texto lleva su propio nombre.
+        String textoSemana;
+        if (semana < 0) textoSemana = "Pasaste " + dinero(-semana);
+        else if (compacto) textoSemana = "Semana: " + dinero(semana);
+        else textoSemana = dinero(semana) + " · " + textoDias(Math.max(dias, 1));
+        v.setTextViewText(R.id.semanaValor, textoSemana);
         v.setTextColor(R.id.semanaValor, semana < 0 ? Tema.alerta() : 0xFFFFFFFF);
 
         int hoyWhimms = p.getInt("whimmsHoy", 0);
         int proximo = p.getInt("proximoWhimmDias", -1);
         String whimm;
-        if (hoyWhimms > 0) whimm = hoyWhimms == 1 ? "Disponible hoy" : hoyWhimms + " disponibles hoy";
-        else if (proximo > 0) whimm = "Próximo en " + textoDias(proximo);
-        else whimm = "Ninguno por ahora";
+        if (hoyWhimms > 0) whimm = compacto ? (hoyWhimms == 1 ? "Whimm hoy" : hoyWhimms + " Whimms hoy") : (hoyWhimms == 1 ? "Disponible hoy" : hoyWhimms + " disponibles hoy");
+        else if (proximo > 0) whimm = compacto ? "Whimm en " + proximo + (proximo == 1 ? " día" : " d") : "Próximo en " + textoDias(proximo);
+        else whimm = compacto ? "Sin Whimms" : "Ninguno por ahora";
         v.setTextViewText(R.id.whimmValor, whimm);
 
         String hora = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(p.getLong("actualizado", 0)));
@@ -157,18 +162,18 @@ public class WidgetProvider extends AppWidgetProvider {
     static void pintar(Context c, AppWidgetManager mgr, int id) {
         boolean sinCodigo = Datos.token(c).isEmpty();
         RemoteViews grande = new RemoteViews(c.getPackageName(), R.layout.widget);
-        rellenar(c, grande);
+        rellenar(c, grande, false);
         enlazar(c, grande, sinCodigo);
 
         RemoteViews resultado = grande;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+: un diseño para 2x2 y otro para 3x2; el sistema elige según el tamaño.
             RemoteViews chico = new RemoteViews(c.getPackageName(), R.layout.widget_chico);
-            rellenar(c, chico);
+            rellenar(c, chico, true);
             enlazar(c, chico, sinCodigo);
             Map<SizeF, RemoteViews> tamanos = new HashMap<>();
             tamanos.put(new SizeF(110f, 110f), chico);
-            tamanos.put(new SizeF(180f, 110f), grande);
+            tamanos.put(new SizeF(240f, 110f), grande);
             resultado = new RemoteViews(tamanos);
         }
         mgr.updateAppWidget(id, resultado);
