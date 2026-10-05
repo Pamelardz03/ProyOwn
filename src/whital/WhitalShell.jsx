@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AvisosNotificaciones from './components/AvisosNotificaciones'
+import Bienvenida from './components/Bienvenida'
 import WhitalNav from './components/WhitalNav'
 import './whital.css'
 import Calendar from './pages/Calendar'
@@ -39,8 +40,16 @@ function useAtajoDelLauncher() {
 export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
+  useEffect(() => {
+    try {
+      localStorage.setItem('whital:login', '1') // la próxima vez, el inicio de sesión ya es el de Whital
+    } catch {
+      /* sin almacenamiento */
+    }
+  }, [])
   return (
     <div className="app-shell whital">
+      <Bienvenida />
       <AvisosNotificaciones />
       <Routes>
         <Route path="/" element={<Inicio />} />

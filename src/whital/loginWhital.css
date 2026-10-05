@@ -1,0 +1,29 @@
+/* Inicio de sesión y saludo de Whital (clases wl-*; no tocan la app de siempre). */
+.wl-pantalla{position:relative;flex:1;min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:32px 26px;overflow:hidden;text-align:center;background:var(--beige)}
+.wl-blob{position:absolute;border-radius:50%;filter:blur(38px);opacity:.55;pointer-events:none}
+.wl-blob.a{width:260px;height:260px;background:var(--wine5);top:-70px;right:-80px;animation:wl-flota 11s ease-in-out infinite}
+.wl-blob.b{width:220px;height:220px;background:var(--beige3);bottom:-60px;left:-70px;animation:wl-flota 14s ease-in-out infinite reverse}
+.wl-blob.c{width:140px;height:140px;background:var(--wine4);bottom:26%;right:-40px;opacity:.28;animation:wl-flota 9s ease-in-out infinite}
+.wl-contenido{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:22px;width:100%;max-width:360px}
+.wl-nombre{font-size:44px;font-weight:700;letter-spacing:-1px;color:var(--wine);display:flex}
+.wl-letra{display:inline-block;opacity:0;transform:translateY(18px);animation:wl-sube .6s cubic-bezier(.2,.8,.2,1) forwards}
+.wl-frase{font-size:13px;color:var(--muted);line-height:1.5;opacity:0;animation:wl-aparece .7s .75s ease forwards}
+.wl-boton{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;opacity:0;transform:translateY(14px);animation:wl-sube .6s 1s cubic-bezier(.2,.8,.2,1) forwards}
+.wl-boton:disabled{opacity:.7}
+.wl-error{font-size:12px;color:var(--red)}
+.wl-logo{filter:drop-shadow(0 10px 18px rgba(58,15,31,.28))}
+.wl-logo-anim{animation:wl-pop .7s cubic-bezier(.2,1.2,.3,1) both}
+.wl-logo-anim .wl-trazo{stroke-dasharray:100;stroke-dashoffset:100;animation:wl-dibuja .9s .35s ease forwards}
+.wl-saludo{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--beige);animation:wl-saludo-sale .45s 1.7s ease forwards}
+.wl-saludo .hola{font-size:13px;color:var(--muted);opacity:0;animation:wl-aparece .5s .4s ease forwards}
+.wl-saludo .quien{font-size:30px;font-weight:700;color:var(--wine);opacity:0;transform:translateY(12px);animation:wl-sube .55s .55s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes wl-sube{to{opacity:1;transform:none}}
+@keyframes wl-aparece{to{opacity:1}}
+@keyframes wl-pop{from{opacity:0;transform:scale(.6) rotate(-8deg)}to{opacity:1;transform:none}}
+@keyframes wl-dibuja{to{stroke-dashoffset:0}}
+@keyframes wl-flota{0%,100%{transform:translate(0,0)}50%{transform:translate(-22px,26px)}}
+@keyframes wl-saludo-sale{to{opacity:0;visibility:hidden}}
+@media (prefers-reduced-motion:reduce){
+  .wl-blob,.wl-logo-anim,.wl-logo-anim .wl-trazo,.wl-letra,.wl-frase,.wl-boton,.wl-saludo .hola,.wl-saludo .quien{animation:none!important;opacity:1;transform:none;stroke-dashoffset:0}
+  .wl-saludo{display:none}
+}

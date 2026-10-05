@@ -1,8 +1,24 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { IconInfo } from '../components/Icons'
+import LoginWhital from '../whital/pages/LoginWhital'
+
+// El inicio de sesión ocurre antes de saber quién eres, así que Whital se reconoce por
+// una marca en este dispositivo (la deja WhitalShell al entrar) o por ?whital=1.
+function usarLoginWhital() {
+  try {
+    if (new URLSearchParams(window.location.search).get('whital') === '1') localStorage.setItem('whital:login', '1')
+    return localStorage.getItem('whital:login') === '1'
+  } catch {
+    return false
+  }
+}
 
 export default function Login() {
+  return usarLoginWhital() ? <LoginWhital /> : <LoginClasico />
+}
+
+function LoginClasico() {
   const { loginWithGoogle } = useAuth()
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
