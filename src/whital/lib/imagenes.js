@@ -1,8 +1,6 @@
-// Fotos de los Whimms: se elige una de la galería/cámara (o se toma de un enlace) y se
+// Fotos de los Whimms: se elige una de la galería/cámara y se
 // guarda en Firebase Storage, así no dependes de enlaces externos que luego se rompen.
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { getFunctions, httpsCallable } from 'firebase/functions'
-import { app } from '../../lib/firebase'
 import { storage } from '../../lib/storage'
 
 const LADO_MAX = 900
@@ -29,13 +27,6 @@ export async function subirFotoWhimm(uid, archivo) {
   const destino = ref(storage, `users/${uid}/whimms/${Date.now()}.jpg`)
   await uploadBytes(destino, blob, { contentType: 'image/jpeg' })
   return getDownloadURL(destino)
-}
-
-// Pide al servidor la foto principal de la página de un enlace y la guarda en Storage.
-export async function fotoDeEnlace(enlace) {
-  const llamar = httpsCallable(getFunctions(app, 'us-central1'), 'imagenDeEnlace')
-  const { data } = await llamar({ enlace })
-  return data.url
 }
 
 // Borra del almacenamiento una foto que subiste tú (las de enlaces externos no se tocan).

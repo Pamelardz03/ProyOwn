@@ -765,6 +765,46 @@ export function evaluarIntercambio({ gastoNuevo, ...base }) {
 }
 
 // ---------------------------------------------------------------------------
+// Impacto de agregar (o cambiar) un Whimm sobre el resto de la fila. Compara la
+// proyección antes y después, igual que `evaluarIntercambio`:
+//   - propio: cuándo se compraría este Whimm
+//   - movidos: otros Whimms que se retrasan (sin fecha límite, o con ella pero a tiempo)
+//   - criticos: Whimms con fecha límite que quedarían tarde por este
+// `whimm` = el Whimm como quedaría; `whimmOriginal` = como está guardado (null si es nuevo).
+// ---------------------------------------------------------------------------
+export function evaluarImpactoWhimm({ whimm, whimmOriginal = null, ...base }) {
+  const otros = (base.whimms || []).filter((w) => w.id !== whimm.id)
+  const antes = proyectarColaWhimms({ ...base, whimms: whimmOriginal ? [...otros, whimmOriginal] : otros })
+  const despues = proyectarColaWhimms({ ...base, whimms: [...otros, whimm] })
+  const previo = new Map(antes.map((r) => [r.id, r]))
+  const nombres = new Map(otros.map((w) => [w.id, w.name || w.id]))
+  const propio = despues.find((r) => r.id === whimm.id)
+
+  const movidos = []
+  const criticos = []
+  despues.forEach((r) => {
+    const a = previo.get(r.id)
+    if (!a || r.id === whimm.id) return
+    const seRetrasa = r.fechaProyectada !== a.fechaProyectada && (!r.fechaProyectada || (a.fechaProyectada && r.fechaProyectada > a.fechaProyectada))
+    if (!seRetrasa) return
+    const item = {
+      id: r.id,
+      nombre: nombres.get(r.id),
+      antes: a.fechaProyectada,
+      despues: r.fechaProyectada,
+      dias: a.fechaProyectada && r.fechaProyectada ? diasEntreISO(a.fechaProyectada, r.fechaProyectada) : null,
+      fechaLimite: r.fechaLimite,
+    }
+    const tarde = r.estatus === 'tarde' || r.estatus === 'sin_fecha_segura'
+    const yaEraTarde = a.estatus === 'tarde' || a.estatus === 'sin_fecha_segura'
+    if (r.fechaLimite && tarde && !yaEraTarde) criticos.push(item)
+    else movidos.push(item)
+  })
+  movidos.sort((x, y) => (y.dias ?? 9999) - (x.dias ?? 9999))
+  return { propio: propio ? { fecha: propio.fechaProyectada, estatus: propio.estatus } : null, movidos, criticos }
+}
+
+// ---------------------------------------------------------------------------
 // Ocurrencias (para Vitalls y Calendar): incluyen las omitidas, marcadas, para
 // poder restaurarlas o cambiarles el monto.
 // ---------------------------------------------------------------------------

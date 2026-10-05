@@ -80,7 +80,6 @@ export const avisosWhital = onSchedule({ schedule: 'every 30 minutes', timeZone:
   }
 })
 
-export { imagenDeEnlace } from './imagen.js'
 export { crearTokenWidget, datosWidget } from './widget.js'
 
 export { avisarWidgetGastos, registrarDispositivoWidget } from './widgetPush.js'

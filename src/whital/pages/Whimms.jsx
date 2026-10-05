@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import { IconChevronLeft, IconClose, IconEdit, IconPlus } from '../../components/Icons'
@@ -8,7 +8,7 @@ import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
-import { borrarFotoPropia, fotoDeEnlace, subirFotoWhimm } from '../lib/imagenes'
+import { borrarFotoPropia, subirFotoWhimm } from '../lib/imagenes'
 import InputConSugerencias from '../components/InputConSugerencias'
 import Modal from '../components/Modal'
 import PestanasCompras from '../components/PestanasCompras'
@@ -22,6 +22,7 @@ import {
   addDaysISO,
   addMonthsISO,
   computeBolsas,
+  evaluarImpactoWhimm,
   normalizarNivel,
   ocurrenciasPagoFijo,
   progresoPagoFijo,
@@ -375,6 +376,24 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
 
   const linksLimpios = links.map((l) => l.trim()).filter(Boolean)
 
+  // Cómo afecta este Whimm a los demás de la fila (se recalcula al cambiar precio, nivel o fecha).
+  const valores = useDeferredValue({ name: name.trim(), precio: num(precio), necesidad, deseo, fechaLimite })
+  const enFila = !comprado && whimm?.estado !== 'pagando'
+  const impacto = useMemo(() => {
+    if (!enFila || !valores.name || !(valores.precio > 0)) return null
+    try {
+      const base = parametrosMotor(datos, todayISO())
+      const candidato = { ...(whimm || {}), id: whimm?.id || '__nuevo__', name: valores.name, precio: valores.precio, necesidad: valores.necesidad, deseo: valores.deseo, fechaLimite: valores.fechaLimite || null, estado: whimm?.estado || 'espera' }
+      const actual = evaluarImpactoWhimm({ whimm: candidato, whimmOriginal: whimm || null, ...base })
+      const total = actual.movidos.length + actual.criticos.length
+      // Si tiene fecha límite y retrasa a otros: ¿sin la fecha retrasaría menos?
+      const sinFecha = valores.fechaLimite && total > 0 ? evaluarImpactoWhimm({ whimm: { ...candidato, fechaLimite: null }, whimmOriginal: whimm || null, ...base }) : null
+      return { actual, total, sinFecha, totalSinFecha: sinFecha ? sinFecha.movidos.length + sinFecha.criticos.length : null }
+    } catch {
+      return null
+    }
+  }, [datos, enFila, whimm, valores])
+
   // Al cerrar sin guardar, las fotos subidas en esta edición se borran (nunca llegaron a usarse).
   const cerrar = () => {
     subidas.forEach((u) => borrarFotoPropia(u, user.uid))
@@ -435,11 +454,6 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
             {links.map((lk, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input className="fld" style={{ flex: 1, minWidth: 0 }} inputMode="url" placeholder="https://…" value={lk} onChange={(e) => setLinks((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))} />
-                {/^https:\/\//i.test(lk.trim()) && (
-                  <button type="button" className="pill" disabled={subiendoFoto} style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '7px 10px', fontSize: 11 }} onClick={() => conFoto(() => fotoDeEnlace(lk.trim()), 'No pude sacar la foto de ese link. Elige una de tu galería')}>
-                    Traer su foto
-                  </button>
-                )}
                 <button type="button" aria-label="Quitar link" className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)', padding: '7px 11px' }} onClick={() => setLinks((prev) => prev.filter((_, j) => j !== i))}>✕</button>
               </div>
             ))}
@@ -464,6 +478,36 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
           </div>
           {pegarUrl && <input className="fld" style={{ marginTop: 8 }} value={imagenUrl} onChange={(e) => setImagenUrl(e.target.value)} placeholder="https://…" />}
         </div>
+        {impacto && (
+          <Aviso tono={impacto.actual.criticos.length ? 'red' : impacto.total ? 'amber' : 'green'}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Cómo afecta a tu fila</div>
+            <div>
+              {impacto.actual.propio?.fecha
+                ? impacto.actual.propio.estatus === 'comprable_hoy' ? 'Se podría comprar hoy.' : `Fecha estimada: ${fechaCorta(impacto.actual.propio.fecha)}.`
+                : 'Todavía sin fecha segura.'}
+              {fechaLimite && ['tarde', 'sin_fecha_segura'].includes(impacto.actual.propio?.estatus) && ' No alcanza para su fecha límite.'}
+            </div>
+            {impacto.total === 0 ? (
+              <div style={{ marginTop: 4 }}>No atrasa a ningún otro Whimm.</div>
+            ) : (
+              <>
+                <div style={{ marginTop: 6 }}>Atrasa a {impacto.total} {impacto.total === 1 ? 'Whimm' : 'Whimms'}:</div>
+                {[...impacto.actual.criticos, ...impacto.actual.movidos].slice(0, 3).map((m) => (
+                  <div key={m.id} style={{ marginTop: 2 }}>
+                    • {m.nombre}: {m.antes ? fechaCorta(m.antes) : 'hoy'} → {m.despues ? fechaCorta(m.despues) : 'sin fecha'}{m.dias ? ` (+${m.dias} días)` : ''}{impacto.actual.criticos.includes(m) ? ' · pasaría su fecha límite' : ''}
+                  </div>
+                ))}
+                {impacto.total > 3 && <div style={{ marginTop: 2 }}>…y {impacto.total - 3} más.</div>}
+                {impacto.sinFecha && impacto.totalSinFecha < impacto.total && (
+                  <div style={{ marginTop: 8 }}>
+                    Sin fecha límite {impacto.totalSinFecha === 0 ? 'no atrasaría a nadie' : `atrasaría a ${impacto.totalSinFecha}`}.{' '}
+                    <button type="button" style={{ fontWeight: 700, textDecoration: 'underline' }} onClick={() => setFechaLimite('')}>Quitar fecha límite</button>
+                  </div>
+                )}
+              </>
+            )}
+          </Aviso>
+        )}
         <SelectorRecordatorio valor={notif} onChange={setNotif} />
         <button className="btn-primary" style={{ opacity: puedeGuardar ? 1 : 0.45 }} disabled={!puedeGuardar} onClick={guardar}>{nuevo ? 'Agregar a la fila' : 'Guardar cambios'}</button>
       </div>
