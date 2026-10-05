@@ -27,6 +27,7 @@ export const TIPOS = [
   { clave: 'vitallPorVencer', grupo: 'Vitalls', titulo: 'Se cobra mañana o en 2 días', defecto: 1440, item: 'vitall' },
   { clave: 'sueldoProximo', grupo: 'Sueldos', titulo: 'Te depositan hoy o mañana', defecto: 1440, item: 'sueldo' },
   { clave: 'gastoPasaste', grupo: 'Gastos', titulo: 'Te pasaste del presupuesto', defecto: 1440 },
+  { clave: 'gastoHoy', grupo: 'Gastos', titulo: 'Cuánto puedes gastar hoy', defecto: 1440 },
   { clave: 'gastoSobra', grupo: 'Gastos', titulo: 'Cuánto te sobra hasta el domingo', defecto: 0 },
   { clave: 'registro', grupo: 'Registro', titulo: 'Registrar tus gastos', defecto: 1440 },
 ]
@@ -101,6 +102,8 @@ export function generarAlertas({ datos, vista, hoyISO, ahoraMs, inicioMs, genera
 
   // --- Gastos de la semana ---
   const disponible = vista.bolsas.disponibleSemana
+  const paraHoy = vista.bolsas.promedioDiarioRestante
+  agregar({ clave: 'gastoHoy', tipo: 'gastoHoy', texto: paraHoy >= 0 ? `Para gastar hoy: ${fmt(paraHoy)}` : `Hoy ya no te queda para gastar (te pasaste ${fmt(-paraHoy)})`, cadaMin: cadenciaEfectiva({ tipo: 'gastoHoy', general }), ir: { ruta: '/gastos', estado: null } })
   if (disponible < 0) {
     agregar({ clave: `gastoPasaste:${vista.bolsas.semanaInicio}`, tipo: 'gastoPasaste', texto: `Te pasaste ${fmt(-disponible)} del presupuesto de la semana`, cadaMin: cadenciaEfectiva({ tipo: 'gastoPasaste', general }), ir: { ruta: '/gastos', estado: null } })
   } else if (disponible > 0) {
