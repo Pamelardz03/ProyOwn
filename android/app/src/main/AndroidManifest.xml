@@ -53,13 +53,27 @@
 
         <receiver
             android:name=".WidgetProvider"
-            android:exported="true">
+            android:exported="true"
+            android:label="Whital 3x2">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- El mismo widget en tamaño 2x2 (aparece como otra opción en el selector). -->
+        <receiver
+            android:name=".WidgetProviderChico"
+            android:exported="true"
+            android:label="Whital 2x2">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_chico" />
         </receiver>
     </application>
 </manifest>

@@ -50,7 +50,18 @@ public class WidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onDisabled(Context c) {
-        WorkManager.getInstance(c).cancelUniqueWork(TRABAJO_PERIODICO);
+        // Solo se deja de actualizar si ya no queda ningún widget (ni 3x2 ni 2x2).
+        if (idsDeTodos(c).length == 0) WorkManager.getInstance(c).cancelUniqueWork(TRABAJO_PERIODICO);
+    }
+
+    private static int[] idsDeTodos(Context c) {
+        AppWidgetManager mgr = AppWidgetManager.getInstance(c);
+        int[] grandes = mgr.getAppWidgetIds(new ComponentName(c, WidgetProvider.class));
+        int[] chicos = mgr.getAppWidgetIds(new ComponentName(c, WidgetProviderChico.class));
+        int[] todos = new int[grandes.length + chicos.length];
+        System.arraycopy(grandes, 0, todos, 0, grandes.length);
+        System.arraycopy(chicos, 0, todos, grandes.length, chicos.length);
+        return todos;
     }
 
     @Override
@@ -73,7 +84,7 @@ public class WidgetProvider extends AppWidgetProvider {
 
     static void repintarTodos(Context c) {
         AppWidgetManager mgr = AppWidgetManager.getInstance(c);
-        for (int id : mgr.getAppWidgetIds(new ComponentName(c, WidgetProvider.class))) pintar(c, mgr, id);
+        for (int id : idsDeTodos(c)) pintar(c, mgr, id);
     }
 
     private static String dinero(int n) {
