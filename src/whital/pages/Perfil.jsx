@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
 import IconPaleta from '../components/IconPaleta'
+import IconWidget from '../components/IconWidget'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
 import { calcularVistaInicio, fechaCorta, fmt } from '../lib/vista'
@@ -18,6 +19,7 @@ const PESTANAS = [
   { to: '/perfil/agregar', Icon: IconPlus, titulo: 'Agregar', pista: 'Gasto, Whimm, Vitall, sueldo…' },
   { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
   { to: '/perfil/apariencia', Icon: IconPaleta, titulo: 'Apariencia', pista: 'Paleta de colores y fondo' },
+  { to: '/perfil/widget', Icon: IconWidget, titulo: 'Widget', pista: 'Código para la app de Android' },
   { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
 ]
 
@@ -53,6 +55,7 @@ export default function Perfil() {
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Saldo real</div>
                 <div className="mono" style={cifra}>{fmt(vista.saldoReal)}</div>
+                <Link to="/perfil/configuracion" style={{ fontSize: 10, color: 'var(--wine)', fontWeight: 600, textDecoration: 'underline', marginTop: 2, display: 'inline-block' }}>Ajustar a mi banco</Link>
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para Whimms</div>

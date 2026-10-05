@@ -3,11 +3,12 @@ import Toast from '../../../components/Toast'
 import { useToast } from '../../../hooks/useToast'
 import { useAuth } from '../../../lib/AuthContext'
 import { deleteUserDoc, setUserDoc } from '../../../lib/firestoreCollections'
+import AjustarSaldo from '../../components/AjustarSaldo'
 import DetalleEliminable from '../../components/DetalleEliminable'
 import EncabezadoSub from '../../components/EncabezadoSub'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
 import { todayISO } from '../../lib/budget'
-import { fechaCorta, fmt, parametrosMotor } from '../../lib/vista'
+import { calcularVistaInicio, fechaCorta, fmt, parametrosMotor } from '../../lib/vista'
 import { DatosDePrueba, LineaEditable } from './piezas'
 
 export default function Configuracion() {
@@ -19,6 +20,7 @@ export default function Configuracion() {
   const [ajusteAbierto, setAjusteAbierto] = useState(null)
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
+  const saldoReal = useMemo(() => (loading ? 0 : calcularVistaInicio(datos, hoy).saldoReal), [datos, loading, hoy])
   const ajustes = useMemo(() => [...datos.ajustesSaldo].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')), [datos.ajustesSaldo])
 
   const guardarConfig = async (campos, mensaje) => {
@@ -50,6 +52,8 @@ export default function Configuracion() {
           {loading && !error && <div className="empty-state">Cargando…</div>}
           {base && (
             <>
+              <AjustarSaldo datos={datos} hoy={hoy} user={user} show={show} saldoReal={saldoReal} />
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <LineaEditable key={`saldo-${editando === 'saldo'}`} etiqueta="Saldo inicial" valorActual={Number(datos.config?.saldoInicial) || 0} editando={editando === 'saldo'} onAbrir={() => setEditando('saldo')} onCerrar={() => setEditando(null)} onGuardar={(n) => guardarConfig({ saldoInicial: n }, 'Saldo inicial guardado')} />
                 <LineaEditable key={`pres-${editando === 'presupuesto'}`} etiqueta="Presupuesto semanal" valorActual={base.presupuestoSemanal} editando={editando === 'presupuesto'} onAbrir={() => setEditando('presupuesto')} onCerrar={() => setEditando(null)} onGuardar={(n) => (n > 0 ? guardarConfig({ presupuestoSemanal: n }, 'Presupuesto guardado') : show('Debe ser mayor a 0'))} />

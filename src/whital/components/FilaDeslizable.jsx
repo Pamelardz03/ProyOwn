@@ -22,7 +22,7 @@ export function ConfirmarEliminar({ titulo, mensaje = '¿Eliminar? No se puede d
 export default function FilaDeslizable({ children, onEliminar, titulo, mensaje, onTap, radio = 0 }) {
   const [abierto, setAbierto] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
-  const { x, dragging, handlers } = useSwipeX({ isOpen: abierto, onChange: setAbierto, lockThreshold: 16, dominancia: 2, abrirDesde: 0.7, onTap: () => (abierto ? setAbierto(false) : onTap?.()) })
+  const { x, dragging, handlers } = useSwipeX({ isOpen: abierto, onChange: setAbierto, lockThreshold: 16, dominancia: 2, abrirDesde: 0.7, cancelaTap: false, onTap: () => (abierto ? setAbierto(false) : onTap?.()) })
 
   return (
     <>

@@ -20,8 +20,9 @@ const LOCK_THRESHOLD = 8
 // Opciones para quien quiera un gesto menos sensible (por defecto, igual que antes):
 // `lockThreshold` px antes de decidir, `dominancia` cuántas veces debe pesar el
 // movimiento horizontal sobre el vertical y `abrirDesde` qué fracción del ancho hay
-// que arrastrar para que quede abierto.
-export function useSwipeX({ isOpen, onChange, onTap, width = 72, lockThreshold = LOCK_THRESHOLD, dominancia = 1, abrirDesde = 0.5 }) {
+// que arrastrar para que quede abierto. Con `cancelaTap: false`, un gesto que el
+// navegador cancela (p. ej. porque empezó un scroll en el celular) NO cuenta como toque.
+export function useSwipeX({ isOpen, onChange, onTap, width = 72, lockThreshold = LOCK_THRESHOLD, dominancia = 1, abrirDesde = 0.5, cancelaTap = true }) {
   const startX = useRef(0)
   const startY = useRef(0)
   const dragging = useRef(false)
@@ -57,6 +58,16 @@ export function useSwipeX({ isOpen, onChange, onTap, width = 72, lockThreshold =
     setDragX(Math.min(0, Math.max(-width, baseX + dx)))
   }
 
+  function onPointerCancel() {
+    if (!cancelaTap && dragging.current && lock.current !== 'swipe') {
+      dragging.current = false
+      lock.current = 'none'
+      setDragX(null)
+      return
+    }
+    onPointerUpOrCancel()
+  }
+
   function onPointerUpOrCancel() {
     if (!dragging.current) return
     dragging.current = false
@@ -88,7 +99,7 @@ export function useSwipeX({ isOpen, onChange, onTap, width = 72, lockThreshold =
       onPointerDown,
       onPointerMove,
       onPointerUp: onPointerUpOrCancel,
-      onPointerCancel: onPointerUpOrCancel,
+      onPointerCancel,
     },
   }
 }

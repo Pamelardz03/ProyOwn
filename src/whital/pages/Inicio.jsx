@@ -4,13 +4,12 @@ import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
-import { addUserDoc } from '../../lib/firestoreCollections'
 import { marcarCobro } from '../lib/cobros'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
-import { calcularAjusteSaldo, gastoNeto, todayISO } from '../lib/budget'
-import { calcularAvisos, calcularVistaInicio, diaSemanaCorto, fechaCorta, fmt, parametrosMotor, textoDias } from '../lib/vista'
+import { gastoNeto, todayISO } from '../lib/budget'
+import { calcularAvisos, calcularVistaInicio, diaSemanaCorto, fechaCorta, fmt, textoDias } from '../lib/vista'
 
 const signo = (n) => (n >= 0 ? '+' : '-') + fmt(Math.abs(n))
 
@@ -47,47 +46,6 @@ function Avisos({ avisos }) {
           <button style={{ fontSize: 11, color: 'var(--muted)' }} onClick={() => descartar(a.id)}>Listo</button>
         </div>
       ))}
-    </div>
-  )
-}
-
-function AjustarSaldo({ datos, hoy, user, show }) {
-  const [abierto, setAbierto] = useState(false)
-  const [valor, setValor] = useState('')
-  const numero = valor === '' ? null : Number(valor)
-  const ajuste = numero != null && Number.isFinite(numero) ? calcularAjusteSaldo({ saldoBancoReal: numero, ...parametrosMotor(datos, hoy) }) : null
-
-  const guardar = async () => {
-    if (ajuste == null || Math.abs(ajuste) < 0.005) return
-    try {
-      await addUserDoc(user.uid, 'ajustesSaldo', { fecha: hoy, monto: ajuste, saldoBanco: numero, nota: 'Ajuste a mi banco' })
-      show('Saldo ajustado')
-      setAbierto(false)
-      setValor('')
-    } catch {
-      show('No se pudo guardar el ajuste')
-    }
-  }
-
-  if (!abierto) {
-    return (
-      <button onClick={() => setAbierto(true)} style={{ marginTop: 12, color: 'rgba(255,255,255,.75)', fontSize: 11, fontWeight: 500, textDecoration: 'underline' }}>
-        Ajustar a mi banco
-      </button>
-    )
-  }
-  return (
-    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <input className="fld" type="number" inputMode="decimal" placeholder="Saldo real en tu banco" value={valor} onChange={(e) => setValor(e.target.value)} />
-      {ajuste != null && (
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,.85)' }}>
-          {Math.abs(ajuste) < 0.005 ? 'Ya coincide.' : `Diferencia: ${signo(ajuste)}`}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button className="segbtn" style={{ background: 'rgba(255,255,255,.15)', color: '#fff' }} onClick={() => setAbierto(false)}>Cancelar</button>
-        <button className="segbtn" style={{ background: '#fff', color: 'var(--wine)' }} onClick={guardar}>Guardar</button>
-      </div>
     </div>
   )
 }
@@ -197,7 +155,6 @@ export default function Inicio() {
                   </div>
                 )}
               </div>
-              <AjustarSaldo datos={datos} hoy={hoy} user={user} show={show} />
             </div>
 
             <div className="card" style={{ padding: 18 }}>
