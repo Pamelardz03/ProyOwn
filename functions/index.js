@@ -84,3 +84,5 @@ export { imagenDeEnlace } from './imagen.js'
 export { crearTokenWidget, datosWidget } from './widget.js'
 
 export { avisarWidgetGastos, registrarDispositivoWidget } from './widgetPush.js'
+
+export { borrarMisDatos, respaldoSemanal } from './cuenta.js'

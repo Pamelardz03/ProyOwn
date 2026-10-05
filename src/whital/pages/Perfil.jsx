@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
+import IconEscudo from '../components/IconEscudo'
 import IconPaleta from '../components/IconPaleta'
 import IconWidget from '../components/IconWidget'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
@@ -20,6 +21,7 @@ const PESTANAS = [
   { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
   { to: '/perfil/temas', Icon: IconPaleta, titulo: 'Temas', pista: 'Paleta de colores y fondo' },
   { to: '/perfil/widget', Icon: IconWidget, titulo: 'Widget', pista: 'Código para la app de Android' },
+  { to: '/perfil/privacidad', Icon: IconEscudo, titulo: 'Privacidad y datos', pista: 'Descargar tus datos, políticas y eliminar la cuenta' },
   { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
 ]
 

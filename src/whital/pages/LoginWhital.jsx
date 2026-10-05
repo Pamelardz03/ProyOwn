@@ -50,6 +50,10 @@ export default function LoginWhital() {
           {cargando ? 'Conectando…' : 'Continuar con Google'}
         </button>
         {error && <div className="wl-error">{error}</div>}
+        <div className="wl-frase" style={{ fontSize: 11, animationDelay: '1.3s' }}>
+          Al continuar aceptas los <a href={`${import.meta.env.BASE_URL}terminos.html`} style={{ color: 'inherit', textDecoration: 'underline' }}>Términos de uso</a> y la{' '}
+          <a href={`${import.meta.env.BASE_URL}privacidad.html`} style={{ color: 'inherit', textDecoration: 'underline' }}>Política de privacidad</a>.
+        </div>
       </div>
     </div>
   )
