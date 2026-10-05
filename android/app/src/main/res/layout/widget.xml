@@ -1,23 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 3x2: hoy en grande, y abajo lo que queda de la semana y el estado de los Whimms. -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/raiz"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_fondo"
-    android:padding="16dp">
+    android:padding="14dp">
 
     <TextView
         android:id="@+id/titulo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Para gastar hoy"
-        android:textColor="#B3FFFFFF"
-        android:textSize="12sp" />
+        android:textColor="#BFFFFFFF"
+        android:textSize="11sp" />
 
     <ImageButton
         android:id="@+id/refrescar"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
         android:layout_alignParentEnd="true"
         android:layout_marginTop="-6dp"
         android:layout_marginEnd="-6dp"
@@ -26,35 +27,94 @@
         android:src="@drawable/ic_refresh" />
 
     <TextView
+        android:id="@+id/actualizado"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp"
+        android:layout_toStartOf="@id/refrescar"
+        android:maxLines="1"
+        android:textColor="#80FFFFFF"
+        android:textSize="9sp" />
+
+    <TextView
         android:id="@+id/monto"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/titulo"
-        android:layout_marginTop="2dp"
         android:maxLines="1"
         android:text="—"
         android:textColor="#FFFFFF"
         android:textSize="32sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/proxima"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/monto"
-        android:layout_marginTop="4dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#E6FFFFFF"
-        android:textSize="13sp" />
-
-    <TextView
-        android:id="@+id/actualizado"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#80FFFFFF"
-        android:textSize="10sp" />
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip"
+            android:orientation="vertical"
+            android:paddingStart="9dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="5dp">
+
+            <TextView
+                android:id="@+id/semanaEtiqueta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="Esta semana"
+                android:textColor="#BFFFFFFF"
+                android:textSize="9sp" />
+
+            <TextView
+                android:id="@+id/semanaValor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_chip"
+            android:orientation="vertical"
+            android:paddingStart="9dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="5dp">
+
+            <TextView
+                android:id="@+id/whimmEtiqueta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="Whimm"
+                android:textColor="#BFFFFFFF"
+                android:textSize="9sp" />
+
+            <TextView
+                android:id="@+id/whimmValor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
 </RelativeLayout>

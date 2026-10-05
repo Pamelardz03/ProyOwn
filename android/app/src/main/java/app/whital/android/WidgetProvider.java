@@ -4,10 +4,13 @@ import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
+import android.content.res.ColorStateList;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
+import android.util.SizeF;
 import android.widget.RemoteViews;
 
 import androidx.work.Constraints;
@@ -20,10 +23,15 @@ import androidx.work.WorkManager;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/** Widget de pantalla de inicio: cuánto puedes gastar hoy y tu próxima compra. */
+/**
+ * Widget de pantalla de inicio (3x2 o 2x2): lo que puedes gastar hoy, lo que queda de la
+ * semana y si hay un Whimm disponible. Toma los colores del tema de la app.
+ */
 public class WidgetProvider extends AppWidgetProvider {
     static final String ACCION_REFRESCAR = "app.whital.android.REFRESCAR";
     private static final String TRABAJO_PERIODICO = "whital-widget";
@@ -68,43 +76,90 @@ public class WidgetProvider extends AppWidgetProvider {
         for (int id : mgr.getAppWidgetIds(new ComponentName(c, WidgetProvider.class))) pintar(c, mgr, id);
     }
 
-    static void pintar(Context c, AppWidgetManager mgr, int id) {
+    private static String dinero(int n) {
+        NumberFormat nf = NumberFormat.getIntegerInstance(new Locale("es", "MX"));
+        return (n < 0 ? "-$" : "$") + nf.format(Math.abs(n));
+    }
+
+    private static String textoDias(int dias) {
+        return dias == 1 ? "1 día" : dias + " días";
+    }
+
+    /** Rellena un diseño (el grande o el chico; comparten los mismos ids). */
+    private static void rellenar(Context c, RemoteViews v) {
         SharedPreferences p = Datos.prefs(c);
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
         boolean sinCodigo = Datos.token(c).isEmpty();
+        boolean hayDatos = p.getBoolean("hayDatos", false);
         String error = p.getString("error", "");
+
+        // Colores del tema de la app (el relleno se tiñe; en Android < 12 queda el vino).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            v.setColorStateList(R.id.raiz, "setBackgroundTintList", ColorStateList.valueOf(Tema.relleno(p.getString("paleta", "vino"), p.getString("fondo", "beige"))));
+        }
 
         if (sinCodigo) {
             v.setTextViewText(R.id.monto, "Falta el código");
-            v.setTextViewText(R.id.proxima, "Toca para pegarlo");
+            v.setTextViewText(R.id.semanaValor, "");
+            v.setTextViewText(R.id.whimmValor, "Toca para pegarlo");
             v.setTextViewText(R.id.actualizado, "");
-        } else if (!p.getBoolean("hayDatos", false)) {
+            return;
+        }
+        if (!hayDatos) {
             v.setTextViewText(R.id.monto, "Cargando…");
-            v.setTextViewText(R.id.proxima, "");
+            v.setTextViewText(R.id.semanaValor, "");
+            v.setTextViewText(R.id.whimmValor, "");
             v.setTextViewText(R.id.actualizado, "codigo".equals(error) ? "El código no es válido" : "");
-        } else {
-            int hoy = p.getInt("paraHoy", 0);
-            NumberFormat nf = NumberFormat.getIntegerInstance(new Locale("es", "MX"));
-            v.setTextViewText(R.id.monto, (hoy < 0 ? "-$" : "$") + nf.format(Math.abs(hoy)));
-            v.setTextColor(R.id.monto, hoy < 0 ? 0xFFFFB4B4 : 0xFFFFFFFF);
-            String nombre = p.getString("proximaNombre", "");
-            int dias = p.getInt("proximaDias", -1);
-            String cuando = dias <= 0 ? "hoy" : dias == 1 ? "mañana" : "en " + dias + " días";
-            v.setTextViewText(R.id.proxima, nombre.isEmpty() ? "Sin próxima compra" : nombre + " · " + cuando);
-            String hora = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(p.getLong("actualizado", 0)));
-            v.setTextViewText(R.id.actualizado, "red".equals(error) ? "Sin conexión · último dato " + hora : "Actualizado " + hora);
+            return;
         }
 
+        int hoy = p.getInt("paraHoy", 0);
+        v.setTextViewText(R.id.monto, dinero(hoy));
+        v.setTextColor(R.id.monto, hoy < 0 ? Tema.alerta() : 0xFFFFFFFF);
+
+        int semana = p.getInt("restanteSemana", 0);
+        int dias = p.getInt("diasSemana", 0);
+        v.setTextViewText(R.id.semanaValor, semana < 0 ? "Pasaste " + dinero(-semana) : dinero(semana) + " · " + textoDias(Math.max(dias, 1)));
+        v.setTextColor(R.id.semanaValor, semana < 0 ? Tema.alerta() : 0xFFFFFFFF);
+
+        int hoyWhimms = p.getInt("whimmsHoy", 0);
+        int proximo = p.getInt("proximoWhimmDias", -1);
+        String whimm;
+        if (hoyWhimms > 0) whimm = hoyWhimms == 1 ? "Disponible hoy" : hoyWhimms + " disponibles hoy";
+        else if (proximo > 0) whimm = "Próximo en " + textoDias(proximo);
+        else whimm = "Ninguno por ahora";
+        v.setTextViewText(R.id.whimmValor, whimm);
+
+        String hora = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(p.getLong("actualizado", 0)));
+        v.setTextViewText(R.id.actualizado, "red".equals(error) ? "Sin red · " + hora : hora);
+    }
+
+    private static void enlazar(Context c, RemoteViews v, boolean sinCodigo) {
         // Tocar el widget: abre Whital (o pide el código si aún no hay).
         Intent abrir = sinCodigo
                 ? new Intent(c, ConfigActivity.class)
                 : new Intent(Intent.ACTION_VIEW, Uri.parse(URL_APP)).setPackage(c.getPackageName());
         v.setOnClickPendingIntent(R.id.raiz, PendingIntent.getActivity(c, 0, abrir, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-
-        // Botón de refrescar.
         Intent refrescar = new Intent(c, WidgetProvider.class).setAction(ACCION_REFRESCAR);
         v.setOnClickPendingIntent(R.id.refrescar, PendingIntent.getBroadcast(c, 1, refrescar, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+    }
 
-        mgr.updateAppWidget(id, v);
+    static void pintar(Context c, AppWidgetManager mgr, int id) {
+        boolean sinCodigo = Datos.token(c).isEmpty();
+        RemoteViews grande = new RemoteViews(c.getPackageName(), R.layout.widget);
+        rellenar(c, grande);
+        enlazar(c, grande, sinCodigo);
+
+        RemoteViews resultado = grande;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+: un diseño para 2x2 y otro para 3x2; el sistema elige según el tamaño.
+            RemoteViews chico = new RemoteViews(c.getPackageName(), R.layout.widget_chico);
+            rellenar(c, chico);
+            enlazar(c, chico, sinCodigo);
+            Map<SizeF, RemoteViews> tamanos = new HashMap<>();
+            tamanos.put(new SizeF(110f, 110f), chico);
+            tamanos.put(new SizeF(180f, 110f), grande);
+            resultado = new RemoteViews(tamanos);
+        }
+        mgr.updateAppWidget(id, resultado);
     }
 }

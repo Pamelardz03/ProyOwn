@@ -35,10 +35,15 @@ export const datosWidget = onRequest({ region: 'us-central1', maxInstances: 3, m
   const hoy = todayISO()
   const vista = calcularVistaInicio(datos, hoy)
   const proxima = vista.proximaCompra
+  const tema = datos.config?.tema || {}
   res.json({
     paraHoy: Math.round(vista.bolsas.promedioDiarioRestante),
-    saldoReal: Math.round(vista.saldoReal),
-    proximaCompra: proxima ? { nombre: proxima.whimm?.name || '', dias: proxima.dias } : null,
+    restanteSemana: Math.round(vista.bolsas.disponibleSemana),
+    diasSemana: vista.bolsas.diasRestantesSemana,
+    // Sin nombres: el widget solo dice si hay un Whimm disponible hoy o cuánto falta para el próximo.
+    whimmsHoy: vista.comprablesHoy,
+    proximoWhimmDias: proxima && proxima.dias > 0 ? proxima.dias : null,
+    tema: { paleta: tema.paleta === 'bosque' ? 'salvia' : tema.paleta || 'vino', fondo: tema.fondo || 'beige' },
     hoy,
     generado: Date.now(),
   })

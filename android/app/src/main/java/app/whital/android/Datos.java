@@ -54,12 +54,16 @@ final class Datos {
                 while ((linea = r.readLine()) != null) sb.append(linea);
             }
             JSONObject json = new JSONObject(sb.toString());
-            JSONObject proxima = json.optJSONObject("proximaCompra");
+            JSONObject tema = json.optJSONObject("tema");
             prefs(c).edit()
                     .putInt("paraHoy", json.optInt("paraHoy"))
+                    .putInt("restanteSemana", json.optInt("restanteSemana"))
+                    .putInt("diasSemana", json.optInt("diasSemana"))
+                    .putInt("whimmsHoy", json.optInt("whimmsHoy"))
+                    .putInt("proximoWhimmDias", json.isNull("proximoWhimmDias") ? -1 : json.optInt("proximoWhimmDias", -1))
+                    .putString("paleta", tema != null ? tema.optString("paleta", "vino") : "vino")
+                    .putString("fondo", tema != null ? tema.optString("fondo", "beige") : "beige")
                     .putBoolean("hayDatos", true)
-                    .putString("proximaNombre", proxima != null ? proxima.optString("nombre") : "")
-                    .putInt("proximaDias", proxima != null ? proxima.optInt("dias") : -1)
                     .putLong("actualizado", System.currentTimeMillis())
                     .remove("error")
                     .apply();
