@@ -111,9 +111,7 @@ public class WidgetProvider extends AppWidgetProvider {
 
 
     /** Rellena el widget: tres franjas (gastado hoy y semana / último gasto / Whimms). */
-    private static void rellenar(Context c, RemoteViews v) {
-        SharedPreferences p = Datos.prefs(c);
-        boolean sinCodigo = Datos.token(c).isEmpty();
+    private static void rellenar(Context c, RemoteViews v, SharedPreferences p, boolean sinCodigo) {
         boolean hayDatos = p.getBoolean("hayDatos", false);
         String error = p.getString("error", "");
 
@@ -190,8 +188,15 @@ public class WidgetProvider extends AppWidgetProvider {
 
     static RemoteViews crear(Context c) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
-        rellenar(c, v);
+        rellenar(c, v, Datos.prefs(c), Datos.token(c).isEmpty());
         enlazar(c, v, Datos.token(c).isEmpty());
+        return v;
+    }
+
+    /** El widget con los datos de `p` (sirve para la vista previa con datos de ejemplo). */
+    static RemoteViews crearConPrefs(Context c, SharedPreferences p) {
+        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget);
+        rellenar(c, v, p, false);
         return v;
     }
 

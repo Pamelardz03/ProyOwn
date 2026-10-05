@@ -6,48 +6,99 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
-/** Pega aquí el código que sale en Whital > Perfil > Widget. */
+/**
+ * Pantalla del widget: vista previa en vivo, color de fondo y código de Whital
+ * (Perfil > Widget). Se abre al agregar el widget y al reconfigurarlo.
+ */
 public class ConfigActivity extends Activity {
+    private static final int VINO = 0xFF3A0F1F;
     private int widgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
 
     private int dp(int v) {
-        return Math.round(android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    /** Círculo de color; el elegido lleva un anillo vino alrededor. */
+    private LayerDrawable circulo(int color, boolean elegido) {
+        GradientDrawable anillo = new GradientDrawable();
+        anillo.setShape(GradientDrawable.OVAL);
+        anillo.setColor(0x00000000);
+        if (elegido) anillo.setStroke(dp(2), VINO);
+        GradientDrawable relleno = new GradientDrawable();
+        relleno.setShape(GradientDrawable.OVAL);
+        relleno.setColor(color);
+        LayerDrawable capas = new LayerDrawable(new GradientDrawable[]{anillo, relleno});
+        capas.setLayerInset(1, dp(4), dp(4), dp(4), dp(4));
+        return capas;
     }
 
     /** Fila de colores para el fondo del widget: "Tema" (el de la app) y los colores fijos. */
     private void armarColores() {
-        final android.widget.LinearLayout fila = findViewById(R.id.colores);
+        final LinearLayout fila = findViewById(R.id.colores);
         fila.removeAllViews();
-        String actual = Datos.prefs(this).getString("fondoWidget", "auto");
-        android.content.SharedPreferences p = Datos.prefs(this);
+        final SharedPreferences p = Datos.prefs(this);
+        String actual = p.getString("fondoWidget", "auto");
         for (final String opcion : Tema.OPCIONES) {
             boolean auto = "auto".equals(opcion);
             int color = Tema.fondoWidget(opcion, p.getString("paleta", "vino"), p.getString("fondo", "beige"));
-            android.graphics.drawable.GradientDrawable forma = new android.graphics.drawable.GradientDrawable();
-            forma.setColor(color);
-            forma.setCornerRadius(dp(16));
-            boolean elegido = opcion.equals(actual);
-            forma.setStroke(dp(elegido ? 3 : 1), elegido ? 0xFF1A1208 : 0x55000000);
-            android.widget.TextView t = new android.widget.TextView(this);
-            t.setBackground(forma);
-            t.setGravity(android.view.Gravity.CENTER);
+            TextView t = new TextView(this);
+            t.setBackground(circulo(color, opcion.equals(actual)));
+            t.setGravity(Gravity.CENTER);
             t.setText(auto ? "Tema" : "");
             t.setTextColor(0xFFFFFFFF);
-            t.setTextSize(11);
+            t.setTextSize(8);
+            t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             t.setContentDescription(auto ? "Color del tema de la app" : "Color " + opcion);
-            android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(auto ? dp(52) : dp(32), dp(32));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(36), dp(36));
             lp.setMarginEnd(dp(6));
             t.setOnClickListener(v -> {
                 p.edit().putString("fondoWidget", opcion).apply();
                 WidgetProvider.repintarTodos(getApplicationContext());
                 armarColores();
+                actualizarPrevia();
             });
             fila.addView(t, lp);
+        }
+    }
+
+    /** Datos de ejemplo para la vista previa cuando aún no hay datos reales. */
+    private SharedPreferences ejemplo() {
+        SharedPreferences real = Datos.prefs(this);
+        SharedPreferences d = getSharedPreferences("whital_demo", MODE_PRIVATE);
+        d.edit()
+                .putBoolean("hayDatos", true)
+                .putInt("paraHoy", 85).putInt("gastoSemana", 334).putInt("presupuestoSemana", 840)
+                .putBoolean("hayUltimo", true).putString("ultimoTema", "Café").putInt("ultimoMonto", 45)
+                .putInt("whimmsHoy", 2).putInt("proximoWhimmDias", -1)
+                .putString("paleta", real.getString("paleta", "vino"))
+                .putString("fondo", real.getString("fondo", "beige"))
+                .putString("fondoWidget", real.getString("fondoWidget", "auto"))
+                .apply();
+        return d;
+    }
+
+    /** Dibuja aquí el widget de verdad, con el color elegido, para ver cómo queda. */
+    private void actualizarPrevia() {
+        FrameLayout marco = findViewById(R.id.vistaPrevia);
+        marco.removeAllViews();
+        SharedPreferences fuente = Datos.prefs(this).getBoolean("hayDatos", false) ? Datos.prefs(this) : ejemplo();
+        try {
+            marco.addView(WidgetProvider.crearConPrefs(this, fuente).apply(this, marco));
+        } catch (Exception e) {
+            // si algo falla, simplemente no hay vista previa
         }
     }
 
@@ -64,6 +115,7 @@ public class ConfigActivity extends Activity {
         EditText campo = findViewById(R.id.codigo);
         campo.setText(Datos.token(this));
         armarColores();
+        actualizarPrevia();
 
         Button pegar = findViewById(R.id.pegar);
         pegar.setOnClickListener(v -> {
@@ -83,7 +135,7 @@ public class ConfigActivity extends Activity {
             guardar.setEnabled(false);
             guardar.setText("Conectando…");
             // Se comprueba el código ahora mismo: así el widget nace ya con datos (o con el aviso claro).
-            final android.content.Context app = getApplicationContext();
+            final Context app = getApplicationContext();
             new Thread(() -> {
                 Datos.actualizar(app);
                 runOnUiThread(() -> {

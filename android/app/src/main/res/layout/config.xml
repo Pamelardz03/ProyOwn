@@ -1,78 +1,202 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- El contenedor de fuera respeta la barra de estado; el de dentro lleva el margen. -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Pantalla del widget, con el estilo de la app: fondo beige, tarjetas redondeadas, el logo
+     de la W, etiquetas en mayúsculas pequeñas y una vista previa del widget en vivo. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:fillViewport="true"
+    android:fitsSystemWindows="true"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="18dp">
 
-        <TextView
+        <!-- Encabezado -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Widget de Whital"
-            android:textColor="@color/whital_vino"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="Pega el código que sale en Whital, en Perfil &gt; Widget. Solo se hace una vez."
-            android:textColor="#7A7156"
-            android:textSize="14sp" />
-
-        <EditText
-            android:id="@+id/codigo"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:hint="Código (48 caracteres)"
-            android:importantForAutofill="no"
-            android:inputType="textNoSuggestions|textMultiLine"
-            android:minLines="2" />
-
-        <Button
-            android:id="@+id/pegar"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Pegar del portapapeles" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="Color de fondo del widget"
-            android:textColor="#7A7156"
-            android:textSize="13sp" />
-
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:scrollbars="none">
+            <ImageView
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:contentDescription="Whital"
+                android:src="@drawable/logo_config" />
 
             <LinearLayout
-                android:id="@+id/colores"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Widget"
+                    android:textColor="#1A1208"
+                    android:textSize="24sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tu resumen en la pantalla de inicio"
+                    android:textColor="#7A7156"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Vista previa en vivo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/card_config"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:text="VISTA PREVIA"
+                android:textColor="#7A7156"
+                android:textSize="10sp" />
+
+            <FrameLayout
+                android:id="@+id/vistaPrevia"
+                android:layout_width="190dp"
+                android:layout_height="200dp"
+                android:layout_marginTop="12dp" />
+        </LinearLayout>
+
+        <!-- Color de fondo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_config"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:text="COLOR DE FONDO"
+                android:textColor="#7A7156"
+                android:textSize="10sp" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/colores"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="“Tema” sigue el color de tu paleta de la app."
+                android:textColor="#7A7156"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Código -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_config"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.08"
+                android:text="CÓDIGO"
+                android:textColor="#7A7156"
+                android:textSize="10sp" />
+
+            <EditText
+                android:id="@+id/codigo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/campo_config"
+                android:fontFamily="monospace"
+                android:hint="48 caracteres"
+                android:importantForAutofill="no"
+                android:inputType="textNoSuggestions|textMultiLine"
+                android:minLines="2"
+                android:padding="12dp"
+                android:textColor="#1A1208"
+                android:textColorHint="#7A7156"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:gravity="center_vertical"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/pegar"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:background="@drawable/pill_config"
+                    android:minHeight="0dp"
+                    android:minWidth="0dp"
+                    android:paddingEnd="16dp"
+                    android:paddingStart="16dp"
+                    android:stateListAnimator="@null"
+                    android:text="Pegar"
+                    android:textAllCaps="false"
+                    android:textColor="#3A0F1F"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:text="Cópialo en Whital, en Perfil › Widget."
+                    android:textColor="#7A7156"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
 
         <Button
             android:id="@+id/guardar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:backgroundTint="@color/whital_vino"
+            android:layout_height="50dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/boton_guardar"
+            android:stateListAnimator="@null"
             android:text="Guardar"
-            android:textColor="#FFFFFF" />
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
     </LinearLayout>
-</FrameLayout>
+</ScrollView>
