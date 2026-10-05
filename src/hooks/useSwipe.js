@@ -17,7 +17,11 @@ const LOCK_THRESHOLD = 8
 // `width` es cuánto se revela (72 = ancho del botón de eliminar en el resto
 // de la app). Un movimiento que nunca superó el umbral se trata como tap y
 // llama a `onTap` (o alterna abierto/cerrado si no se da `onTap`).
-export function useSwipeX({ isOpen, onChange, onTap, width = 72 }) {
+// Opciones para quien quiera un gesto menos sensible (por defecto, igual que antes):
+// `lockThreshold` px antes de decidir, `dominancia` cuántas veces debe pesar el
+// movimiento horizontal sobre el vertical y `abrirDesde` qué fracción del ancho hay
+// que arrastrar para que quede abierto.
+export function useSwipeX({ isOpen, onChange, onTap, width = 72, lockThreshold = LOCK_THRESHOLD, dominancia = 1, abrirDesde = 0.5 }) {
   const startX = useRef(0)
   const startY = useRef(0)
   const dragging = useRef(false)
@@ -41,8 +45,8 @@ export function useSwipeX({ isOpen, onChange, onTap, width = 72 }) {
     const dy = e.clientY - startY.current
 
     if (lock.current === 'none') {
-      if (Math.abs(dx) > LOCK_THRESHOLD || Math.abs(dy) > LOCK_THRESHOLD) {
-        lock.current = Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'scroll'
+      if (Math.abs(dx) > lockThreshold || Math.abs(dy) > lockThreshold) {
+        lock.current = Math.abs(dx) > Math.abs(dy) * dominancia ? 'swipe' : 'scroll'
       } else {
         return
       }
@@ -74,7 +78,7 @@ export function useSwipeX({ isOpen, onChange, onTap, width = 72 }) {
       else onChange(!isOpen)
       return
     }
-    onChange(finalX <= -width / 2)
+    onChange(finalX <= -width * abrirDesde)
   }
 
   return {

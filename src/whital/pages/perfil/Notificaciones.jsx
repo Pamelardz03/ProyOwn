@@ -6,7 +6,7 @@ import { setUserDoc } from '../../../lib/firestoreCollections'
 import { Aviso } from '../../components/Campo'
 import EncabezadoSub from '../../components/EncabezadoSub'
 import { useWhitalDatos } from '../../hooks/useWhitalDatos'
-import { FRECUENCIAS, GRUPOS, TIPOS, cadenciaEfectiva } from '../../lib/notificaciones'
+import { GRUPOS, TIPOS, cadenciaEfectiva, opcionesFrecuencia } from '../../lib/notificaciones'
 import { activarPush } from '../../lib/push'
 
 // Qué avisar y cada cuánto. La frecuencia de aquí es la GENERAL de cada tipo; un
@@ -65,7 +65,7 @@ export default function Notificaciones() {
                       <div key={t.clave} className="row-list-item" style={{ gap: 12 }}>
                         <div style={{ flex: 1, fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>{t.titulo}</div>
                         <select className="fld" style={{ width: 138, flexShrink: 0, padding: '9px 10px' }} aria-label={t.titulo} value={cadenciaEfectiva({ tipo: t.clave, general })} onChange={(e) => cambiar(t.clave, Number(e.target.value))}>
-                          {FRECUENCIAS.map((f) => <option key={f.min} value={f.min}>{f.label}</option>)}
+                          {opcionesFrecuencia(cadenciaEfectiva({ tipo: t.clave, general })).map((f) => <option key={f.min} value={f.min}>{f.label}</option>)}
                         </select>
                       </div>
                     ))}

@@ -9,15 +9,19 @@ import { ocurrenciasSueldo, proximosVitalls, addDaysISO } from './budget'
 import { aMillis, textoTranscurrido } from './recordatorio'
 import { enDias, fechaCorta, fmt } from './vista'
 
+// Pocas opciones a propósito. Si algo ya guardado tiene otra frecuencia (de antes),
+// `opcionesFrecuencia` la sigue mostrando para que no aparezca vacío.
 export const FRECUENCIAS = [
   { min: 0, label: 'No avisar' },
-  { min: 30, label: 'Cada 30 min' },
-  { min: 60, label: 'Cada hora' },
   { min: 180, label: 'Cada 3 horas' },
-  { min: 900, label: 'Cada 15 horas' },
   { min: 1440, label: 'Cada día' },
   { min: 4320, label: 'Cada 3 días' },
 ]
+export function opcionesFrecuencia(actual) {
+  const n = Number(actual)
+  if (!n || FRECUENCIAS.some((f) => f.min === n)) return FRECUENCIAS
+  return [...FRECUENCIAS, { min: n, label: n % 60 === 0 ? `Cada ${n / 60} h` : `Cada ${n} min` }]
+}
 
 // `item`: de qué producto cuelga el aviso (permite frecuencia propia).
 export const TIPOS = [

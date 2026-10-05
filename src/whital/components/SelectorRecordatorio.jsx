@@ -1,4 +1,4 @@
-import { FRECUENCIAS } from '../lib/notificaciones'
+import { opcionesFrecuencia } from '../lib/notificaciones'
 import Campo from './Campo'
 
 // Frecuencia propia de un producto (Whimm, Vitall o sueldo): vacío = usar la general,
@@ -8,7 +8,7 @@ export default function SelectorRecordatorio({ valor, onChange }) {
     <Campo label="Recordarme">
       <select className="fld" value={valor} onChange={(e) => onChange(e.target.value)}>
         <option value="">General</option>
-        {FRECUENCIAS.map((f) => <option key={f.min} value={String(f.min)}>{f.label}</option>)}
+        {opcionesFrecuencia(valor).map((f) => <option key={f.min} value={String(f.min)}>{f.label}</option>)}
       </select>
     </Campo>
   )

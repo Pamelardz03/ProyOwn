@@ -22,13 +22,15 @@ export function ConfirmarEliminar({ titulo, mensaje = '¿Eliminar? No se puede d
 export default function FilaDeslizable({ children, onEliminar, titulo, mensaje, onTap, radio = 0 }) {
   const [abierto, setAbierto] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
-  const { x, dragging, handlers } = useSwipeX({ isOpen: abierto, onChange: setAbierto, onTap: () => (abierto ? setAbierto(false) : onTap?.()) })
+  const { x, dragging, handlers } = useSwipeX({ isOpen: abierto, onChange: setAbierto, lockThreshold: 16, dominancia: 2, abrirDesde: 0.7, onTap: () => (abierto ? setAbierto(false) : onTap?.()) })
 
   return (
     <>
       <div style={{ position: 'relative', borderRadius: radio, overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'flex-end', opacity: x < -4 ? 1 : 0, pointerEvents: abierto ? 'auto' : 'none', transition: dragging ? 'none' : 'opacity .12s ease' }}>
-          <button aria-label="Eliminar" onClick={() => setConfirmando(true)} style={{ width: 72, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* La papelera ocupa solo lo que ya se destapó (nunca queda detrás de la fila),
+            así no se ve a través de las tarjetas semitransparentes. */}
+        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: Math.max(0, -x), overflow: 'hidden', display: 'flex', justifyContent: 'flex-end', pointerEvents: abierto ? 'auto' : 'none', transition: dragging ? 'none' : 'width .12s ease' }}>
+          <button aria-label="Eliminar" onClick={() => setConfirmando(true)} style={{ width: 72, flexShrink: 0, background: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconTrash />
           </button>
         </div>
