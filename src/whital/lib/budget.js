@@ -298,6 +298,12 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
   return saldo
 }
 
+// Día (ISO, hora local) en que se guardó un documento, a partir de su `creadoEn` de Firestore.
+function isoDeRegistro(creadoEn) {
+  const ms = typeof creadoEn?.toMillis === 'function' ? creadoEn.toMillis() : creadoEn?.seconds != null ? creadoEn.seconds * 1000 : creadoEn?._seconds != null ? creadoEn._seconds * 1000 : null
+  return ms == null ? null : toISO(new Date(ms))
+}
+
 // Dinero reservado para gastos hasta el próximo cobro. La semana arranca con su presupuesto
 // cubierto (840) y cada día sin gastar lo deja para repartirse entre los días que faltan
 // (reserva / días al cobro). Nunca se reserva más del promedio diario (presupuesto / 7) por día
@@ -315,15 +321,19 @@ export function reservaGastos(base) {
   const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
   // Todo ingreso (sueldos e ingresos rápidos) se reparte en este orden: 1) Vitalls, si el saldo no los
   // alcanza; 2) lo que falte en la reserva de gastos (hasta lo que tocaría tener: el presupuesto de la
-  // semana, sin pasar del promedio por día que falta); 3) lo que sobra, a Whimms. Los omitidos o
+  // semana, hasta el promedio diario por cada día que falta); 3) lo que sobra, a Whimms. Los omitidos o
   // "aún no llega" no cuentan hasta que lleguen. `destinos` se indexa por id del ingreso.
   const destinos = {}
+  // Un ingreso agregado o marcado como llegado tarde (de un día pasado o de otra semana) cuenta como
+  // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
+  const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
+  const semana = startOfWeekISO(hoyISO)
   const ingresos = [
-    ...(sueldosRapidos || []).map((r) => ({ id: r.id, fecha: r.fecha, monto: Number(r.monto) || 0 })),
+    ...(sueldosRapidos || []).filter((r) => r?.fecha && r.fecha <= hoyISO).map((r) => ({ id: r.id, fecha: llegada(r.fecha, isoDeRegistro(r.creadoEn)), monto: Number(r.monto) || 0 })),
     ...(sueldosFijos || []).flatMap((s) =>
-      fechasPagoVivas(s, hoyISO).filter((f) => f >= startOfWeekISO(hoyISO)).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: f, monto: montoOcurrenciaSueldo(s, f) }))
+      fechasPagoVivas(s, hoyISO).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: llegada(f, excepcionDe(s, f)?.marcadoEn), monto: montoOcurrenciaSueldo(s, f) }))
     ),
-  ]
+  ].filter((i) => i.fecha >= semana)
   let faltaVitalls = 0
   if (base.saldoInicial !== undefined || base.ajustesSaldo) {
     const hoyIngresos = ingresos.filter((i) => i.fecha === hoyISO).reduce((sum, i) => sum + i.monto, 0)
@@ -334,7 +344,7 @@ export function reservaGastos(base) {
     ingresos.filter((i) => i.fecha === dia).forEach((i) => {
       const aVitalls = dia === hoyISO ? Math.min(i.monto, faltaVitalls) : 0
       if (aVitalls) faltaVitalls -= aVitalls
-      const aGastos = Math.min(i.monto - aVitalls, Math.max(Math.min(presupuesto, tope * objetivoDia) - reserva, 0))
+      const aGastos = Math.min(i.monto - aVitalls, Math.max(tope * objetivoDia - reserva, 0))
       reserva += aGastos
       destinos[i.id] = { monto: i.monto, aVitalls, aGastos, aWhimms: i.monto - aVitalls - aGastos }
     })
