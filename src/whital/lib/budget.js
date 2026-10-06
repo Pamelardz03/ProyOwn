@@ -327,6 +327,8 @@ export function reservaGastos(base) {
   let gastado = 0 // lo gastado en el periodo: un ingreso nunca devuelve lo que ya se gastó
   // Un ingreso agregado o marcado como llegado tarde (de un día pasado o de otra semana) cuenta como
   // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
+  // Un sueldo que cae en domingo ya es para la semana que arranca el lunes: cuenta ese lunes.
+  const esDomingo = (iso) => parseISODate(iso)?.getDay() === 0
   const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
   // La cuenta arranca el día del último cobro principal (el periodo) y la reserva se arrastra de semana
   // a semana. El periodo en curso cuando se estrenó este modelo (PERIODO_ARRASTRE_DESDE) arranca el lunes
@@ -336,7 +338,7 @@ export function reservaGastos(base) {
   const ingresos = [
     ...(sueldosRapidos || []).filter((r) => r?.fecha && r.fecha <= hoyISO).map((r) => ({ id: r.id, fecha: llegada(r.fecha, isoDeRegistro(r.creadoEn)), monto: Number(r.monto) || 0 })),
     ...(sueldosFijos || []).flatMap((s) =>
-      fechasPagoVivas(s, hoyISO).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: llegada(f, excepcionDe(s, f)?.marcadoEn), monto: montoOcurrenciaSueldo(s, f) }))
+      fechasPagoVivas(s, hoyISO).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: llegada(esDomingo(f) ? addDaysISO(f, 1) : f, excepcionDe(s, f)?.marcadoEn), monto: montoOcurrenciaSueldo(s, f) }))
     ),
   ].filter((i) => i.fecha >= inicio)
   let faltaVitalls = 0
