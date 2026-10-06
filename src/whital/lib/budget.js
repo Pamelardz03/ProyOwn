@@ -304,7 +304,8 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
 // que falta: lo que sobra de ese tope pasa a Whimms y ya no regresa. Lo gastado baja la reserva
 // y se va regenerando en los días que no gastas, hasta volver a topar con el promedio. Gastar más
 // que la reserva ya no sale de aquí sino del saldo (o sea, de Whimms). Se calcula desde el lunes.
-export function reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO }) {
+export function reservaGastos(base) {
+  const { sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO } = base
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const tope = presupuesto / 7
   const diasAlCobro = (dia) => {
@@ -312,15 +313,30 @@ export function reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuest
     return Math.max(cobro ? diasEntreISO(dia, cobro) : 30, 1)
   }
   const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
-  // Un ingreso rápido primero rellena lo que falte en la reserva de gastos (hasta lo que tocaría tener:
-  // el presupuesto de la semana, sin pasar del promedio por día que falta); lo que sobra va a Whimms.
+  // Todo ingreso (sueldos e ingresos rápidos) se reparte en este orden: 1) Vitalls, si el saldo no los
+  // alcanza; 2) lo que falte en la reserva de gastos (hasta lo que tocaría tener: el presupuesto de la
+  // semana, sin pasar del promedio por día que falta); 3) lo que sobra, a Whimms. Los omitidos o
+  // "aún no llega" no cuentan hasta que lleguen. `destinos` se indexa por id del ingreso.
   const destinos = {}
+  const ingresos = [
+    ...(sueldosRapidos || []).map((r) => ({ id: r.id, fecha: r.fecha, monto: Number(r.monto) || 0 })),
+    ...(sueldosFijos || []).flatMap((s) =>
+      fechasPagoVivas(s, hoyISO).filter((f) => f >= startOfWeekISO(hoyISO)).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: f, monto: montoOcurrenciaSueldo(s, f) }))
+    ),
+  ]
+  let faltaVitalls = 0
+  if (base.saldoInicial !== undefined || base.ajustesSaldo) {
+    const hoyIngresos = ingresos.filter((i) => i.fecha === hoyISO).reduce((sum, i) => sum + i.monto, 0)
+    const antes = saldoRealEnBanco(base) - hoyIngresos
+    faltaVitalls = Math.max(vitallsHastaCobro(base) - Math.max(antes, 0), 0)
+  }
   const rellenar = (dia, objetivoDia) => {
-    ;(sueldosRapidos || []).filter((r) => r?.fecha === dia).forEach((r) => {
-      const monto = Number(r.monto) || 0
-      const aGastos = Math.min(monto, Math.max(Math.min(presupuesto, tope * objetivoDia) - reserva, 0))
+    ingresos.filter((i) => i.fecha === dia).forEach((i) => {
+      const aVitalls = dia === hoyISO ? Math.min(i.monto, faltaVitalls) : 0
+      if (aVitalls) faltaVitalls -= aVitalls
+      const aGastos = Math.min(i.monto - aVitalls, Math.max(Math.min(presupuesto, tope * objetivoDia) - reserva, 0))
       reserva += aGastos
-      destinos[r.id] = { monto, aGastos, aWhimms: monto - aGastos }
+      destinos[i.id] = { monto: i.monto, aVitalls, aGastos, aWhimms: i.monto - aVitalls - aGastos }
     })
   }
   let dia = startOfWeekISO(hoyISO)
@@ -337,6 +353,14 @@ export function reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuest
   return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
 }
 
+function vitallsHastaCobro({ pagosFijos, sueldosFijos, hoyISO }) {
+  const proximo = proximoCobroPrincipalISO({ sueldosFijos, hoyISO }) || addDaysISO(hoyISO, 30)
+  return (pagosFijos || [])
+    .filter((p) => p?.tipo !== 'MSI')
+    .flatMap((p) => fechasVencimientoVivas(p, addDaysISO(proximo, -1)).filter((f) => f > hoyISO).map((f) => montoOcurrenciaPagoFijo(p, f)))
+    .reduce((sum, x) => sum + x, 0)
+}
+
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
 // horizonte, SIN contar compras de Whimms futuras. Hoy solo suma el gasto
 // esperado de hoy (los demás eventos de hoy ya están en el saldo real).
@@ -345,7 +369,7 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
   const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
-  const reserva = reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO })
+  const reserva = reservaGastos({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
 
   const delta = new Map()
   const sumar = (fecha, monto) => delta.set(fecha, (delta.get(fecha) || 0) + monto)

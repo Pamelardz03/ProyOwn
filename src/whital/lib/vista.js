@@ -60,9 +60,12 @@ export function diaSemanaCorto(iso) {
 // A dónde fue un ingreso rápido: primero a rellenar tus gastos, y lo que sobra a Whimms.
 export function textoDestino(d) {
   if (!d) return ''
-  if (d.aGastos <= 0) return 'Todo a Whimms: tus gastos de la semana ya estaban cubiertos.'
-  if (d.aWhimms <= 0) return `Todo a tus gastos de la semana: les faltaba ${fmt(d.aGastos)}.`
-  return `${fmt(d.aGastos)} a tus gastos de la semana (les faltaba) y ${fmt(d.aWhimms)} a Whimms.`
+  const partes = []
+  if (d.aVitalls > 0) partes.push(`${fmt(d.aVitalls)} a tus Vitalls`)
+  if (d.aGastos > 0) partes.push(`${fmt(d.aGastos)} a tus gastos de la semana`)
+  if (d.aWhimms > 0) partes.push(`${fmt(d.aWhimms)} a Whimms`)
+  if (partes.length === 1 && d.aWhimms > 0) return 'Todo a Whimms: tus Vitalls y gastos de la semana ya estaban cubiertos.'
+  return `${partes.length > 1 ? `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}` : partes[0]}.`
 }
 
 export function parametrosMotor(datos, hoyISO) {
@@ -205,6 +208,11 @@ export function calcularAvisos(datos, hoyISO, bolsas) {
   ;(datos.sueldosRapidos || [])
     .filter((r) => r.fecha && r.fecha <= hoyISO && r.fecha >= addDaysISO(hoyISO, -2) && destinos[r.id])
     .forEach((r) => avisos.push({ id: `ingreso-${r.id}`, tipo: 'ingreso', texto: `${r.desc || 'Ingreso'} (${fmt(r.monto)}): ${textoDestino(destinos[r.id])}` }))
+  ;(datos.sueldosFijos || []).forEach((s) => {
+    ocurrenciasSueldo(s, hoyISO, addDaysISO(hoyISO, -2))
+      .filter((o) => !o.omitida && destinos[`sf-${s.id}-${o.fecha}`])
+      .forEach((o) => avisos.push({ id: `ingreso-sf-${s.id}-${o.fecha}`, tipo: 'ingreso', texto: `${s.name || s.nombre || 'Sueldo'} (${fmt(o.monto)}): ${textoDestino(destinos[`sf-${s.id}-${o.fecha}`])}` }))
+  })
 
   return avisos
 }

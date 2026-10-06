@@ -14,7 +14,7 @@ export const FILTROS_HISTORIAL = [
 
 export function construirHistorial({ datos, hoyISO }) {
   const eventos = []
-  const { destinos } = reservaGastos({ sueldosFijos: datos.sueldosFijos, sueldosRapidos: datos.sueldosRapidos, gastos: datos.gastos, presupuestoSemanal: datos.config?.presupuestoSemanal, hoyISO })
+  const { destinos } = reservaGastos({ ...datos, saldoInicial: Number(datos.config?.saldoInicial) || 0, presupuestoSemanal: datos.config?.presupuestoSemanal, hoyISO })
 
   ;(datos.gastos || []).forEach((g) => {
     if (!g.fecha || g.fecha > hoyISO) return
@@ -29,7 +29,7 @@ export function construirHistorial({ datos, hoyISO }) {
 
   ;(datos.sueldosFijos || []).forEach((s) => {
     ocurrenciasSueldo(s, hoyISO).forEach((o) => {
-      eventos.push({ id: `sf-${s.id}-${o.fecha}`, tipo: 'sueldo', fecha: o.fecha, titulo: `${s.name || s.nombre || 'Sueldo'} depositado`, monto: o.monto, entidad: s, ocurrencia: o, coleccion: 'sueldosFijos', omitida: o.omitida })
+      eventos.push({ id: `sf-${s.id}-${o.fecha}`, tipo: 'sueldo', fecha: o.fecha, titulo: `${s.name || s.nombre || 'Sueldo'} depositado`, monto: o.monto, entidad: s, ocurrencia: o, coleccion: 'sueldosFijos', omitida: o.omitida, destino: o.omitida ? null : destinos[`sf-${s.id}-${o.fecha}`] })
     })
   })
 

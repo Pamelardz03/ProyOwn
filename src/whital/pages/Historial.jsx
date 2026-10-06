@@ -60,9 +60,9 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
           <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => navigate('/whimms', { state: { openWhimmId: ev.entidad.id } })}>Ver Whimm</button>
         </div>
       )}
+      {ev.tipo === 'sueldo' && ev.destino && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.4 }}>{textoDestino(ev.destino)}</div>}
       {ev.tipo === 'sueldo' && ev.rapido && (
         <div style={{ marginTop: 16 }}>
-          {ev.destino && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.4 }}>{textoDestino(ev.destino)}</div>}
           <BotonEliminar mensaje="¿Eliminar este ingreso? No se puede deshacer." onConfirmar={() => borrar('sueldosRapidos', ev.entidad.id, 'Ingreso eliminado')} />
         </div>
       )}
