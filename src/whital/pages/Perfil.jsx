@@ -38,7 +38,7 @@ export default function Perfil() {
   // El saldo real se reparte en tres: lo libre para Whimms, lo reservado para Vitalls
   // y lo que queda para gastos hasta la quincena (el próximo cobro del sueldo principal).
   const c = vista?.cajitas
-  const porDia = c ? c.saldoPrincipal / Math.max(c.dias, 1) : 0
+  const porDia = vista ? vista.asignadoHoy : 0
   const metaDia = vista ? vista.presupuestoSemanal / 7 : 0
   // Lo que toca por día frente a tu presupuesto diario: Bajo (rojo), Medio o Alto.
   const nivel = porDia >= metaDia ? { texto: 'Alto', color: 'var(--green)' } : porDia >= metaDia * 0.7 ? { texto: 'Medio', color: 'var(--amber)' } : { texto: 'Bajo', color: 'var(--red)' }
@@ -69,7 +69,7 @@ export default function Perfil() {
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para gastos · hasta el {fechaCorta(c.proximoCobro)}</div>
-                <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(c.saldoPrincipal)}</div>
+                <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(vista.reservaGastos)}</div>
                 <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>{fmt(Math.round(porDia))}/día · {nivel.texto}</div>
               </div>
             </div>

@@ -139,6 +139,7 @@ export function calcularVistaInicio(datos, hoyISO) {
   return {
     saldoReal,
     asignadoHoy: topes[limitadoPor],
+    reservaGastos: reserva.reserva,
     gastoHoy,
     paraHoy: topes[limitadoPor] - gastoHoy,
     limitadoPor,
