@@ -162,8 +162,13 @@ export default function Inicio() {
               <div style={{ fontSize: 13, fontWeight: 600, color: vista.bolsas.disponibleSemana < 0 ? 'var(--red)' : 'var(--text)' }}>
                 {vista.bolsas.disponibleSemana < 0
                   ? `Te pasaste ${fmt(-vista.bolsas.disponibleSemana)}`
-                  : `Te quedan ${fmt(vista.bolsas.disponibleSemana)} para ${textoDias(vista.bolsas.diasRestantesSemana)}`}
+                  : `Te quedan ${fmt(Math.max(vista.reservaGastos - vista.gastoHoy, 0))} disponibles`}
               </div>
+              {vista.bolsas.disponibleSemana >= 0 && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+                  {fmt(vista.asignadoHoy)} por día · {vista.cajitas.dias <= vista.bolsas.diasRestantesSemana ? `${textoDias(vista.cajitas.dias)} al cobro` : `hasta el ${fechaCorta(vista.cajitas.proximoCobro)}`}
+                </div>
+              )}
               <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{fmt(vista.bolsas.gastadoSemanaActual)} de {fmt(vista.presupuestoSemanal)}</div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64, marginTop: 14 }}>
                 {(() => {
