@@ -57,6 +57,14 @@ export function diaSemanaCorto(iso) {
   return DIAS_CORTOS[(d.getDay() + 6) % 7]
 }
 
+// A dónde fue un ingreso rápido: primero a rellenar tus gastos, y lo que sobra a Whimms.
+export function textoDestino(d) {
+  if (!d) return ''
+  if (d.aGastos <= 0) return 'Todo a Whimms: tus gastos de la semana ya estaban cubiertos.'
+  if (d.aWhimms <= 0) return `Todo a tus gastos de la semana: les faltaba ${fmt(d.aGastos)}.`
+  return `${fmt(d.aGastos)} a tus gastos de la semana (les faltaba) y ${fmt(d.aWhimms)} a Whimms.`
+}
+
 export function parametrosMotor(datos, hoyISO) {
   const { gastos, sueldosFijos, sueldosRapidos, pagosFijos, whimms, ajustesSaldo, config } = datos
   const presupuesto = Number(config?.presupuestoSemanal)
@@ -191,6 +199,12 @@ export function calcularAvisos(datos, hoyISO, bolsas) {
         texto: `${v.fecha === addDaysISO(hoyISO, 1) ? 'Mañana' : `El ${diaSemanaCorto(v.fecha)} ${fechaCorta(v.fecha)}`} vence ${v.name}: ${fmt(v.monto)}.`,
       })
     })
+
+  // Ingresos rápidos de los últimos 2 días: a dónde se fueron.
+  const { destinos } = reservaGastos(parametrosMotor(datos, hoyISO))
+  ;(datos.sueldosRapidos || [])
+    .filter((r) => r.fecha && r.fecha <= hoyISO && r.fecha >= addDaysISO(hoyISO, -2) && destinos[r.id])
+    .forEach((r) => avisos.push({ id: `ingreso-${r.id}`, tipo: 'ingreso', texto: `${r.desc || 'Ingreso'} (${fmt(r.monto)}): ${textoDestino(destinos[r.id])}` }))
 
   return avisos
 }

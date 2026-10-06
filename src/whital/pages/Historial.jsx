@@ -11,7 +11,7 @@ import Modal from '../components/Modal'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
 import { FILTROS_HISTORIAL, construirHistorial } from '../lib/historial'
-import { fechaCorta, fmt } from '../lib/vista'
+import { fechaCorta, fmt, textoDestino } from '../lib/vista'
 
 const COLOR = { gasto: 'var(--acento)', whimm: 'var(--amber)', vitall: 'var(--wine4)', sueldo: 'var(--green)', ajuste: 'var(--muted)' }
 const boton = { flex: 1, borderRadius: 10, padding: 10, fontSize: 12, fontWeight: 600, textAlign: 'center' }
@@ -62,6 +62,7 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
       )}
       {ev.tipo === 'sueldo' && ev.rapido && (
         <div style={{ marginTop: 16 }}>
+          {ev.destino && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.4 }}>{textoDestino(ev.destino)}</div>}
           <BotonEliminar mensaje="¿Eliminar este ingreso? No se puede deshacer." onConfirmar={() => borrar('sueldosRapidos', ev.entidad.id, 'Ingreso eliminado')} />
         </div>
       )}

@@ -1,7 +1,7 @@
 // Historial completo: todo lo que ya pasó (hasta hoy), en una sola lista.
 // Función PURA. Las ocurrencias de sueldos fijos y de pagos fijos/Vitalls
 // incluyen las omitidas (marcadas como datos atípicos) para poder restaurarlas.
-import { gastoNeto, ocurrenciasPagoFijo, ocurrenciasSueldo } from './budget'
+import { gastoNeto, ocurrenciasPagoFijo, ocurrenciasSueldo, reservaGastos } from './budget'
 
 export const FILTROS_HISTORIAL = [
   ['todos', 'Todos'],
@@ -14,6 +14,7 @@ export const FILTROS_HISTORIAL = [
 
 export function construirHistorial({ datos, hoyISO }) {
   const eventos = []
+  const { destinos } = reservaGastos({ sueldosFijos: datos.sueldosFijos, sueldosRapidos: datos.sueldosRapidos, gastos: datos.gastos, presupuestoSemanal: datos.config?.presupuestoSemanal, hoyISO })
 
   ;(datos.gastos || []).forEach((g) => {
     if (!g.fecha || g.fecha > hoyISO) return
@@ -33,7 +34,7 @@ export function construirHistorial({ datos, hoyISO }) {
   })
 
   ;(datos.sueldosRapidos || []).forEach((r) => {
-    if (r.fecha && r.fecha <= hoyISO) eventos.push({ id: `sr-${r.id}`, tipo: 'sueldo', fecha: r.fecha, titulo: `${r.desc || 'Ingreso'} depositado`, monto: Number(r.monto) || 0, entidad: r, rapido: true })
+    if (r.fecha && r.fecha <= hoyISO) eventos.push({ id: `sr-${r.id}`, tipo: 'sueldo', fecha: r.fecha, titulo: `${r.desc || 'Ingreso'} depositado`, monto: Number(r.monto) || 0, entidad: r, rapido: true, destino: destinos[r.id] })
   })
 
   ;(datos.pagosFijos || []).forEach((p) => {

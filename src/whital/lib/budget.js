@@ -304,7 +304,7 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
 // que falta: lo que sobra de ese tope pasa a Whimms y ya no regresa. Lo gastado baja la reserva
 // y se va regenerando en los días que no gastas, hasta volver a topar con el promedio. Gastar más
 // que la reserva ya no sale de aquí sino del saldo (o sea, de Whimms). Se calcula desde el lunes.
-export function reservaGastos({ sueldosFijos, gastos, presupuestoSemanal, hoyISO }) {
+export function reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const tope = presupuesto / 7
   const diasAlCobro = (dia) => {
@@ -312,15 +312,29 @@ export function reservaGastos({ sueldosFijos, gastos, presupuestoSemanal, hoyISO
     return Math.max(cobro ? diasEntreISO(dia, cobro) : 30, 1)
   }
   const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
+  // Un ingreso rápido primero rellena lo que falte en la reserva de gastos (hasta lo que tocaría tener:
+  // el presupuesto de la semana, sin pasar del promedio por día que falta); lo que sobra va a Whimms.
+  const destinos = {}
+  const rellenar = (dia, objetivoDia) => {
+    ;(sueldosRapidos || []).filter((r) => r?.fecha === dia).forEach((r) => {
+      const monto = Number(r.monto) || 0
+      const aGastos = Math.min(monto, Math.max(Math.min(presupuesto, tope * objetivoDia) - reserva, 0))
+      reserva += aGastos
+      destinos[r.id] = { monto, aGastos, aWhimms: monto - aGastos }
+    })
+  }
   let dia = startOfWeekISO(hoyISO)
   let reserva = Math.min(presupuesto, tope * diasAlCobro(dia))
   while (dia < hoyISO) {
     reserva = Math.max(reserva - gastoDelDia(dia), 0)
     dia = addDaysISO(dia, 1)
-    reserva = Math.min(reserva, tope * diasAlCobro(dia))
+    const diasHoy = diasAlCobro(dia)
+    rellenar(addDaysISO(dia, -1), diasHoy)
+    reserva = Math.min(reserva, tope * diasHoy)
   }
   const dias = diasAlCobro(hoyISO)
-  return { reserva, dias, tope, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
+  rellenar(hoyISO, dias)
+  return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
 }
 
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
@@ -331,7 +345,7 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
   const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
-  const reserva = reservaGastos({ sueldosFijos, gastos, presupuestoSemanal, hoyISO })
+  const reserva = reservaGastos({ sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO })
 
   const delta = new Map()
   const sumar = (fecha, monto) => delta.set(fecha, (delta.get(fecha) || 0) + monto)
