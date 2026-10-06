@@ -10,6 +10,7 @@ import FilaExcepcion from '../components/FilaExcepcion'
 import Modal from '../components/Modal'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
+import { marcarCobro } from '../lib/cobros'
 import { FILTROS_HISTORIAL, construirHistorial } from '../lib/historial'
 import { fechaCorta, fmt, textoDestino } from '../lib/vista'
 
@@ -29,6 +30,17 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
       onCerrar()
     } catch {
       show('No se pudo eliminar')
+    }
+  }
+
+  // Mismo cambio de estado que en Sueldos: "Aún no llega" lo saca del saldo; "Ya llegó" lo suma como si llegara hoy.
+  const cambiarEstado = async () => {
+    try {
+      await marcarCobro(user.uid, ev.entidad, ev.fecha, ev.ocurrencia.pendiente)
+      show(ev.ocurrencia.pendiente ? 'Sueldo sumado a tu saldo' : 'Se sumará cuando llegue')
+      onCerrar()
+    } catch {
+      show('No se pudo actualizar')
     }
   }
 
@@ -59,6 +71,11 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => navigate('/whimms', { state: { openWhimmId: ev.entidad.id } })}>Ver Whimm</button>
         </div>
+      )}
+      {ev.coleccion === 'sueldosFijos' && ev.ocurrencia && (ev.ocurrencia.pendiente || (!ev.omitida && ev.fecha <= hoy)) && (
+        <button style={{ ...boton, width: '100%', marginTop: 12, background: ev.ocurrencia.pendiente ? 'var(--green-bg)' : 'var(--beige2)', color: ev.ocurrencia.pendiente ? 'var(--green)' : 'var(--acento)' }} onClick={cambiarEstado}>
+          {ev.ocurrencia.pendiente ? 'Ya llegó' : 'Aún no llega'}
+        </button>
       )}
       {ev.tipo === 'sueldo' && ev.destino && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.4 }}>{textoDestino(ev.destino)}</div>}
       {ev.tipo === 'sueldo' && ev.rapido && (
