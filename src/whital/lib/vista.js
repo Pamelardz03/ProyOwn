@@ -15,6 +15,7 @@ import {
   parseISODate,
   proximosVitalls,
   proyectarColaWhimms,
+  reservaGastos,
   saldoRealEnBanco,
   startOfWeekISO,
 } from './budget'
@@ -120,22 +121,18 @@ export function calcularVistaInicio(datos, hoyISO) {
 
   // Sin ingresos que cubran el presupuesto, el dinero libre sale negativo: para las cajitas cuenta como 0.
   const cajitas = distribucionCajitas({ saldoReal, bolsaWhimms: Math.max(0, bolsas.bolsaWhimms), ...base })
-  // "Para gastar hoy": nunca más que el promedio diario del presupuesto (lo que no gastas no
-  // se acumula para el día siguiente: queda libre para Whimms al cerrar la semana), ni que lo
-  // que queda de la semana repartido entre los días que faltan, ni que el dinero real que hay
-  // para gastos hasta el próximo cobro. `limitadoPor` dice cuál de los tres manda ahora.
-  // Se calcula lo que te TOCABA hoy antes de gastar nada (le sumamos lo gastado hoy a lo que
-  // queda) y de ahí se resta lo gastado: así "para gastar hoy" baja 1 a 1 con cada gasto que
-  // registras y no se mueve solo porque cambie el promedio.
+  // "Para gastar hoy" = reserva de gastos repartida entre los días al cobro, con tope en el promedio
+  // diario (ver reservaGastos), y sin pasar del dinero real sin comprometer. `limitadoPor` dice cuál
+  // manda. Es lo que TE TOCABA hoy antes de gastar; de ahí se resta lo gastado, así baja 1 a 1.
   const gastoHoy = dias.find((d) => d.esHoy)?.gastado || 0
-  // Dinero de gastos "sin soltar" a Whimms: lo que tienes hoy para gastar hasta el cobro. Repartido
-  // entre los días que faltan sube cada día que no gastas, hasta topar con el promedio diario.
-  const bolsasAcum = computeBolsas({ ...base, acumularSiempre: true })
-  const potGastos = distribucionCajitas({ saldoReal, bolsaWhimms: Math.max(0, bolsasAcum.bolsaWhimms), ...base }).saldoPrincipal
+  // Dinero real sin comprometer (saldo menos Vitalls y MSI de antes del cobro): solo limita si es
+  // menor que la reserva de gastos.
+  const msi = cajitas.cajitaWhimms - Math.max(0, bolsas.bolsaWhimms)
+  const reserva = reservaGastos(base)
   const topes = {
-    presupuesto: bolsas.presupuestoSemanaActual / 7,
-    semana: (bolsas.disponibleSemana + gastoHoy) / Math.max(bolsas.diasRestantesSemana, 1),
-    dinero: (potGastos + gastoHoy) / Math.max(cajitas.dias, 1),
+    presupuesto: reserva.tope,
+    semana: reserva.reserva / reserva.dias,
+    dinero: (saldoReal - cajitas.cajitaVitalls - msi + gastoHoy) / Math.max(cajitas.dias, 1),
   }
   const limitadoPor = Object.keys(topes).reduce((a, k) => (topes[k] < topes[a] ? k : a), 'presupuesto')
 

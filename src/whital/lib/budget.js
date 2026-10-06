@@ -298,19 +298,40 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
   return saldo
 }
 
+// Dinero reservado para gastos hasta el próximo cobro. La semana arranca con su presupuesto
+// cubierto (840) y cada día sin gastar lo deja para repartirse entre los días que faltan
+// (reserva / días al cobro). Nunca se reserva más del promedio diario (presupuesto / 7) por día
+// que falta: lo que sobra de ese tope pasa a Whimms y ya no regresa. Lo gastado baja la reserva
+// y se va regenerando en los días que no gastas, hasta volver a topar con el promedio. Gastar más
+// que la reserva ya no sale de aquí sino del saldo (o sea, de Whimms). Se calcula desde el lunes.
+export function reservaGastos({ sueldosFijos, gastos, presupuestoSemanal, hoyISO }) {
+  const presupuesto = presupuestoDe(presupuestoSemanal)
+  const tope = presupuesto / 7
+  const diasAlCobro = (dia) => {
+    const cobro = proximoCobroPrincipalISO({ sueldosFijos, hoyISO: dia })
+    return Math.max(cobro ? diasEntreISO(dia, cobro) : 30, 1)
+  }
+  const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
+  let dia = startOfWeekISO(hoyISO)
+  let reserva = Math.min(presupuesto, tope * diasAlCobro(dia))
+  while (dia < hoyISO) {
+    reserva = Math.max(reserva - gastoDelDia(dia), 0)
+    dia = addDaysISO(dia, 1)
+    reserva = Math.min(reserva, tope * diasAlCobro(dia))
+  }
+  const dias = diasAlCobro(hoyISO)
+  return { reserva, dias, tope, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
+}
+
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
 // horizonte, SIN contar compras de Whimms futuras. Hoy solo suma el gasto
 // esperado de hoy (los demás eventos de hoy ya están en el saldo real).
-function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO, acumularSiempre }) {
+function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
   const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
-  const semanaInicio = startOfWeekISO(hoyISO)
-  const restanteSemana = Math.max(presupuesto - gastoSemanaReal(gastos, semanaInicio, hoyISO), 0)
-  const diasRestantes = Math.max(diasEntreISO(hoyISO, addDaysISO(semanaInicio, 7)), 1)
-  const cobro = proximoCobroPrincipalISO({ sueldosFijos, hoyISO })
-  const diasHastaCobro = cobro ? diasEntreISO(hoyISO, cobro) : 30
+  const reserva = reservaGastos({ sueldosFijos, gastos, presupuestoSemanal, hoyISO })
 
   const delta = new Map()
   const sumar = (fecha, monto) => delta.set(fecha, (delta.get(fecha) || 0) + monto)
@@ -329,18 +350,15 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
   let acumulado = saldoHoy
   for (let i = 0; i <= HORIZONTE_PROYECCION_DIAS; i++) {
     const f = addDaysISO(hoyISO, i)
-    // Lo que queda de la semana se reparte entre los días que faltan. Mientras ese reparto por
-    // día (visto hasta el cobro) no llegue al promedio diario (presupuesto / 7), un día sin gastar
-    // SÍ se acumula para los siguientes. Cuando ya lo rebasa, cada día aparta como máximo el
-    // promedio y lo demás queda libre para Whimms.
-    const repartoSemana = restanteSemana / diasRestantes
-    const acumula = acumularSiempre || restanteSemana / Math.max(diasHastaCobro, 1) < presupuesto / 7
-    const gastoEsperado = i < diasRestantes ? (acumula ? repartoSemana : Math.min(repartoSemana, presupuesto / 7)) : presupuesto / 7
+    // Hasta el cobro se aparta lo reservado para gastos repartido por día (hoy, menos lo ya gastado);
+    // después, el promedio diario (presupuesto / 7).
+    const asignado = reserva.reserva / reserva.dias
+    const gastoEsperado = i < reserva.dias ? (i === 0 ? Math.max(asignado - reserva.gastoHoy, 0) : asignado) : presupuesto / 7
     acumulado += (delta.get(f) || 0) - gastoEsperado
     fechas.push(f)
     saldos.push(acumulado)
   }
-  return { fechas, saldos, saldoHoy, restanteSemana, presupuesto }
+  return { fechas, saldos, saldoHoy, presupuesto }
 }
 
 // minimos[i] = el saldo más bajo que se proyecta del día i en adelante.
@@ -364,8 +382,8 @@ function apartadoTotalPendiente(whimms) {
 // El cierre semanal es implícito: lo no gastado de una semana se queda en el
 // saldo (bono) y lo gastado de más ya salió de él (déficit).
 // ---------------------------------------------------------------------------
-export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO, acumularSiempre }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO, acumularSiempre })
+export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
   const bolsaWhimms = minimosDesdeElFinal(linea.saldos)[0] - apartadoTotalPendiente(whimms)
 
   const semanaHoyInicio = startOfWeekISO(hoyISO)
