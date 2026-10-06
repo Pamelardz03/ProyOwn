@@ -362,17 +362,19 @@ export function reservaGastos(base) {
   }
   let dia = inicio
   let reserva = 0
+  // Cada día: primero entran los ingresos del día (y la semana queda cubierta si es lunes) y después
+  // se resta lo gastado; el tope por día que falta recorta lo que sobre al pasar al día siguiente.
+  rellenar(dia, diasAlCobro(dia))
   semanaCubierta(dia)
   while (dia < hoyISO) {
     reserva = Math.max(reserva - gastoDelDia(dia), 0)
     dia = addDaysISO(dia, 1)
-    const diasHoy = diasAlCobro(dia)
-    rellenar(addDaysISO(dia, -1), diasHoy)
+    const diasDelDia = diasAlCobro(dia)
+    reserva = Math.min(reserva, tope * diasDelDia)
+    rellenar(dia, diasDelDia)
     semanaCubierta(dia)
-    reserva = Math.min(reserva, tope * diasHoy)
   }
   const dias = diasAlCobro(hoyISO)
-  rellenar(hoyISO, dias)
   return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
 }
 
@@ -426,8 +428,12 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
     const f = addDaysISO(hoyISO, i)
     // Hasta el cobro se aparta lo reservado para gastos repartido por día (hoy, menos lo ya gastado);
     // después, el promedio diario (presupuesto / 7).
+    // Si hoy te pasas de lo que tocaba, el exceso se descuenta de la reserva de los días que faltan
+    // (no de Whimms) hasta que la reserva se acabe.
     const asignado = reserva.reserva / reserva.dias
-    const gastoEsperado = i < reserva.dias ? (i === 0 ? Math.max(asignado - reserva.gastoHoy, 0) : asignado) : presupuesto / 7
+    const pasadoHoy = reserva.gastoHoy > asignado
+    const delResto = pasadoHoy ? Math.max(reserva.reserva - reserva.gastoHoy, 0) / Math.max(reserva.dias - 1, 1) : asignado
+    const gastoEsperado = i < reserva.dias ? (i === 0 ? (pasadoHoy ? 0 : asignado - reserva.gastoHoy) : delResto) : presupuesto / 7
     acumulado += (delta.get(f) || 0) - gastoEsperado
     fechas.push(f)
     saldos.push(acumulado)
