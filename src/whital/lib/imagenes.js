@@ -3,27 +3,30 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { storage } from '../../lib/storage'
 
-const LADO_MAX = 900
+const LADO_SALIDA = 720 // la foto se guarda en un cuadrado de 720 px (unos 100 KB en JPEG)
 
-// Reduce la foto a 900 px de lado máximo en JPEG (unos 100 KB): sube rápido y gasta poco.
-async function reducir(archivo) {
+// Dibuja la foto como quedó en el cuadro de ajuste: `s` es la escala (px de pantalla por px de la
+// foto), `x`,`y` su posición dentro del cuadro de `marco` px. Lo que la foto no cubre queda blanco.
+export async function recortarFoto(archivo, { s, x, y, marco, anchoReal }) {
+  if (!archivo?.type?.startsWith('image/')) throw new Error('No es una imagen')
   const bmp = await createImageBitmap(archivo)
-  const escala = Math.min(1, LADO_MAX / Math.max(bmp.width, bmp.height))
+  const k = LADO_SALIDA / marco
   const lienzo = document.createElement('canvas')
-  lienzo.width = Math.round(bmp.width * escala)
-  lienzo.height = Math.round(bmp.height * escala)
+  lienzo.width = LADO_SALIDA
+  lienzo.height = LADO_SALIDA
   const ctx = lienzo.getContext('2d')
-  ctx.fillStyle = '#fff' // PNG con fondo transparente: se rellena de blanco
-  ctx.fillRect(0, 0, lienzo.width, lienzo.height)
-  ctx.drawImage(bmp, 0, 0, lienzo.width, lienzo.height)
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, LADO_SALIDA, LADO_SALIDA)
+  ctx.imageSmoothingQuality = 'high'
+  // `anchoReal` es el ancho que usó la pantalla; si el navegador decodifica distinto, se ajusta.
+  const ajuste = anchoReal && bmp.width ? anchoReal / bmp.width : 1
+  ctx.drawImage(bmp, x * k, y * k, bmp.width * ajuste * s * k, bmp.height * ajuste * s * k)
   bmp.close?.()
-  return new Promise((resolve, reject) => lienzo.toBlob((b) => (b ? resolve(b) : reject(new Error('imagen'))), 'image/jpeg', 0.82))
+  return new Promise((resolve, reject) => lienzo.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('imagen'))), 'image/jpeg', 0.85))
 }
 
-// Devuelve la URL pública de la foto subida.
-export async function subirFotoWhimm(uid, archivo) {
-  if (!archivo?.type?.startsWith('image/')) throw new Error('No es una imagen')
-  const blob = await reducir(archivo)
+// Sube la foto ya ajustada y devuelve su URL.
+export async function subirBlobWhimm(uid, blob) {
   const destino = ref(storage, `users/${uid}/whimms/${Date.now()}.jpg`)
   await uploadBytes(destino, blob, { contentType: 'image/jpeg' })
   return getDownloadURL(destino)

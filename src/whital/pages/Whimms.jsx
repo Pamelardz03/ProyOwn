@@ -6,9 +6,10 @@ import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
+import AjustarFoto from '../components/AjustarFoto'
 import Campo, { Aviso } from '../components/Campo'
 import FilaDeslizable from '../components/FilaDeslizable'
-import { borrarFotoPropia, subirFotoWhimm } from '../lib/imagenes'
+import { borrarFotoPropia, subirBlobWhimm } from '../lib/imagenes'
 import InputConSugerencias from '../components/InputConSugerencias'
 import Modal from '../components/Modal'
 import PestanasCompras from '../components/PestanasCompras'
@@ -350,6 +351,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const [fechaCompra, setFechaCompra] = useState(whimm?.compradoEn || '')
   const [notif, setNotif] = useState(deNotif(whimm?.notifCadaMin))
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [porAjustar, setPorAjustar] = useState(null) // foto elegida que se está ajustando en el cuadro
   const [pegarUrl, setPegarUrl] = useState(false)
 
   const categorias = useMemo(() => [...new Set(datos.whimms.map((w) => w.categoria).filter(Boolean))], [datos.whimms])
@@ -372,7 +374,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const elegirFoto = (e) => {
     const archivo = e.target.files?.[0]
     e.target.value = ''
-    if (archivo) conFoto(() => subirFotoWhimm(user.uid, archivo), 'No se pudo subir la foto')
+    if (archivo) setPorAjustar(archivo)
   }
 
   const linksLimpios = links.map((l) => l.trim()).filter(Boolean)
@@ -428,6 +430,16 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
 
   return (
     <Modal abierto onClose={cerrar} nivel={1}>
+      {porAjustar && (
+        <AjustarFoto
+          archivo={porAjustar}
+          onCancelar={() => setPorAjustar(null)}
+          onListo={(blob) => {
+            setPorAjustar(null)
+            conFoto(() => subirBlobWhimm(user.uid, blob), 'No se pudo subir la foto')
+          }}
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <button aria-label="Atrás" onClick={cerrar}><IconChevronLeft /></button>
         <div style={{ fontSize: 15, fontWeight: 600 }}>{nuevo ? 'Nuevo Whimm' : 'Editar Whimm'}</div>
