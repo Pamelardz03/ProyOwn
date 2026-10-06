@@ -96,7 +96,9 @@ export const NIVEL_DEFAULT = 3
 export function normalizarNivel(valor) {
   const n = Math.round(Number(valor))
   if (!Number.isFinite(n)) return NIVEL_DEFAULT
-  return Math.min(Math.max(n, NIVEL_MIN), NIVEL_MAX)
+  // Un 6-10 solo puede venir de la escala vieja de 1-10: se convierte a 1-5 (8 -> 4), no se topa en 5.
+  const nivel = n > NIVEL_MAX ? Math.ceil(n / 2) : n
+  return Math.min(Math.max(nivel, NIVEL_MIN), NIVEL_MAX)
 }
 
 // Para datos viejos capturados con la escala 1-10 (cuenta real de producción).
@@ -146,8 +148,20 @@ function montoRealDeExcepcion(exc, montoBase) {
 // `omitida`/`montoReal` por excepción puntual (sección E.1 del doc Whital —
 // NUEVO: antes esto solo existía para pagosFijos).
 // ---------------------------------------------------------------------------
-export function fechasPagoVivas(sueldo, hastaISO) {
+// Calendario de pagos de un sueldo hasta `hastaISO`. Si el calendario guardado se acaba antes
+// (cuentas con calendarios cortos), se extiende con el mismo patrón desde donde terminó, para
+// que la proyección no crea que dejaste de cobrar.
+export function calendarioDePagos(sueldo, hastaISO) {
   const fechas = Array.isArray(sueldo?.fechasPago) ? [...sueldo.fechasPago] : []
+  const ultima = fechas.reduce((m, f) => (f && f > m ? f : m), '')
+  if (!ultima || ultima >= hastaISO || !sueldo?.frecuencia || !sueldo?.fechaInicio) return fechas
+  const meses = Math.min(Math.ceil((diasEntreISO(sueldo.fechaInicio, hastaISO) || 0) / 28) + 2, 240)
+  const extra = generarFechasPago({ frecuencia: sueldo.frecuencia, fechaInicio: sueldo.fechaInicio, meses }).filter((f) => f > ultima)
+  return [...fechas, ...extra]
+}
+
+export function fechasPagoVivas(sueldo, hastaISO) {
+  const fechas = calendarioDePagos(sueldo, hastaISO)
   const fechaFin = sueldo?.fechaFin || null
   return fechas
     .filter((f) => f && f <= hastaISO && (!fechaFin || f <= fechaFin))
@@ -822,7 +836,7 @@ export function ocurrenciasPagoFijo(pagoFijo, hastaISO, desdeISO) {
 
 export function ocurrenciasSueldo(sueldo, hastaISO, desdeISO) {
   const fechaFin = sueldo?.fechaFin || null
-  const fechas = Array.isArray(sueldo?.fechasPago) ? sueldo.fechasPago : []
+  const fechas = calendarioDePagos(sueldo, hastaISO)
   return fechas
     .filter((f) => f && f <= hastaISO && (!fechaFin || f <= fechaFin) && (!desdeISO || f >= desdeISO))
     .sort(compareISOAsc)
