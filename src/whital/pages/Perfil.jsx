@@ -61,7 +61,7 @@ export default function Perfil() {
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para Whimms</div>
-                <div className="mono" style={{ ...cifra, color: 'var(--wine4)' }}>{fmt(c.cajitaWhimms)}</div>
+                <div className="mono" style={{ ...cifra, color: 'var(--wine4)' }}>{fmt(Math.max(0, c.cajitaWhimms))}</div>
               </div>
               <div className="card" style={{ padding: 14 }}>
                 <div style={etiqueta}>Para Vitalls</div>

@@ -1,28 +1,11 @@
-// Gate por cuenta (decisión final, 2 oct — ver organizador-gastos-reglas-
-// actuales.md sección 10, punto 1): Pame no quiso ni repo nuevo ni rama
-// nueva para probar Whital, así que todo vive en el mismo sitio de
-// siempre, diferenciado por qué cuenta de Google inició sesión.
+// Quién ve Whital. Antes solo la cuenta de pruebas de la UDEM; ahora la ve cualquier cuenta
+// de Google, excepto las de esta lista, que siguen con la app de siempre.
+// (Es solo qué pantalla se muestra: la seguridad de los datos está en las reglas de Firestore y
+// Storage, que dejan a cada cuenta leer y escribir únicamente lo suyo.)
 //
-// Si `user.uid` está en esta lista, App.jsx renderiza el App Shell/motor
-// nuevo de Whital (src/whital/) en vez de la app de producción de hoy.
-// UID real de pamela.rodriguezd@udem.edu: mXsSrvUK61NuVct4EUa4sZ2YbTP2
-// (leído el 2 oct con una diagnosis de solo lectura sobre una sesión que
-// Pame inició a mano -- nunca se escribió nada para obtenerlo).
-//
-// La cuenta de prueba ya está poblada (carga desde Perfil), así que vuelve a
-// ver Whital también en producción. Tu cuenta personal NO está en la lista:
-// sigue viendo la app de siempre.
-//
-// Para VER Whital en tu máquina sin cambiar esta lista (y sin que se despliegue),
-// agrega a .env.local (no se sube a git):  VITE_WHITAL_UIDS=mXsSrvUK61NuVct4EUa4sZ2YbTP2
-// En producción esa variable no existe, así que solo cuenta la lista de abajo.
-const UIDS_LOCALES = String(import.meta.env.VITE_WHITAL_UIDS || '')
-  .split(',')
-  .map((x) => x.trim())
-  .filter(Boolean)
-
-export const WHITAL_UIDS = ['mXsSrvUK61NuVct4EUa4sZ2YbTP2', ...UIDS_LOCALES]
+// ntYhuOLRRZgUsp1cZUTq0ad1zZf2 = pamelardelar@gmail.com (cuenta personal, con la app original).
+export const CUENTAS_CLASICAS = ['ntYhuOLRRZgUsp1cZUTq0ad1zZf2']
 
 export function esCuentaWhital(uid) {
-  return !!uid && WHITAL_UIDS.includes(uid)
+  return !!uid && !CUENTAS_CLASICAS.includes(uid)
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AvisosNotificaciones from './components/AvisosNotificaciones'
 import Bienvenida from './components/Bienvenida'
+import PrimerosPasos from './components/PrimerosPasos'
 import WhitalNav from './components/WhitalNav'
 import { useTema } from './hooks/useTema'
 import { repintarBarra } from './lib/barra'
@@ -51,16 +52,10 @@ export default function WhitalShell() {
   useEffect(() => {
     repintarBarra(FONDOS.find((f) => f.id === tema.fondo)?.barra || '#f3efe2')
   }, [location.pathname, tema.fondo])
-  useEffect(() => {
-    try {
-      localStorage.setItem('whital:login', '1') // la próxima vez, el inicio de sesión ya es el de Whital
-    } catch {
-      /* sin almacenamiento */
-    }
-  }, [])
   return (
     <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo}>
       <Bienvenida />
+      <PrimerosPasos />
       <AvisosNotificaciones />
       <Routes>
         <Route path="/" element={<Inicio />} />

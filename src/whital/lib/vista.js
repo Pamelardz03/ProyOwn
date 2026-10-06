@@ -118,7 +118,8 @@ export function calcularVistaInicio(datos, hoyISO) {
     ...cola.filter((r) => r.estatus === 'comprable_hoy').map((r) => ({ id: `whimm-${r.id}`, titulo: porId.get(r.id)?.name || 'Whimm', sub: 'Listo para comprar', monto: -r.faltante })),
   ]
 
-  const cajitas = distribucionCajitas({ saldoReal, bolsaWhimms: bolsas.bolsaWhimms, ...base })
+  // Sin ingresos que cubran el presupuesto, el dinero libre sale negativo: para las cajitas cuenta como 0.
+  const cajitas = distribucionCajitas({ saldoReal, bolsaWhimms: Math.max(0, bolsas.bolsaWhimms), ...base })
   // "Para gastar hoy": nunca más que el promedio diario del presupuesto (lo que no gastas no
   // se acumula para el día siguiente: queda libre para Whimms al cerrar la semana), ni que lo
   // que queda de la semana repartido entre los días que faltan, ni que el dinero real que hay

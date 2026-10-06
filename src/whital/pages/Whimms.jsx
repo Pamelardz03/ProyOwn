@@ -106,7 +106,7 @@ function RepartoPrioridad({ libre, n, user, show }) {
       <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600 }}>Reparto y prioridad</div>
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(libre)} libres · {n} a la vez</div>
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{fmt(Math.max(0, libre))} libres · {n} a la vez</div>
         </div>
         <button aria-label="Editar reparto y prioridad" onClick={() => { setValor(n); setAbierto(true) }} style={{ width: 30, height: 30, borderRadius: 15, background: 'var(--beige2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <IconEdit size={14} color="var(--acento)" />
