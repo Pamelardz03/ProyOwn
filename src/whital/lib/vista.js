@@ -128,10 +128,14 @@ export function calcularVistaInicio(datos, hoyISO) {
   // queda) y de ahí se resta lo gastado: así "para gastar hoy" baja 1 a 1 con cada gasto que
   // registras y no se mueve solo porque cambie el promedio.
   const gastoHoy = dias.find((d) => d.esHoy)?.gastado || 0
+  // El tope de dinero usa lo que de verdad hay sin comprometer (saldo menos Vitalls y MSI de antes
+  // del cobro), NO el "saldo principal": ese ya descuenta lo que pasó a Whimms por no gastarlo,
+  // y haría bajar tu límite cada día que no gastas.
+  const msi = cajitas.cajitaWhimms - Math.max(0, bolsas.bolsaWhimms)
   const topes = {
     presupuesto: bolsas.presupuestoSemanaActual / 7,
     semana: (bolsas.disponibleSemana + gastoHoy) / Math.max(bolsas.diasRestantesSemana, 1),
-    dinero: (cajitas.saldoPrincipal + gastoHoy) / Math.max(cajitas.dias, 1),
+    dinero: (saldoReal - cajitas.cajitaVitalls - msi + gastoHoy) / Math.max(cajitas.dias, 1),
   }
   const limitadoPor = Object.keys(topes).reduce((a, k) => (topes[k] < topes[a] ? k : a), 'presupuesto')
 
