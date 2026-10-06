@@ -327,13 +327,17 @@ export function reservaGastos(base) {
   // Un ingreso agregado o marcado como llegado tarde (de un día pasado o de otra semana) cuenta como
   // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
   const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
-  const semana = startOfWeekISO(hoyISO)
+  // La cuenta arranca el día del último cobro principal (el periodo) y la reserva se arrastra de semana
+  // a semana. Los periodos que empezaron antes de PERIODO_ARRASTRE_DESDE (la quincena de transición)
+  // arrancan el lunes de la semana en curso, con el presupuesto de la semana repartido hasta el cobro.
+  const ultimoCobro = ultimoCobroPrincipalISO({ sueldosFijos, hoyISO })
+  const inicio = ultimoCobro && ultimoCobro >= PERIODO_ARRASTRE_DESDE ? ultimoCobro : startOfWeekISO(hoyISO)
   const ingresos = [
     ...(sueldosRapidos || []).filter((r) => r?.fecha && r.fecha <= hoyISO).map((r) => ({ id: r.id, fecha: llegada(r.fecha, isoDeRegistro(r.creadoEn)), monto: Number(r.monto) || 0 })),
     ...(sueldosFijos || []).flatMap((s) =>
       fechasPagoVivas(s, hoyISO).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: llegada(f, excepcionDe(s, f)?.marcadoEn), monto: montoOcurrenciaSueldo(s, f) }))
     ),
-  ].filter((i) => i.fecha >= semana)
+  ].filter((i) => i.fecha >= inicio)
   let faltaVitalls = 0
   if (base.saldoInicial !== undefined || base.ajustesSaldo) {
     const hoyIngresos = ingresos.filter((i) => i.fecha === hoyISO).reduce((sum, i) => sum + i.monto, 0)
@@ -349,18 +353,36 @@ export function reservaGastos(base) {
       destinos[i.id] = { monto: i.monto, aVitalls, aGastos, aWhimms: i.monto - aVitalls - aGastos }
     })
   }
-  let dia = startOfWeekISO(hoyISO)
-  let reserva = Math.min(presupuesto, tope * diasAlCobro(dia))
+  // Cada lunes la semana tiene, como mínimo, su presupuesto cubierto (hasta el promedio por día que
+  // falta): si te pasaste, eso sale de Whimms y no toca las semanas siguientes.
+  const semanaCubierta = (d) => {
+    if (d === startOfWeekISO(d)) reserva = Math.max(reserva, Math.min(presupuesto, tope * diasAlCobro(d)))
+  }
+  let dia = inicio
+  let reserva = 0
+  semanaCubierta(dia)
   while (dia < hoyISO) {
     reserva = Math.max(reserva - gastoDelDia(dia), 0)
     dia = addDaysISO(dia, 1)
     const diasHoy = diasAlCobro(dia)
     rellenar(addDaysISO(dia, -1), diasHoy)
+    semanaCubierta(dia)
     reserva = Math.min(reserva, tope * diasHoy)
   }
   const dias = diasAlCobro(hoyISO)
   rellenar(hoyISO, dias)
   return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
+}
+
+// Primer cobro principal cuyo periodo ya arrastra la reserva entre semanas.
+const PERIODO_ARRASTRE_DESDE = '2026-10-15'
+
+function ultimoCobroPrincipalISO({ sueldosFijos, hoyISO }) {
+  const candidatos = (sueldosFijos || [])
+    .map((sueldo) => ({ monto: Number(sueldo.monto) || 0, fecha: ocurrenciasSueldo(sueldo, hoyISO, addDaysISO(hoyISO, -45)).filter((o) => !o.omitida).pop()?.fecha }))
+    .filter((c) => c.fecha)
+    .sort((a, b) => b.monto - a.monto)
+  return candidatos[0]?.fecha || null
 }
 
 function vitallsHastaCobro({ pagosFijos, sueldosFijos, hoyISO }) {
