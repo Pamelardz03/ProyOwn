@@ -321,9 +321,10 @@ export function reservaGastos(base) {
   const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
   // Todo ingreso (sueldos e ingresos rápidos) se reparte en este orden: 1) Vitalls, si el saldo no los
   // alcanza; 2) lo que falte en la reserva de gastos (hasta lo que tocaría tener: el presupuesto de la
-  // semana, hasta el promedio diario por cada día que falta); 3) lo que sobra, a Whimms. Los omitidos o
+  // semana, hasta el promedio diario por cada día que falta, descontando lo ya gastado: lo gastado no se regenera); 3) lo que sobra, a Whimms. Los omitidos o
   // "aún no llega" no cuentan hasta que lleguen. `destinos` se indexa por id del ingreso.
   const destinos = {}
+  let gastado = 0 // lo gastado en el periodo: un ingreso nunca devuelve lo que ya se gastó
   // Un ingreso agregado o marcado como llegado tarde (de un día pasado o de otra semana) cuenta como
   // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
   const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
@@ -348,7 +349,7 @@ export function reservaGastos(base) {
     ingresos.filter((i) => i.fecha === dia).forEach((i) => {
       const aVitalls = dia === hoyISO ? Math.min(i.monto, faltaVitalls) : 0
       if (aVitalls) faltaVitalls -= aVitalls
-      const aGastos = Math.min(i.monto - aVitalls, Math.max(tope * objetivoDia - reserva, 0))
+      const aGastos = Math.min(i.monto - aVitalls, Math.max(tope * objetivoDia - gastado - reserva, 0))
       reserva += aGastos
       destinos[i.id] = { monto: i.monto, aVitalls, aGastos, aWhimms: i.monto - aVitalls - aGastos }
     })
@@ -362,7 +363,9 @@ export function reservaGastos(base) {
   let reserva = 0
   semanaCubierta(dia)
   while (dia < hoyISO) {
-    reserva = Math.max(reserva - gastoDelDia(dia), 0)
+    const gastoDia = gastoDelDia(dia)
+    gastado += gastoDia
+    reserva = Math.max(reserva - gastoDia, 0)
     dia = addDaysISO(dia, 1)
     const diasHoy = diasAlCobro(dia)
     rellenar(addDaysISO(dia, -1), diasHoy)
