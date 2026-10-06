@@ -328,8 +328,8 @@ export function reservaGastos(base) {
   // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
   const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
   // La cuenta arranca el día del último cobro principal (el periodo) y la reserva se arrastra de semana
-  // a semana. Los periodos que empezaron antes de PERIODO_ARRASTRE_DESDE (la quincena de transición)
-  // arrancan el lunes de la semana en curso, con el presupuesto de la semana repartido hasta el cobro.
+  // a semana. El periodo en curso cuando se estrenó este modelo (PERIODO_ARRASTRE_DESDE) arranca el lunes
+  // de la semana, con el presupuesto de la semana repartido hasta el siguiente cobro principal.
   const ultimoCobro = ultimoCobroPrincipalISO({ sueldosFijos, hoyISO })
   const inicio = ultimoCobro && ultimoCobro >= PERIODO_ARRASTRE_DESDE ? ultimoCobro : startOfWeekISO(hoyISO)
   const ingresos = [
@@ -374,8 +374,10 @@ export function reservaGastos(base) {
   return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
 }
 
-// Primer cobro principal cuyo periodo ya arrastra la reserva entre semanas.
-const PERIODO_ARRASTRE_DESDE = '2026-10-15'
+// Día en que arrancó este modelo de reserva. El periodo que ya estaba en curso (su último cobro
+// principal es anterior) termina bajo la regla de transición; el SIGUIENTE cobro del sueldo más
+// grande de cada cuenta arranca el periodo que arrastra la reserva entre semanas.
+const PERIODO_ARRASTRE_DESDE = '2026-10-06'
 
 function ultimoCobroPrincipalISO({ sueldosFijos, hoyISO }) {
   const candidatos = (sueldosFijos || [])
