@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
-import { auth, googleProvider, firebaseReady } from './firebase'
+import { clearIndexedDbPersistence, terminate } from 'firebase/firestore'
+import { auth, db, googleProvider, firebaseReady } from './firebase'
 
 const AuthContext = createContext(null)
 
@@ -23,7 +24,18 @@ export function AuthProvider({ children }) {
     }
     return signInWithPopup(auth, googleProvider)
   }
-  const logout = () => (firebaseReady ? signOut(auth) : Promise.resolve())
+  const logout = async () => {
+    if (!firebaseReady) return
+    await signOut(auth)
+    // Los datos guardados en el teléfono son de esa cuenta: se borran y se recarga limpio.
+    try {
+      await terminate(db)
+      await clearIndexedDbPersistence(db)
+    } catch {
+      /* sin caché que borrar */
+    }
+    window.location.reload()
+  }
 
   return (
     <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, firebaseReady }}>

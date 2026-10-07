@@ -2,7 +2,8 @@
 // respaldo en caché) para que la app abra aunque no haya internet en ese
 // momento. Fase 8 del roadmap lo puede volver más completo (precache del
 // app shell) cuando haga falta.
-const CACHE_NAME = 'organizador-gastos-v2'
+const CACHE_NAME = 'organizador-gastos-v3'
+const ESPERA_RED_MS = 4000 // con red lenta o a medias, a los 4 s se usa lo guardado en vez de quedarse esperando
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -24,12 +25,13 @@ self.addEventListener('fetch', (event) => {
       // deploy ya tuviera la versión nueva) — siempre se pide de verdad al
       // servidor primero, y solo se usa el respaldo de caches.match si de
       // verdad no hay conexión.
-      fetch(event.request, { cache: 'no-store' })
-        .then((response) => {
+      Promise.race([
+        fetch(event.request, { cache: 'no-store' }).then((response) => {
           if (response.ok) cache.put(event.request, response.clone())
           return response
-        })
-        .catch(() => cache.match(event.request))
+        }),
+        new Promise((_, rechazar) => setTimeout(rechazar, ESPERA_RED_MS)),
+      ]).catch(() => cache.match(event.request).then((guardado) => guardado || fetch(event.request)))
     )
   )
 })
