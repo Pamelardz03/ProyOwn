@@ -33,6 +33,7 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
   const [compartido, setCompartido] = useState(Number(inicial?.reembolso) > 0)
   const [reembolso, setReembolso] = useState(Number(inicial?.reembolso) > 0 ? String(inicial.reembolso) : '')
   const [whimmId, setWhimmId] = useState('')
+  const [enviado, setEnviado] = useState(false) // al guardar, los datos ya traen este gasto: no se vuelve a evaluar
 
   const pendientes = datos.whimms.filter((w) => w.estado === 'espera' || w.estado === 'apartando')
   const etiquetas = useMemo(() => [...new Set(datos.gastos.map((g) => g.etiqueta || g.categoriaWhimm).filter(Boolean))], [datos.gastos])
@@ -41,12 +42,12 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
   const reembolsoNum = compartido ? num(reembolso) : 0
 
   const evaluacion = useMemo(() => {
-    if (editando || modo !== 'gasto' || montoNum <= 0 || !fecha) return null
+    if (enviado || editando || modo !== 'gasto' || montoNum <= 0 || !fecha) return null
     return evaluarIntercambio({
       ...parametrosMotor(datos, hoy),
       gastoNuevo: { concepto: concepto || 'Gasto', monto: montoNum, reembolso: reembolsoNum, fecha, categoria: 'General' },
     })
-  }, [editando, modo, montoNum, reembolsoNum, fecha, concepto, datos, hoy])
+  }, [enviado, editando, modo, montoNum, reembolsoNum, fecha, concepto, datos, hoy])
 
   const elegirWhimm = (id) => {
     setWhimmId(id)
@@ -59,6 +60,8 @@ function GastoForm({ inicial, datos, hoy, onGuardar, onEliminar }) {
 
   const guardar = () => {
     if (!puedeGuardar) return
+    setEnviado(true)
+    setTimeout(() => setEnviado(false), 2500) // si el guardado falla, el aviso vuelve
     if (modo === 'whimm') onGuardar({ tipo: 'whimm', whimmId, monto: montoNum, fecha })
     else onGuardar({ tipo: 'gasto', id: inicial?.id, datos: { concepto: concepto.trim() || 'Gasto', monto: montoNum, lugar: lugar.trim(), etiqueta: etiqueta.trim(), fecha, reembolso: reembolsoNum, categoria: inicial?.categoria || 'General' } })
   }

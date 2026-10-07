@@ -381,10 +381,11 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
 
   // Cómo afecta este Whimm a los demás de la fila (se recalcula al cambiar precio, nivel o fecha).
   // Al editar uno ya guardado, también se compara SU fecha con la que tenía.
+  const [guardando, setGuardando] = useState(false)
   const valores = useDeferredValue({ name: name.trim(), precio: num(precio), necesidad, deseo, fechaLimite })
   const enFila = !comprado && whimm?.estado !== 'pagando'
   const impacto = useMemo(() => {
-    if (!enFila || !valores.name || !(valores.precio > 0)) return null
+    if (guardando || !enFila || !valores.name || !(valores.precio > 0)) return null
     try {
       const base = parametrosMotor(datos, todayISO())
       const candidato = { ...(whimm || {}), id: whimm?.id || '__nuevo__', name: valores.name, precio: valores.precio, necesidad: valores.necesidad, deseo: valores.deseo, fechaLimite: valores.fechaLimite || null, estado: whimm?.estado || 'espera' }
@@ -396,7 +397,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
     } catch {
       return null
     }
-  }, [datos, enFila, whimm, valores])
+  }, [datos, enFila, whimm, valores, guardando])
 
   // Al cerrar sin guardar, las fotos subidas en esta edición se borran (nunca llegaron a usarse).
   const cerrar = () => {
@@ -413,6 +414,8 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
   const propioSeAtrasa = !!cambioPropio && (!pn.fecha || (pa.fecha && pn.fecha > pa.fecha))
 
   const guardar = async () => {
+    // Al guardar, los datos ya traen este Whimm: se deja de evaluar su impacto para que el aviso no parpadee.
+    setGuardando(true)
     const campos = { name: name.trim(), categoria: categoria.trim(), precio: num(precio), lugar: lugar.trim(), imagenUrl: imagenUrl.trim(), links: linksLimpios, link: linksLimpios[0] || '', necesidad, deseo, fechaLimite: fechaLimite || null, notifCadaMin: aNotif(notif) }
     try {
       if (nuevo) await addUserDoc(user.uid, 'whimms', { ...campos, estado: 'espera', montoApartado: 0, notifFormal: false, notifMini: false })
@@ -424,6 +427,7 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
       show(nuevo ? 'Whimm agregado' : 'Whimm actualizado')
       onCerrar()
     } catch {
+      setGuardando(false)
       show('No se pudo guardar')
     }
   }
