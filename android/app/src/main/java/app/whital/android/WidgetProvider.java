@@ -145,10 +145,11 @@ public class WidgetProvider extends AppWidgetProvider {
         int paraHoy = p.getInt("paraHoy", 0);
         v.setTextViewText(R.id.monto, dinero(paraHoy));
         v.setTextColor(R.id.monto, paraHoy < 0 ? Tema.alerta() : 0xFFFFFFFF);
-        int gastoSemana = p.getInt("gastoSemana", 0);
+        // Lo que queda de la caja de la semana, de lo que había (840 + lo que hayas decidido mantener).
+        int restante = p.getInt("restanteSemana", 0);
         int presupuesto = p.getInt("presupuestoSemana", 0);
-        v.setTextViewText(R.id.semanaValor, dinero(gastoSemana) + " de " + dinero(presupuesto));
-        v.setTextColor(R.id.semanaValor, gastoSemana > presupuesto ? Tema.alerta() : 0xFFFFFFFF);
+        v.setTextViewText(R.id.semanaValor, dinero(restante) + " de " + dinero(presupuesto));
+        v.setTextColor(R.id.semanaValor, restante < 0 ? Tema.alerta() : 0xFFFFFFFF);
 
         // 2/3: el último gasto de hoy, solo tema y monto.
         if (p.getBoolean("hayUltimo", false)) {

@@ -46,7 +46,8 @@ export const datosWidget = onRequest({ region: 'us-central1', maxInstances: 3, m
 
   res.json({
     gastoHoy: Math.round(deHoy.reduce((s, g) => s + gastoNeto(g), 0)),
-    gastoSemana: Math.round(vista.bolsas.gastadoSemanaActual),
+    // Compatibilidad con el widget ya instalado: esa franja ahora dice "lo que queda de lo que hay".
+    gastoSemana: Math.round(vista.bolsas.disponibleSemana),
     presupuestoSemana: Math.round(vista.bolsas.presupuestoSemanaActual),
     ultimoGasto: ultimo ? { tema: String(temaUltimo).slice(0, 40), monto: Math.round(gastoNeto(ultimo)) } : null,
     paraHoy: Math.round(vista.paraHoy),

@@ -80,7 +80,7 @@ public class ConfigActivity extends Activity {
         SharedPreferences d = getSharedPreferences("whital_demo", MODE_PRIVATE);
         d.edit()
                 .putBoolean("hayDatos", true)
-                .putInt("paraHoy", 85).putInt("gastoSemana", 334).putInt("presupuestoSemana", 840)
+                .putInt("paraHoy", 85).putInt("restanteSemana", 506).putInt("presupuestoSemana", 840)
                 .putBoolean("hayUltimo", true).putString("ultimoTema", "Café").putInt("ultimoMonto", 45)
                 .putInt("whimmsHoy", 2).putInt("proximoWhimmDias", -1)
                 .putString("paleta", real.getString("paleta", "vino"))
