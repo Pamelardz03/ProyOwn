@@ -15,7 +15,7 @@ export default function AjustarSaldo({ datos, hoy, user, show, saldoReal }) {
   const numero = valor === '' ? null : Number(valor)
   const ajuste = numero != null && Number.isFinite(numero) ? calcularAjusteSaldo({ saldoBancoReal: numero, ...parametrosMotor(datos, hoy) }) : null
 
-  const desbalance = ajuste != null && Math.abs(ajuste) >= 0.005 ? evaluarDesbalance(ajuste, datos.ajustesSaldo) : null
+  const desbalance = ajuste != null && Math.abs(ajuste) >= 0.005 ? evaluarDesbalance(ajuste, datos.ajustesSaldo.filter((a) => !a.fueraDelPromedio)) : null
 
   const guardar = async () => {
     if (ajuste == null || Math.abs(ajuste) < 0.005) return

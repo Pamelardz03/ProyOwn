@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import Toast from '../../../components/Toast'
 import { useToast } from '../../../hooks/useToast'
 import { useAuth } from '../../../lib/AuthContext'
-import { deleteUserDoc, setUserDoc } from '../../../lib/firestoreCollections'
+import { setUserDoc, updateUserDoc } from '../../../lib/firestoreCollections'
 import AjustarSaldo from '../../components/AjustarSaldo'
 import DetalleEliminable from '../../components/DetalleEliminable'
 import EncabezadoSub from '../../components/EncabezadoSub'
@@ -21,7 +21,9 @@ export default function Configuracion() {
 
   const base = useMemo(() => (loading ? null : parametrosMotor(datos, hoy)), [datos, loading, hoy])
   const saldoReal = useMemo(() => (loading ? 0 : calcularVistaInicio(datos, hoy).saldoReal), [datos, loading, hoy])
-  const ajustes = useMemo(() => [...datos.ajustesSaldo].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')), [datos.ajustesSaldo])
+  const ajustes = useMemo(() => datos.ajustesSaldo.filter((a) => !a.fueraDelPromedio).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')), [datos.ajustesSaldo])
+
+  const quitados = useMemo(() => datos.ajustesSaldo.filter((a) => a.fueraDelPromedio), [datos.ajustesSaldo])
 
   const guardarConfig = async (campos, mensaje) => {
     try {
@@ -33,10 +35,12 @@ export default function Configuracion() {
     }
   }
 
+  // "Eliminar" quita el ajuste de la lista y del promedio con el que se comparan los próximos, pero su monto
+  // sigue en tu saldo: borrarlo de verdad movería tu saldo real.
   const borrarAjuste = async (id) => {
     try {
-      await deleteUserDoc(user.uid, 'ajustesSaldo', id)
-      show('Ajuste eliminado')
+      await updateUserDoc(user.uid, 'ajustesSaldo', id, { fueraDelPromedio: true })
+      show('Ajuste quitado de la lista y del promedio')
       setAjusteAbierto(null)
     } catch {
       show('No se pudo eliminar')
@@ -76,6 +80,12 @@ export default function Configuracion() {
                 </div>
               )}
 
+              {quitados.length > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {quitados.length} {quitados.length === 1 ? 'ajuste quitado' : 'ajustes quitados'} de la lista: suman {fmt(quitados.reduce((sum, a) => sum + (Number(a.monto) || 0), 0))} y siguen en tu saldo.
+                </div>
+              )}
+
               <DatosDePrueba datos={datos} user={user} show={show} />
             </>
           )}
@@ -87,7 +97,7 @@ export default function Configuracion() {
           titulo="Ajuste a mi banco"
           sub={`${fechaCorta(ajusteAbierto.fecha)}${ajusteAbierto.saldoBanco != null ? ` · banco ${fmt(ajusteAbierto.saldoBanco)}` : ''}`}
           monto={ajusteAbierto.monto}
-          mensaje="¿Eliminar este ajuste de saldo? El saldo se vuelve a calcular sin él."
+          mensaje="¿Quitar este ajuste de la lista y del promedio? Su monto sigue contando en tu saldo."
           onEliminar={() => borrarAjuste(ajusteAbierto.id)}
           onCerrar={() => setAjusteAbierto(null)}
         />

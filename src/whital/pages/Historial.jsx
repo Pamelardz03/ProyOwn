@@ -4,7 +4,7 @@ import Toast from '../../components/Toast'
 import { IconChevronLeft, IconClose } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
-import { deleteUserDoc } from '../../lib/firestoreCollections'
+import { deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import FilaExcepcion from '../components/FilaExcepcion'
 import Modal from '../components/Modal'
@@ -30,6 +30,17 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
       onCerrar()
     } catch {
       show('No se pudo eliminar')
+    }
+  }
+
+  // Un ajuste no se borra (movería tu saldo): se queda en tu saldo y solo sale del promedio de los próximos.
+  const quitarAjuste = async (id) => {
+    try {
+      await updateUserDoc(user.uid, 'ajustesSaldo', id, { fueraDelPromedio: true })
+      show('Ajuste quitado del promedio')
+      onCerrar()
+    } catch {
+      show('No se pudo actualizar')
     }
   }
 
@@ -82,9 +93,9 @@ function Detalle({ ev, hoy, user, show, onCerrar }) {
           <BotonEliminar mensaje="¿Eliminar este ingreso? No se puede deshacer." onConfirmar={() => borrar('sueldosRapidos', ev.entidad.id, 'Ingreso eliminado')} />
         </div>
       )}
-      {ev.tipo === 'ajuste' && (
+      {ev.tipo === 'ajuste' && !ev.entidad.fueraDelPromedio && (
         <div style={{ marginTop: 16 }}>
-          <BotonEliminar mensaje="¿Eliminar este ajuste de saldo? El saldo se vuelve a calcular sin él." onConfirmar={() => borrar('ajustesSaldo', ev.entidad.id, 'Ajuste eliminado')} />
+          <BotonEliminar mensaje="¿Quitar este ajuste del promedio? Su monto sigue contando en tu saldo." onConfirmar={() => quitarAjuste(ev.entidad.id)} />
         </div>
       )}
     </Modal>

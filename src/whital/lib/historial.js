@@ -43,7 +43,7 @@ export function construirHistorial({ datos, hoyISO }) {
   })
 
   ;(datos.ajustesSaldo || []).forEach((a) => {
-    if (a.fecha && a.fecha <= hoyISO) eventos.push({ id: `aj-${a.id}`, tipo: 'ajuste', fecha: a.fecha, titulo: 'Ajuste a mi banco', monto: Number(a.monto) || 0, entidad: a })
+    if (a.fecha && a.fecha <= hoyISO) eventos.push({ id: `aj-${a.id}`, tipo: 'ajuste', fecha: a.fecha, titulo: a.fueraDelPromedio ? 'Ajuste a mi banco (fuera del promedio)' : 'Ajuste a mi banco', monto: Number(a.monto) || 0, entidad: a })
   })
 
   return eventos.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.tipo.localeCompare(b.tipo))
