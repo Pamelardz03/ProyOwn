@@ -186,18 +186,35 @@ function fechasVencimientoBase(pagoFijo, hastaISO) {
   const freq = pagoFijo?.frecuencia
   const base = pagoFijo?.fecha
   if (!base) return []
-  const fechas = []
-  let f = base
-  let guard = 0
   const numPagos = pagoFijo?.finito ? Number(pagoFijo.numPagos) || 1 : Infinity
-  let count = 0
-  while (f <= hastaISO && count < numPagos && guard < 5000) {
+  const fechas = []
+  let guard = 0
+  if (freq === 'Quincenal') {
+    // Dos fechas fijas por mes (p. ej. 5 y 20, o 15 y fin de mes), no cada 15 días exactos.
+    const inicio = parseISODate(base)
+    if (!inicio) return []
+    const dia = inicio.getDate()
+    const primero = dia > 15 ? dia - 15 : dia
+    for (let k = 0; fechas.length < numPagos && guard < 5000; k++, guard++) {
+      const y = inicio.getFullYear() + Math.floor((inicio.getMonth() + k) / 12)
+      const m = (inicio.getMonth() + k) % 12
+      const ultimo = daysInMonth(y, m)
+      const dobles = [Math.min(primero, ultimo), primero === 15 ? ultimo : Math.min(primero + 15, ultimo)]
+      const delMes = [...new Set(dobles)].map((d) => toISO(new Date(y, m, d))).filter((f) => f >= base).sort(compareISOAsc)
+      if (!delMes.length && toISO(new Date(y, m, 1)) > hastaISO) break
+      for (const f of delMes) {
+        if (f > hastaISO || fechas.length >= numPagos) return fechas
+        fechas.push(f)
+      }
+    }
+    return fechas
+  }
+  let f = base
+  while (f <= hastaISO && fechas.length < numPagos && guard < 5000) {
     fechas.push(f)
-    count++
     guard++
-    if (freq === 'Semanal') f = addDaysISO(f, 7)
-    else if (freq === 'Quincenal') f = addDaysISO(f, 15)
-    else f = addMonthsISO(f, 1) // Mensual (default)
+    // Se calcula desde la fecha base (no desde la anterior): un pago del 31 no se queda en el 28 después de febrero.
+    f = freq === 'Semanal' ? addDaysISO(f, 7) : addMonthsISO(base, fechas.length)
   }
   return fechas
 }
