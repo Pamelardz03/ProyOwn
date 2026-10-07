@@ -15,7 +15,6 @@ import {
   parseISODate,
   proximosVitalls,
   proyectarColaWhimms,
-  reservaGastos,
   saldoRealEnBanco,
   startOfWeekISO,
 } from './budget'
@@ -57,17 +56,6 @@ export function diaSemanaCorto(iso) {
   return DIAS_CORTOS[(d.getDay() + 6) % 7]
 }
 
-// A dónde fue un ingreso rápido: primero a rellenar tus gastos, y lo que sobra a Whimms.
-export function textoDestino(d) {
-  if (!d) return ''
-  const partes = []
-  if (d.aVitalls > 0) partes.push(`${fmt(d.aVitalls)} a tus Vitalls`)
-  if (d.aGastos > 0) partes.push(`${fmt(d.aGastos)} a tus gastos de la semana`)
-  if (d.aWhimms > 0) partes.push(`${fmt(d.aWhimms)} a Whimms`)
-  if (partes.length === 1 && d.aWhimms > 0) return 'Todo a Whimms: tus Vitalls y gastos de la semana ya estaban cubiertos.'
-  return `${partes.length > 1 ? `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}` : partes[0]}.`
-}
-
 export function parametrosMotor(datos, hoyISO) {
   const { gastos, sueldosFijos, sueldosRapidos, pagosFijos, whimms, ajustesSaldo, config } = datos
   const presupuesto = Number(config?.presupuestoSemanal)
@@ -79,6 +67,7 @@ export function parametrosMotor(datos, hoyISO) {
     whimms,
     ajustesSaldo,
     saldoInicial: Number(config?.saldoInicial) || 0,
+    cierresSemana: config?.cierresSemana || {},
     presupuestoSemanal: Number.isFinite(presupuesto) && presupuesto > 0 ? presupuesto : PRESUPUESTO_SEMANAL_DEFAULT,
     whimmsSimultaneos: Number(config?.whimmsSimultaneos) > 0 ? Math.round(Number(config.whimmsSimultaneos)) : 1,
     hoyISO,
@@ -132,25 +121,23 @@ export function calcularVistaInicio(datos, hoyISO) {
 
   // Sin ingresos que cubran el presupuesto, el dinero libre sale negativo: para las cajitas cuenta como 0.
   const cajitas = distribucionCajitas({ saldoReal, bolsaWhimms: Math.max(0, bolsas.bolsaWhimms), ...base })
-  // "Para gastar hoy" = reserva de gastos repartida entre los días al cobro, con tope en el promedio
-  // diario (ver reservaGastos), y sin pasar del dinero real sin comprometer. `limitadoPor` dice cuál
-  // manda. Es lo que TE TOCABA hoy antes de gastar; de ahí se resta lo gastado, así baja 1 a 1.
-  const gastoHoy = dias.find((d) => d.esHoy)?.gastado || 0
-  // Dinero real sin comprometer (saldo menos Vitalls y MSI de antes del cobro): solo limita si es
-  // menor que la reserva de gastos.
+  // "Para gastar hoy" = la guía de la caja de la semana (lo que queda entre los días que faltan), sin pasar
+  // del dinero real sin comprometer hasta el próximo cobro (por si el cobro tarda y el dinero no alcanza).
+  // `limitadoPor` dice cuál manda. Es lo que TE TOCABA hoy antes de gastar; de ahí se resta lo gastado.
+  const caja = bolsas.caja
+  const gastoHoy = caja.gastadoHoy
   const msi = cajitas.cajitaWhimms - Math.max(0, bolsas.bolsaWhimms)
-  const reserva = reservaGastos(base)
   const topes = {
-    presupuesto: reserva.tope,
-    semana: reserva.reserva / reserva.dias,
+    semana: caja.guiaHoy,
     dinero: (saldoReal - cajitas.cajitaVitalls - msi + gastoHoy) / Math.max(cajitas.dias, 1),
   }
-  const limitadoPor = Object.keys(topes).reduce((a, k) => (topes[k] < topes[a] ? k : a), 'presupuesto')
+  const limitadoPor = topes.dinero < topes.semana ? 'dinero' : 'semana'
 
   return {
     saldoReal,
     asignadoHoy: topes[limitadoPor],
-    reservaGastos: reserva.reserva,
+    caja,
+    cierrePendiente: caja.cierrePendiente,
     gastoHoy,
     paraHoy: topes[limitadoPor] - gastoHoy,
     limitadoPor,
@@ -173,23 +160,8 @@ export function calcularVistaInicio(datos, hoyISO) {
 // Avisos dentro de la app (banners de Inicio). Cada aviso trae un `id` estable
 // para poder descartarlo. (El recordatorio de registrar gastos es aparte: se
 // configura en Ajustes, ver hooks/useRecordatorioRegistro.js.)
-export function calcularAvisos(datos, hoyISO, bolsas) {
+export function calcularAvisos(datos, hoyISO) {
   const avisos = []
-  const diaSemana = (parseISODate(hoyISO).getDay() + 6) % 7 // 0 = lunes
-  const semanaInicio = startOfWeekISO(hoyISO)
-
-  // Cierre de semana: lunes y martes.
-  const cierre = bolsas.cierreSemanaPasada
-  if (diaSemana <= 1 && cierre.gastado > 0) {
-    const sobro = cierre.resultado >= 0
-    avisos.push({
-      id: `cierre-${semanaInicio}`,
-      tipo: 'cierre',
-      texto: sobro
-        ? `Cerró la semana: te sobraron ${fmt(cierre.resultado)}.`
-        : `Cerró la semana: te pasaste ${fmt(-cierre.resultado)}.`,
-    })
-  }
 
   // Vitalls que vencen mañana o pasado (los de hoy ya salen en "Acciones de hoy"), con opción de omitir.
   proximosVitalls({ pagosFijos: datos.pagosFijos, hoyISO, dias: 2 })
@@ -202,17 +174,6 @@ export function calcularAvisos(datos, hoyISO, bolsas) {
         texto: `${v.fecha === addDaysISO(hoyISO, 1) ? 'Mañana' : `El ${diaSemanaCorto(v.fecha)} ${fechaCorta(v.fecha)}`} vence ${v.name}: ${fmt(v.monto)}.`,
       })
     })
-
-  // Ingresos rápidos de los últimos 2 días: a dónde se fueron.
-  const { destinos } = reservaGastos(parametrosMotor(datos, hoyISO))
-  ;(datos.sueldosRapidos || [])
-    .filter((r) => r.fecha && r.fecha <= hoyISO && r.fecha >= addDaysISO(hoyISO, -2) && destinos[r.id])
-    .forEach((r) => avisos.push({ id: `ingreso-${r.id}`, tipo: 'ingreso', texto: `${r.desc || 'Ingreso'} (${fmt(r.monto)}): ${textoDestino(destinos[r.id])}` }))
-  ;(datos.sueldosFijos || []).forEach((s) => {
-    ocurrenciasSueldo(s, hoyISO, addDaysISO(hoyISO, -2))
-      .filter((o) => !o.omitida && destinos[`sf-${s.id}-${o.fecha}`])
-      .forEach((o) => avisos.push({ id: `ingreso-sf-${s.id}-${o.fecha}`, tipo: 'ingreso', texto: `${s.name || s.nombre || 'Sueldo'} (${fmt(o.monto)}): ${textoDestino(destinos[`sf-${s.id}-${o.fecha}`])}` }))
-  })
 
   return avisos
 }

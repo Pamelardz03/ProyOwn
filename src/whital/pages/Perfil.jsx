@@ -7,7 +7,7 @@ import IconPaleta from '../components/IconPaleta'
 import IconWidget from '../components/IconWidget'
 import { useWhitalDatos } from '../hooks/useWhitalDatos'
 import { todayISO } from '../lib/budget'
-import { calcularVistaInicio, fechaCorta, fmt } from '../lib/vista'
+import { calcularVistaInicio, fmt } from '../lib/vista'
 
 // Versión publicada (commit); sirve para saber si estás viendo lo último.
 const VERSION = typeof __WHITAL_VERSION__ !== 'undefined' ? __WHITAL_VERSION__ : 'local'
@@ -68,8 +68,8 @@ export default function Perfil() {
                 <div className="mono" style={{ ...cifra, color: 'var(--wine3)' }}>{fmt(c.cajitaVitalls)}</div>
               </div>
               <div className="card" style={{ padding: 14 }}>
-                <div style={etiqueta}>Para gastos · hasta el {fechaCorta(c.proximoCobro)}</div>
-                <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(vista.reservaGastos)}</div>
+                <div style={etiqueta}>Para gastos · esta semana</div>
+                <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(Math.max(vista.caja.restante, 0))}</div>
                 <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>{fmt(Math.round(porDia))}/día · {nivel.texto}</div>
               </div>
             </div>

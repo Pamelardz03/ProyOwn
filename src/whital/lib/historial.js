@@ -1,7 +1,7 @@
 // Historial completo: todo lo que ya pasó (hasta hoy), en una sola lista.
 // Función PURA. Las ocurrencias de sueldos fijos y de pagos fijos/Vitalls
 // incluyen las omitidas (marcadas como datos atípicos) para poder restaurarlas.
-import { gastoNeto, ocurrenciasPagoFijo, ocurrenciasSueldo, reservaGastos } from './budget'
+import { gastoNeto, ocurrenciasPagoFijo, ocurrenciasSueldo } from './budget'
 
 export const FILTROS_HISTORIAL = [
   ['todos', 'Todos'],
@@ -14,7 +14,6 @@ export const FILTROS_HISTORIAL = [
 
 export function construirHistorial({ datos, hoyISO }) {
   const eventos = []
-  const { destinos } = reservaGastos({ ...datos, saldoInicial: Number(datos.config?.saldoInicial) || 0, presupuestoSemanal: datos.config?.presupuestoSemanal, hoyISO })
 
   ;(datos.gastos || []).forEach((g) => {
     if (!g.fecha || g.fecha > hoyISO) return
@@ -29,12 +28,12 @@ export function construirHistorial({ datos, hoyISO }) {
 
   ;(datos.sueldosFijos || []).forEach((s) => {
     ocurrenciasSueldo(s, hoyISO).forEach((o) => {
-      eventos.push({ id: `sf-${s.id}-${o.fecha}`, tipo: 'sueldo', fecha: o.fecha, titulo: `${s.name || s.nombre || 'Sueldo'} depositado`, monto: o.monto, entidad: s, ocurrencia: o, coleccion: 'sueldosFijos', omitida: o.omitida, destino: o.omitida ? null : destinos[`sf-${s.id}-${o.fecha}`] })
+      eventos.push({ id: `sf-${s.id}-${o.fecha}`, tipo: 'sueldo', fecha: o.fecha, titulo: `${s.name || s.nombre || 'Sueldo'} depositado`, monto: o.monto, entidad: s, ocurrencia: o, coleccion: 'sueldosFijos', omitida: o.omitida })
     })
   })
 
   ;(datos.sueldosRapidos || []).forEach((r) => {
-    if (r.fecha && r.fecha <= hoyISO) eventos.push({ id: `sr-${r.id}`, tipo: 'sueldo', fecha: r.fecha, titulo: `${r.desc || 'Ingreso'} depositado`, monto: Number(r.monto) || 0, entidad: r, rapido: true, destino: destinos[r.id] })
+    if (r.fecha && r.fecha <= hoyISO) eventos.push({ id: `sr-${r.id}`, tipo: 'sueldo', fecha: r.fecha, titulo: `${r.desc || 'Ingreso'} depositado`, monto: Number(r.monto) || 0, entidad: r, rapido: true })
   })
 
   ;(datos.pagosFijos || []).forEach((p) => {

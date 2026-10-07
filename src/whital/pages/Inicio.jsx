@@ -4,6 +4,7 @@ import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
+import { setUserDoc } from '../../lib/firestoreCollections'
 import { marcarCobro } from '../lib/cobros'
 import Modal from '../components/Modal'
 import TileImagen from '../components/TileImagen'
@@ -93,13 +94,58 @@ function Encabezado({ eyebrow, titulo, children }) {
   )
 }
 
+// Cierre de la semana pasada: no se quita hasta que elijas a dónde va lo que sobró.
+function CierreSemana({ cierre, user, show }) {
+  const [guardando, setGuardando] = useState(false)
+  const elegir = async (decision, mensaje) => {
+    setGuardando(true)
+    try {
+      await setUserDoc(user.uid, 'config', 'presupuesto', { cierresSemana: { [cierre.semanaInicio]: decision } })
+      show(mensaje)
+    } catch {
+      show('No se pudo guardar')
+    } finally {
+      setGuardando(false)
+    }
+  }
+  const sobro = cierre.sobra > 0
+  const fila = { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 4 }
+  const boton = { flex: 1, borderRadius: 10, padding: '10px 8px', fontSize: 12, fontWeight: 600, textAlign: 'center' }
+  return (
+    <div className="card" style={{ padding: 16, border: '1.5px solid var(--wine)' }}>
+      <div className="eyebrow" style={{ marginBottom: 4 }}>Semana del {fechaCorta(cierre.semanaInicio)} al {fechaCorta(cierre.semanaFin)}</div>
+      {sobro ? (
+        <>
+          {cierre.sobroEstaSemana > 0 && <div style={fila}><span>Te sobró</span><span className="mono">{fmt(cierre.sobroEstaSemana)}</span></div>}
+          {cierre.guardadoAntes > 0 && <div style={fila}><span>Ya llevabas guardado</span><span className="mono">{fmt(cierre.guardadoAntes)}</span></div>}
+          <div style={{ ...fila, fontWeight: 600 }}><span>Juntas</span><span className="mono">{fmt(cierre.sobra)}</span></div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.5 }}>
+            Mantener: {fmt(cierre.siMantiene.total)} esta semana ({fmt(cierre.siMantiene.porDia)} por día)<br />
+            A Whimms: {fmt(cierre.siWhimms.total)} ({fmt(cierre.siWhimms.porDia)} por día)
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button disabled={guardando} style={{ ...boton, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => elegir('whimms', 'Fue a Whimms')}>A Whimms</button>
+            <button disabled={guardando} style={{ ...boton, background: 'var(--wine)', color: '#fff' }} onClick={() => elegir('mantener', 'Se mantiene esta semana')}>Mantener</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)' }}>Te pasaste {fmt(cierre.pasado)}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Lo cubrió Whimms. Esta semana empiezas con {fmt(cierre.siWhimms.total)}.</div>
+          <button disabled={guardando} style={{ ...boton, width: '100%', marginTop: 12, background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => elegir('whimms', 'Listo')}>Listo</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Inicio() {
   const { user } = useAuth()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
   const vista = useMemo(() => (loading ? null : calcularVistaInicio(datos, hoy)), [datos, loading, hoy])
-  const avisos = useMemo(() => (vista ? calcularAvisos(datos, hoy, vista.bolsas) : []), [datos, hoy, vista])
+  const avisos = useMemo(() => (vista ? calcularAvisos(datos, hoy) : []), [datos, hoy, vista])
   const nombre = user?.displayName?.split(' ')[0] || 'Pame'
   const [diaAbierto, setDiaAbierto] = useState(null)
 
@@ -128,6 +174,7 @@ export default function Inicio() {
 
         {vista && (
           <>
+            {vista.cierrePendiente && <CierreSemana cierre={vista.cierrePendiente} user={user} show={show} />}
             <Avisos avisos={avisos} />
 
             <div className="hero">
@@ -159,17 +206,12 @@ export default function Inicio() {
 
             <div className="card" style={{ padding: 18 }}>
               <div className="eyebrow" style={{ marginBottom: 2 }}>Esta semana · gasto por día</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: vista.bolsas.disponibleSemana < 0 ? 'var(--red)' : 'var(--text)' }}>
-                {vista.bolsas.disponibleSemana < 0
-                  ? `Te pasaste ${fmt(-vista.bolsas.disponibleSemana)}`
-                  : `Te quedan ${fmt(Math.max(vista.reservaGastos - vista.gastoHoy, 0))} disponibles`}
+              <div style={{ fontSize: 13, fontWeight: 600, color: vista.caja.restante < 0 ? 'var(--red)' : 'var(--text)' }}>
+                {vista.caja.restante < 0 ? `Te pasaste ${fmt(-vista.caja.restante)} de la semana` : `Te quedan ${fmt(vista.caja.restante)} de ${fmt(vista.caja.total)}`}
               </div>
-              {vista.bolsas.disponibleSemana >= 0 && (
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-                  {fmt(vista.asignadoHoy)} por día · {vista.cajitas.dias <= vista.bolsas.diasRestantesSemana ? `${textoDias(vista.cajitas.dias)} al cobro` : `hasta el ${fechaCorta(vista.cajitas.proximoCobro)}`}
-                </div>
-              )}
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>{fmt(vista.bolsas.gastadoSemanaActual)} de {fmt(vista.presupuestoSemanal)}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+                {fmt(vista.asignadoHoy)} por día · {textoDias(vista.caja.diasRestantes)}{vista.caja.arrastre > 0 ? ` · incluye ${fmt(vista.caja.arrastre)} guardados` : ''}
+              </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64, marginTop: 14 }}>
                 {(() => {
                   const max = Math.max(...vista.dias.map((d) => d.gastado), vista.presupuestoSemanal / 7, 1)

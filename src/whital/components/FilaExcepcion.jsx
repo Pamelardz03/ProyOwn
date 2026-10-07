@@ -21,7 +21,7 @@ function EditarOcurrencia({ coleccion, entidad, ocurrencia, nombre, user, show, 
 
   const escribirExcepcion = async (nueva, mensaje) => {
     try {
-      await updateUserDoc(user.uid, coleccion, entidad.id, { [`excepciones.${ocurrencia.fecha}`]: nueva.omitida ? nueva : { ...nueva, marcadoEn: hoy } })
+      await updateUserDoc(user.uid, coleccion, entidad.id, { [`excepciones.${ocurrencia.fecha}`]: nueva })
       show(mensaje)
       onCerrar()
     } catch {

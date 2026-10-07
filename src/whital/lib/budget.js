@@ -315,116 +315,69 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
   return saldo
 }
 
-// Día (ISO, hora local) en que se guardó un documento, a partir de su `creadoEn` de Firestore.
-function isoDeRegistro(creadoEn) {
-  const ms = typeof creadoEn?.toMillis === 'function' ? creadoEn.toMillis() : creadoEn?.seconds != null ? creadoEn.seconds * 1000 : creadoEn?._seconds != null ? creadoEn._seconds * 1000 : null
-  return ms == null ? null : toISO(new Date(ms))
-}
+// ---------------------------------------------------------------------------
+// Caja de la semana (lunes a domingo). Es la única regla de gastos:
+//   - Cada lunes la semana tiene su presupuesto (840) más lo que se haya decidido mantener.
+//   - Cada gasto la baja. La guía por día es lo que queda entre los días que faltan; es solo
+//     una referencia: pasarte un día sale de la misma caja.
+//   - Al cerrar la semana, lo que sobró se manda a Whimms o se mantiene para la siguiente. Eso
+//     se elige en una tarjeta (`cierresSemana[lunes] = 'whimms' | 'mantener'`) y, mientras no
+//     se elija, la semana siguiente arranca sin ese sobrante.
+//   - Si te pasaste de la caja, lo cubre Whimms (ya sale del saldo).
+// ---------------------------------------------------------------------------
+const MODELO_SEMANAL_DESDE = '2026-10-05' // lunes en que arrancó este modelo; antes no hay cierres que elegir
 
-// Dinero reservado para gastos hasta el próximo cobro. La semana arranca con su presupuesto
-// cubierto (840) y cada día sin gastar lo deja para repartirse entre los días que faltan
-// (reserva / días al cobro). Nunca se reserva más del promedio diario (presupuesto / 7) por día
-// que falta: lo que sobra de ese tope pasa a Whimms y ya no regresa. Lo gastado baja la reserva
-// y se va regenerando en los días que no gastas, hasta volver a topar con el promedio. Gastar más
-// que la reserva ya no sale de aquí sino del saldo (o sea, de Whimms). Se calcula desde el lunes.
-export function reservaGastos(base) {
-  const { sueldosFijos, sueldosRapidos, gastos, presupuestoSemanal, hoyISO } = base
+export function cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
-  const tope = presupuesto / 7
-  const diasAlCobro = (dia) => {
-    const cobro = proximoCobroPrincipalISO({ sueldosFijos, hoyISO: dia })
-    return Math.max(cobro ? diasEntreISO(dia, cobro) : 30, 1)
-  }
-  const gastoDelDia = (dia) => (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === dia).reduce((sum, g) => sum + gastoNeto(g), 0)
-  // Todo ingreso (sueldos e ingresos rápidos) se reparte en este orden: 1) Vitalls, si el saldo no los
-  // alcanza; 2) lo que falte en la reserva de gastos (hasta lo que tocaría tener: el presupuesto de la
-  // semana, hasta el promedio diario por cada día que falta; lo gastado de días pasados ya salió de la reserva); 3) lo que sobra, a Whimms. Los omitidos o
-  // "aún no llega" no cuentan hasta que lleguen. `destinos` se indexa por id del ingreso.
-  const destinos = {}
-  // Un ingreso agregado o marcado como llegado tarde (de un día pasado o de otra semana) cuenta como
-  // si llegara el día en que lo registraste: `marcadoEn` en los sueldos y `creadoEn` en los rápidos.
-  // Un sueldo que cae en domingo ya es para la semana que arranca el lunes: cuenta ese lunes.
-  const esDomingo = (iso) => parseISODate(iso)?.getDay() === 0
-  const llegada = (fecha, registroISO) => (registroISO && registroISO > fecha && registroISO <= hoyISO ? registroISO : fecha)
-  // La cuenta arranca el día del último cobro principal (el periodo) y la reserva se arrastra de semana
-  // a semana. El periodo en curso cuando se estrenó este modelo (PERIODO_ARRASTRE_DESDE) arranca el lunes
-  // de la semana, con el presupuesto de la semana repartido hasta el siguiente cobro principal.
-  const ultimoCobro = ultimoCobroPrincipalISO({ sueldosFijos, hoyISO })
-  const inicio = ultimoCobro && ultimoCobro >= PERIODO_ARRASTRE_DESDE ? ultimoCobro : startOfWeekISO(hoyISO)
-  const ingresos = [
-    ...(sueldosRapidos || []).filter((r) => r?.fecha && r.fecha <= hoyISO).map((r) => ({ id: r.id, fecha: llegada(r.fecha, isoDeRegistro(r.creadoEn)), monto: Number(r.monto) || 0 })),
-    ...(sueldosFijos || []).flatMap((s) =>
-      fechasPagoVivas(s, hoyISO).map((f) => ({ id: `sf-${s.id}-${f}`, fecha: llegada(esDomingo(f) ? addDaysISO(f, 1) : f, excepcionDe(s, f)?.marcadoEn), monto: montoOcurrenciaSueldo(s, f) }))
-    ),
-  ].filter((i) => i.fecha >= inicio)
-  let faltaVitalls = 0
-  if (base.saldoInicial !== undefined || base.ajustesSaldo) {
-    const hoyIngresos = ingresos.filter((i) => i.fecha === hoyISO).reduce((sum, i) => sum + i.monto, 0)
-    const antes = saldoRealEnBanco(base) - hoyIngresos
-    faltaVitalls = Math.max(vitallsHastaCobro(base) - Math.max(antes, 0), 0)
-  }
-  const rellenar = (dia, objetivoDia) => {
-    ingresos.filter((i) => i.fecha === dia).forEach((i) => {
-      const aVitalls = dia === hoyISO ? Math.min(i.monto, faltaVitalls) : 0
-      if (aVitalls) faltaVitalls -= aVitalls
-      const aGastos = Math.min(i.monto - aVitalls, Math.max(tope * objetivoDia - reserva, 0))
-      reserva += aGastos
-      destinos[i.id] = { monto: i.monto, aVitalls, aGastos, aWhimms: i.monto - aVitalls - aGastos }
-    })
-  }
-  // Cada lunes la semana tiene, como mínimo, su presupuesto cubierto (hasta el promedio por día que
-  // falta): si te pasaste, eso sale de Whimms y no toca las semanas siguientes.
-  const semanaCubierta = (d) => {
-    if (d === startOfWeekISO(d)) reserva = Math.max(reserva, Math.min(presupuesto, tope * diasAlCobro(d)))
-  }
-  let dia = inicio
-  let reserva = 0
-  // Cada día: primero entran los ingresos del día (y la semana queda cubierta si es lunes) y después
-  // se resta lo gastado; el tope por día que falta recorta lo que sobre al pasar al día siguiente.
-  rellenar(dia, diasAlCobro(dia))
-  semanaCubierta(dia)
-  while (dia < hoyISO) {
-    reserva = Math.max(reserva - gastoDelDia(dia), 0)
-    dia = addDaysISO(dia, 1)
-    const diasDelDia = diasAlCobro(dia)
-    reserva = Math.min(reserva, tope * diasDelDia)
-    rellenar(dia, diasDelDia)
-    semanaCubierta(dia)
-  }
-  const dias = diasAlCobro(hoyISO)
-  return { reserva, dias, tope, destinos, asignado: Math.min(tope, reserva / dias), gastoHoy: gastoDelDia(hoyISO) }
-}
+  const lunesHoy = startOfWeekISO(hoyISO)
+  const primerGasto = (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha && g.fecha <= hoyISO).map((g) => g.fecha).sort(compareISOAsc)[0]
+  const primera = primerGasto && startOfWeekISO(primerGasto) > MODELO_SEMANAL_DESDE ? startOfWeekISO(primerGasto) : MODELO_SEMANAL_DESDE
 
-// Día en que arrancó este modelo de reserva. El periodo que ya estaba en curso (su último cobro
-// principal es anterior) termina bajo la regla de transición; el SIGUIENTE cobro del sueldo más
-// grande de cada cuenta arranca el periodo que arrastra la reserva entre semanas.
-const PERIODO_ARRASTRE_DESDE = '2026-10-06'
+  let arrastre = 0
+  let ultimaCerrada = null
+  for (let lunes = primera; lunes < lunesHoy; lunes = addDaysISO(lunes, 7)) {
+    const gastado = gastoSemanaReal(gastos, lunes, addDaysISO(lunes, 6))
+    const total = presupuesto + arrastre
+    const sobra = Math.max(total - gastado, 0)
+    const decision = cierresSemana?.[lunes] || null
+    ultimaCerrada = { semanaInicio: lunes, semanaFin: addDaysISO(lunes, 6), gastado, presupuesto, arrastrePrevio: arrastre, total, sobra, pasado: Math.max(gastado - total, 0), decision }
+    arrastre = decision === 'mantener' ? sobra : 0
+  }
 
-function ultimoCobroPrincipalISO({ sueldosFijos, hoyISO }) {
-  const candidatos = (sueldosFijos || [])
-    .map((sueldo) => ({ monto: Number(sueldo.monto) || 0, fecha: ocurrenciasSueldo(sueldo, hoyISO, addDaysISO(hoyISO, -45)).filter((o) => !o.omitida).pop()?.fecha }))
-    .filter((c) => c.fecha)
-    .sort((a, b) => b.monto - a.monto)
-  return candidatos[0]?.fecha || null
-}
+  const total = presupuesto + arrastre
+  const gastado = gastoSemanaReal(gastos, lunesHoy, hoyISO)
+  const gastadoHoy = (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === hoyISO).reduce((sum, g) => sum + gastoNeto(g), 0)
+  const diasRestantes = Math.max(diasEntreISO(hoyISO, addDaysISO(lunesHoy, 7)), 1)
+  const restante = total - gastado
+  const guiaHoy = Math.max(restante + gastadoHoy, 0) / diasRestantes // lo que tocaba hoy antes de gastar
 
-function vitallsHastaCobro({ pagosFijos, sueldosFijos, hoyISO }) {
-  const proximo = proximoCobroPrincipalISO({ sueldosFijos, hoyISO }) || addDaysISO(hoyISO, 30)
-  return (pagosFijos || [])
-    .filter((p) => p?.tipo !== 'MSI')
-    .flatMap((p) => fechasVencimientoVivas(p, addDaysISO(proximo, -1)).filter((f) => f > hoyISO).map((f) => montoOcurrenciaPagoFijo(p, f)))
-    .reduce((sum, x) => sum + x, 0)
+  // Tarjeta de cierre: la semana pasada, hasta que se elija qué hacer con lo que sobró.
+  let cierrePendiente = null
+  if (ultimaCerrada && !ultimaCerrada.decision && (ultimaCerrada.sobra > 0 || ultimaCerrada.pasado > 0)) {
+    const guardadoAntes = Math.min(ultimaCerrada.arrastrePrevio, ultimaCerrada.sobra)
+    const opcion = (monto) => ({ total: presupuesto + monto, porDia: (presupuesto + monto) / 7 })
+    cierrePendiente = {
+      ...ultimaCerrada,
+      sobroEstaSemana: ultimaCerrada.sobra - guardadoAntes,
+      guardadoAntes,
+      siMantiene: opcion(ultimaCerrada.sobra),
+      siWhimms: opcion(0),
+    }
+  }
+
+  return { presupuesto, arrastre, total, gastado, gastadoHoy, restante, diasRestantes, guiaHoy, cierrePendiente }
 }
 
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
 // horizonte, SIN contar compras de Whimms futuras. Hoy solo suma el gasto
 // esperado de hoy (los demás eventos de hoy ya están en el saldo real).
-function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
+function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
   const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
-  const reserva = reservaGastos({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
+  const caja = cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, hoyISO })
+  const restanteSemana = Math.max(caja.restante, 0)
 
   const delta = new Map()
   const sumar = (fecha, monto) => delta.set(fecha, (delta.get(fecha) || 0) + monto)
@@ -443,19 +396,14 @@ function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagos
   let acumulado = saldoHoy
   for (let i = 0; i <= HORIZONTE_PROYECCION_DIAS; i++) {
     const f = addDaysISO(hoyISO, i)
-    // Hasta el cobro se aparta lo reservado para gastos repartido por día (hoy, menos lo ya gastado);
-    // después, el promedio diario (presupuesto / 7).
-    // Si hoy te pasas de lo que tocaba, el exceso se descuenta de la reserva de los días que faltan
-    // (no de Whimms) hasta que la reserva se acabe.
-    const asignado = reserva.reserva / reserva.dias
-    const pasadoHoy = reserva.gastoHoy > asignado
-    const delResto = pasadoHoy ? Math.max(reserva.reserva - reserva.gastoHoy, 0) / Math.max(reserva.dias - 1, 1) : asignado
-    const gastoEsperado = i < reserva.dias ? (i === 0 ? (pasadoHoy ? 0 : asignado - reserva.gastoHoy) : delResto) : presupuesto / 7
+    // Lo que queda de la caja de la semana se reparte entre los días que faltan; las semanas siguientes
+    // apartan el promedio diario (presupuesto / 7). Lo que sobre al cerrar la semana queda libre para Whimms.
+    const gastoEsperado = i < caja.diasRestantes ? restanteSemana / caja.diasRestantes : presupuesto / 7
     acumulado += (delta.get(f) || 0) - gastoEsperado
     fechas.push(f)
     saldos.push(acumulado)
   }
-  return { fechas, saldos, saldoHoy, presupuesto }
+  return { fechas, saldos, saldoHoy, presupuesto, caja }
 }
 
 // minimos[i] = el saldo más bajo que se proyecta del día i en adelante.
@@ -479,13 +427,13 @@ function apartadoTotalPendiente(whimms) {
 // El cierre semanal es implícito: lo no gastado de una semana se queda en el
 // saldo (bono) y lo gastado de más ya salió de él (déficit).
 // ---------------------------------------------------------------------------
-export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
+export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO })
   const bolsaWhimms = minimosDesdeElFinal(linea.saldos)[0] - apartadoTotalPendiente(whimms)
 
   const semanaHoyInicio = startOfWeekISO(hoyISO)
   const gastadoSemanaActual = gastoSemanaReal(gastos, semanaHoyInicio, hoyISO)
-  const disponibleSemana = linea.presupuesto - gastadoSemanaActual
+  const disponibleSemana = linea.caja.restante
   const diasRestantesSemana = diasEntreISO(hoyISO, addDaysISO(semanaHoyInicio, 7))
 
   const semanaPasadaInicio = addDaysISO(semanaHoyInicio, -7)
@@ -493,7 +441,8 @@ export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gast
 
   return {
     bolsaWhimms,
-    presupuestoSemanaActual: linea.presupuesto,
+    presupuestoSemanaActual: linea.caja.total,
+    caja: linea.caja,
     gastadoSemanaActual,
     disponibleSemana,
     diasRestantesSemana,
@@ -591,8 +540,8 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // `montoApartado` (Apartar fondos extra) es dinero ya reservado: no se ofrece a
 // otros Whimms y reduce lo que le falta al suyo.
 // ---------------------------------------------------------------------------
-export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, whimmsSimultaneos = 1, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, hoyISO })
+export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, cierresSemana, whimmsSimultaneos = 1, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO })
   const apartado = apartadoTotalPendiente(whimms)
   const saldosBase = linea.saldos.map((s) => s - apartado)
 
