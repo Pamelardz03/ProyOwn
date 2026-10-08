@@ -97,10 +97,18 @@
 
 /* ===== Menú de abajo: 5 columnas iguales (el + queda al centro) y + en cuadrado redondeado ===== */
 .whital nav.bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center}
-.btn-mas{position:absolute;left:50%;top:0;transform:translate(-50%,-52%);width:56px;height:56px;border-radius:18px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(0,0,0,.28)}
+.btn-mas{position:absolute;left:50%;top:0;transform:translate(-50%,-30%);width:56px;height:56px;border-radius:18px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(0,0,0,.28)}
 /* El menú tiene un hueco curvo en el centro donde queda el +. El fondo va en ::before para poder recortarlo. */
 .whital nav.bottom-nav{background:none;border-top:0;isolation:isolate}
-.whital nav.bottom-nav::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--card-solid);border-top:1px solid var(--beige3);-webkit-mask:radial-gradient(circle 46px at 50% 0,transparent 44px,#000 45.5px);mask:radial-gradient(circle 46px at 50% 0,transparent 44px,#000 45.5px)}
+/* Hueco cuadrado redondeado alrededor del +: botón 56px + 8px de separación por lado; esquinas inferiores de 22px */
+.whital nav.bottom-nav::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--card-solid);border-top:1px solid var(--beige3);
+  -webkit-mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000),linear-gradient(#000,#000),radial-gradient(circle 22px at 100% 0,transparent 21px,#000 22px),radial-gradient(circle 22px at 0 0,transparent 21px,#000 22px);
+  mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000),linear-gradient(#000,#000),radial-gradient(circle 22px at 100% 0,transparent 21px,#000 22px),radial-gradient(circle 22px at 0 0,transparent 21px,#000 22px);
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-size:calc(50% - 36px) 100%,calc(50% - 36px) 100%,100% calc(100% - 47px),22px 22px,22px 22px;
+  mask-size:calc(50% - 36px) 100%,calc(50% - 36px) 100%,100% calc(100% - 47px),22px 22px,22px 22px;
+  -webkit-mask-position:0 0,100% 0,0 47px,calc(50% - 36px) 25px,calc(50% + 14px) 25px;
+  mask-position:0 0,100% 0,0 47px,calc(50% - 36px) 25px,calc(50% + 14px) 25px}
 .whital[data-fondo=beige] .btn-mas{color:#f3efe2}
 
 /* ===== Perfil: las tarjetas y filas, un poco más oscuras que el fondo de Perfil ===== */

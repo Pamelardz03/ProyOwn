@@ -7,6 +7,8 @@ import { ultimaCompras } from '../lib/ultimaCompras'
 
 const TAMANO_ICONO = 27
 const INACTIVO = 'var(--muted)'
+// El acento mezclado con negro para que la pestaña seleccionada resalte más que las demás.
+const ACTIVO = 'color-mix(in srgb, var(--acento) 60%, #000)'
 
 // Perfil ya no es una pestaña: se entra con la foto de la cuenta en Inicio.
 const IZQUIERDA = [
@@ -34,7 +36,7 @@ export default function WhitalNav() {
     <NavLink key={to} to={compras ? ultimaCompras() : to} end={end}>
       {({ isActive }) => {
         const activo = compras ? pathname === '/whimms' || pathname === '/vitalls' : isActive
-        const color = activo ? 'var(--acento)' : INACTIVO
+        const color = activo ? ACTIVO : INACTIVO
         return (
           <>
             <Icon size={TAMANO_ICONO} color={color} />
