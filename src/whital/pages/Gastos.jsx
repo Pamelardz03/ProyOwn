@@ -187,7 +187,8 @@ export default function Gastos() {
         await updateUserDoc(user.uid, 'whimms', accion.whimmId, { estado: 'comprado', compradoEn: accion.fecha, precioComprado: accion.monto })
         show('Whimm marcado como comprado')
       } else if (accion.id) {
-        await updateUserDoc(user.uid, 'gastos', accion.id, accion.datos)
+        // Al editar un gasto rápido del reloj ya está verificado: deja de aparecer como pendiente.
+        await updateUserDoc(user.uid, 'gastos', accion.id, { ...accion.datos, rapido: false })
         show('Gasto actualizado')
       } else {
         await addUserDoc(user.uid, 'gastos', accion.datos)
@@ -274,7 +275,7 @@ export default function Gastos() {
                       icono={<div className="icon-tile" style={{ width: 38, height: 38 }}><IconReceipt size={17} /></div>}
                       titulo={it.g.concepto}
                       sub={`${etiquetaDe(it.g)} · ${fechaCorta(it.fecha)}`}
-                      extra={Number(it.g.reembolso) > 0 ? `+${fmt(it.g.reembolso)} reembolso` : null}
+                      extra={it.g.rapido ? 'Del reloj · por verificar en Nu (edítalo para ponerle nombre)' : Number(it.g.reembolso) > 0 ? `+${fmt(it.g.reembolso)} reembolso` : null}
                       monto={gastoNeto(it.g)}
                       etiquetaEditar="Editar gasto"
                       onEditar={() => setSheet({ gasto: it.g })}

@@ -2,7 +2,7 @@
 // personal (token) que se genera en Perfil > Widget. Solo se guarda su huella (hash)
 // para buscar a la persona, y se puede renovar para dejar sin efecto el anterior.
 import { createHash, randomBytes } from 'node:crypto'
-import { getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https'
 import { cargarDatos } from './datos.js'
 import { gastoNeto, todayISO } from './whital/budget.js'
@@ -60,4 +60,40 @@ export const datosWidget = onRequest({ region: 'us-central1', maxInstances: 3, m
     hoy,
     generado: Date.now(),
   })
+})
+
+// Registro rápido desde el reloj: solo el monto, para no olvidarlo. El gasto queda con la etiqueta
+// "Rápido" y `rapido: true` para revisarlo después contra el movimiento de Nu. Usa el mismo código
+// del widget. El `id` lo genera el reloj, así que un reintento no duplica el gasto.
+export const registrarGastoRapido = onRequest({ region: 'us-central1', maxInstances: 3, memory: '256MiB', cors: false }, async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  if (req.method !== 'POST') return void res.status(405).json({ error: 'metodo' })
+  const { t, monto, id } = req.body || {}
+  const token = String(t || '')
+  if (!/^[0-9a-f]{48}$/.test(token)) return void res.status(404).json({ error: 'codigo' })
+  const importe = Math.round(Number(monto) * 100) / 100
+  if (!Number.isFinite(importe) || importe <= 0 || importe > 100000) return void res.status(400).json({ error: 'monto' })
+  const clave = String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)
+  if (!clave) return void res.status(400).json({ error: 'id' })
+
+  const db = getFirestore()
+  const dueno = await db.collection('widgetTokens').doc(huella(token)).get()
+  if (!dueno.exists) return void res.status(404).json({ error: 'codigo' })
+
+  const ref = db.collection('users').doc(dueno.data().uid).collection('gastos').doc(`rapido-${clave}`)
+  if (!(await ref.get()).exists) {
+    await ref.set({
+      concepto: 'Gasto',
+      monto: importe,
+      lugar: '',
+      etiqueta: 'Rápido',
+      fecha: todayISO(),
+      reembolso: 0,
+      categoria: 'General',
+      rapido: true,
+      origen: 'reloj',
+      creadoEn: FieldValue.serverTimestamp(),
+    })
+  }
+  res.json({ ok: true })
 })

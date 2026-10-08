@@ -13,5 +13,6 @@ firebase-debug.log
 android/.gradle/
 android/build/
 android/app/build/
+android/wear/build/
 android/local.properties
 android/*.keystore

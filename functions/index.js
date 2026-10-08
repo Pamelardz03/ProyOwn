@@ -80,7 +80,7 @@ export const avisosWhital = onSchedule({ schedule: 'every 30 minutes', timeZone:
   }
 })
 
-export { crearTokenWidget, datosWidget } from './widget.js'
+export { crearTokenWidget, datosWidget, registrarGastoRapido } from './widget.js'
 
 export { avisarWidgetGastos, registrarDispositivoWidget } from './widgetPush.js'
 

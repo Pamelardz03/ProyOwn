@@ -29,6 +29,24 @@ final class Datos {
 
     static void guardarToken(Context c, String token) {
         prefs(c).edit().putString("token", token.trim()).remove("error").apply();
+        enviarAlReloj(c);
+    }
+
+    /**
+     * Comparte el código del widget con el reloj emparejado (Data Layer). Lleva el día para que se
+     * reenvíe a diario: así lo recibe también un reloj en el que se instaló Whital después.
+     */
+    static void enviarAlReloj(Context c) {
+        String token = token(c);
+        if (token.isEmpty()) return;
+        try {
+            com.google.android.gms.wearable.PutDataMapRequest req = com.google.android.gms.wearable.PutDataMapRequest.create("/whital/codigo");
+            req.getDataMap().putString("t", token);
+            req.getDataMap().putLong("dia", System.currentTimeMillis() / 86400000L);
+            com.google.android.gms.wearable.Wearable.getDataClient(c.getApplicationContext()).putDataItem(req.asPutDataRequest().setUrgent());
+        } catch (Exception e) {
+            // sin reloj o sin Google Play Services: el widget no depende de esto
+        }
     }
 
     // --- Aviso instantáneo (FCM): el servidor sabe a qué teléfono avisar cuando registras un gasto ---

@@ -36,4 +36,6 @@ dependencies {
     // Avisos del servidor para que el widget se actualice al registrar un gasto.
     implementation platform('com.google.firebase:firebase-bom:33.7.0')
     implementation 'com.google.firebase:firebase-messaging'
+    // Manda el código del widget al reloj (Wear OS) para que no haya que escribirlo allá.
+    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
 }

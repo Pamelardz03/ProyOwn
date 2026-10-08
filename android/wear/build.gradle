@@ -1,0 +1,36 @@
+plugins {
+    id 'com.android.application'
+}
+
+// App del reloj (Wear OS): muestra lo que queda del día y de la semana y deja registrar un gasto rápido.
+// Usa el mismo applicationId que la del teléfono: así el código del widget viaja solo del teléfono al reloj.
+android {
+    namespace 'app.whital.wear'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'app.whital.android'
+        // Solo para probar en un teléfono/emulador que ya tiene Whital: -Psufijo=.reloj
+        if (project.hasProperty('sufijo')) applicationIdSuffix project.property('sufijo')
+        minSdk 30
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Recibe del teléfono el código del widget (Data Layer).
+    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+}
