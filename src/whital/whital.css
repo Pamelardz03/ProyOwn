@@ -1,6 +1,6 @@
 /* Estilos propios de Whital (solo dentro de .whital). */
 /* Franja superior reservada para el botón "?" de ayuda. */
-.whital .screen{padding-top:44px}
+.whital .screen{padding-top:60px;position:relative}
 .whital .segbtn{border-radius:12px}
 .whital .fld{border-radius:12px}
 /* Sin barras de desplazamiento visibles (se sigue pudiendo hacer scroll). */
@@ -53,26 +53,31 @@
 .whital .screen{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
 
 /* ===== Inicio: verde con movimiento (se apaga con "reducir movimiento") ===== */
-.whital{--verde-vivo:#4fc16a;--verde-brillo:#9be8a8}
+/* Color vivo de las animaciones: sale de la paleta elegida (cambia con el tema). */
+.whital{--vivo:#6faf5c;--vivo-brillo:#bfe3ad}
+.whital[data-paleta=rosa]{--vivo:#e0457f;--vivo-brillo:#f9bfd6}
+.whital[data-paleta=salvia]{--vivo:#4fa08f;--vivo-brillo:#b9e2d8}
+.whital[data-paleta=oceano]{--vivo:#2f9fc4;--vivo-brillo:#b5e4f2}
+.whital[data-paleta=ciruela]{--vivo:#8a5fd6;--vivo-brillo:#d6c4f5}
+.whital[data-paleta=terracota]{--vivo:#d9733f;--vivo-brillo:#f5c9ae}
 .hero-vivo{position:relative;overflow:hidden}
 .hero-vivo>*{position:relative;z-index:1}
 .hero-vivo::before,.hero-vivo::after{content:"";position:absolute;border-radius:50%;pointer-events:none;filter:blur(26px);z-index:0}
-.hero-vivo::before{width:190px;height:190px;right:-50px;top:-70px;background:radial-gradient(circle,rgba(79,193,106,.75),transparent 70%);animation:verde-flota 7s ease-in-out infinite}
-.hero-vivo::after{width:150px;height:150px;left:-40px;bottom:-60px;background:radial-gradient(circle,rgba(155,232,168,.5),transparent 70%);animation:verde-flota 9s ease-in-out infinite reverse}
-.tile-hoy{box-shadow:inset 0 0 0 1px rgba(155,232,168,.55),0 0 14px rgba(79,193,106,.35);animation:verde-latido 2.8s ease-in-out infinite}
-.punto-vivo{width:7px;height:7px;border-radius:50%;background:var(--verde-brillo);box-shadow:0 0 0 0 rgba(155,232,168,.7);animation:verde-pulso 1.8s ease-out infinite;flex-shrink:0}
+.hero-vivo::before{width:190px;height:190px;right:-50px;top:-70px;background:radial-gradient(circle,color-mix(in srgb,var(--vivo) 75%,transparent),transparent 70%);animation:vivo-flota 7s ease-in-out infinite}
+.hero-vivo::after{width:150px;height:150px;left:-40px;bottom:-60px;background:radial-gradient(circle,color-mix(in srgb,var(--vivo-brillo) 50%,transparent),transparent 70%);animation:vivo-flota 9s ease-in-out infinite reverse}
+.punto-vivo{width:7px;height:7px;border-radius:50%;background:var(--vivo-brillo);flex-shrink:0}
 .barra-dia{transform-origin:bottom;animation:barra-sube .6s cubic-bezier(.2,.8,.2,1) both}
-.barra-hoy{box-shadow:0 0 10px rgba(79,193,106,.7);animation:barra-sube .6s cubic-bezier(.2,.8,.2,1) both,verde-latido 2.4s ease-in-out .8s infinite}
-@keyframes verde-flota{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-26px,22px) scale(1.18)}}
-@keyframes verde-latido{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
-@keyframes verde-pulso{0%{box-shadow:0 0 0 0 rgba(155,232,168,.7)}100%{box-shadow:0 0 0 9px rgba(155,232,168,0)}}
+.barra-hoy{box-shadow:0 0 10px color-mix(in srgb,var(--vivo) 70%,transparent);animation:barra-sube .6s cubic-bezier(.2,.8,.2,1) both,vivo-latido 2.4s ease-in-out .8s infinite}
+@keyframes vivo-flota{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-26px,22px) scale(1.18)}}
+@keyframes vivo-latido{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
 @keyframes barra-sube{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-@media (prefers-reduced-motion:reduce){.hero-vivo::before,.hero-vivo::after,.tile-hoy,.punto-vivo,.barra-dia,.barra-hoy{animation:none}}
+@media (prefers-reduced-motion:reduce){.hero-vivo::before,.hero-vivo::after,.barra-dia,.barra-hoy{animation:none}}
 
 /* ===== Botón "?" de ayuda y guías animadas (usan el color del tema) ===== */
-.btn-ayuda{position:absolute;top:calc(10px + env(safe-area-inset-top));right:14px;width:30px;height:30px;border-radius:15px;background:var(--wine);color:#fff;font-size:15px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.btn-ayuda{position:absolute;top:9px;right:14px;width:34px;height:34px;border-radius:17px;background:var(--wine);color:#fff;font-size:16px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .guia-capa{position:absolute;inset:0;z-index:60}
 .guia-foco{position:absolute;border-radius:16px;box-shadow:0 0 0 9999px rgba(20,12,6,.62);outline:2px solid var(--acento);transition:left .3s ease,top .3s ease,width .3s ease,height .3s ease;pointer-events:none;animation:guia-anillo 1.6s ease-in-out infinite}
+.guia-oscuro{position:absolute;inset:0;background:rgba(20,12,6,.62);pointer-events:none}
 .guia-gesto{position:absolute;width:0;height:0;pointer-events:none;z-index:1}
 .guia-dedo,.guia-ola{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%}
 .guia-dedo{background:#fff;border:3px solid var(--acento);box-shadow:0 2px 10px rgba(0,0,0,.4)}
@@ -87,5 +92,14 @@
 @keyframes guia-desliza{0%{transform:translateX(56px);opacity:0}15%{opacity:1}80%{transform:translateX(-64px);opacity:1}100%{transform:translateX(-64px);opacity:0}}
 @keyframes guia-entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.guia-foco,.guia-dedo,.guia-ola,.guia-card{animation:none}}
-.btn-avatar{position:absolute;top:calc(8px + env(safe-area-inset-top));left:14px;width:32px;height:32px;border-radius:16px;overflow:hidden;background:var(--wine);color:#fff;font-size:14px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.btn-avatar{position:absolute;top:6px;left:14px;width:40px;height:40px;border-radius:20px;overflow:hidden;background:var(--wine);color:#fff;font-size:16px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .btn-avatar img{width:100%;height:100%;object-fit:cover}
+
+/* ===== Menú de abajo: 5 columnas iguales (el + queda al centro) y + en cuadrado redondeado ===== */
+.whital nav.bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center}
+.btn-mas{width:54px;height:54px;border-radius:17px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;transform:translateY(-10px);box-shadow:0 6px 14px rgba(0,0,0,.25)}
+.whital[data-fondo=beige] .btn-mas{color:#f3efe2}
+
+/* ===== Perfil: las tarjetas y filas, un poco más oscuras que el fondo de Perfil ===== */
+.whital.modo-perfil .row-list-item,.whital.modo-perfil .card{background:color-mix(in srgb,var(--perfil-bg) 86%,#000)}
+.whital[data-fondo=oscuro].modo-perfil .row-list-item,.whital[data-fondo=oscuro].modo-perfil .card{background:color-mix(in srgb,var(--perfil-bg) 84%,#fff)}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AvisosNotificaciones from './components/AvisosNotificaciones'
 import AvatarPerfil from './components/AvatarPerfil'
@@ -6,6 +6,7 @@ import AyudaPantalla from './components/AyudaPantalla'
 import Bienvenida from './components/Bienvenida'
 import PrimerosPasos from './components/PrimerosPasos'
 import WhitalNav from './components/WhitalNav'
+import { GuiaContext } from './hooks/useGuia'
 import { useTema } from './hooks/useTema'
 import { repintarBarra } from './lib/barra'
 import { FONDOS, colorPerfil } from './lib/temas'
@@ -50,14 +51,17 @@ export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
   const tema = useTema()
+  const [guiaActiva, setGuiaActiva] = useState(false)
   // Las pantallas de Perfil llevan un fondo propio (tono claro del tema).
-  const fondoPerfil = location.pathname.startsWith('/perfil') ? colorPerfil(tema.paleta, tema.fondo) : null
+  const enPerfil = location.pathname.startsWith('/perfil')
+  const fondoPerfil = enPerfil ? colorPerfil(tema.paleta, tema.fondo) : null
   // Chrome reinicia el color de la barra de estado al cambiar de pantalla: se vuelve a pintar.
   useEffect(() => {
     repintarBarra(fondoPerfil || FONDOS.find((f) => f.id === tema.fondo)?.barra || '#f3efe2')
   }, [location.pathname, tema.fondo, fondoPerfil])
   return (
-    <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo} style={fondoPerfil ? { background: fondoPerfil } : undefined}>
+    <GuiaContext.Provider value={{ activa: guiaActiva, setActiva: setGuiaActiva }}>
+    <div className={`app-shell whital${enPerfil ? ' modo-perfil' : ''}`} data-paleta={tema.paleta} data-fondo={tema.fondo} style={fondoPerfil ? { background: fondoPerfil, '--perfil-bg': fondoPerfil } : undefined}>
       <Bienvenida />
       <PrimerosPasos />
       <AvisosNotificaciones />
@@ -85,7 +89,8 @@ export default function WhitalShell() {
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <WhitalNav />
+      {!enPerfil && <WhitalNav />}
     </div>
+    </GuiaContext.Provider>
   )
 }

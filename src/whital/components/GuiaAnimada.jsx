@@ -14,7 +14,12 @@ export default function GuiaAnimada({ pasos, onTerminar }) {
     const medir = () => {
       const el = document.querySelector(paso.selector)
       const shell = document.querySelector('.app-shell')
-      if (!el || !shell) return
+      if (!shell) return
+      if (!el) {
+        // Sin elemento que resaltar (no debería pasar: las pantallas muestran un ejemplo): solo se explica.
+        setCaja({ sinFoco: true, alto: shell.getBoundingClientRect().height })
+        return
+      }
       // Dentro de la pantalla con scroll, se centra el elemento a mano (scrollIntoView movería también el contenedor).
       const pantalla = el.closest('.screen')
       if (pantalla) {
@@ -35,14 +40,14 @@ export default function GuiaAnimada({ pasos, onTerminar }) {
   if (!caja || !destino) return null
 
   const ALTO_CARD = 190
-  const debajo = caja.alto - (caja.y + caja.h) >= ALTO_CARD
-  const arriba = caja.y >= ALTO_CARD
+  const debajo = !caja.sinFoco && caja.alto - (caja.y + caja.h) >= ALTO_CARD
+  const arriba = !caja.sinFoco && caja.y >= ALTO_CARD
   const posCard = debajo ? { top: caja.y + caja.h + 18 } : arriba ? { bottom: caja.alto - caja.y + 18 } : { bottom: 16 }
 
   return createPortal(
     <div className="guia-capa">
-      <div className="guia-foco" style={{ left: caja.x - 6, top: caja.y - 6, width: caja.w + 12, height: caja.h + 12 }} />
-      {paso.gesto !== 'mirar' && (
+      {caja.sinFoco ? <div className="guia-oscuro" /> : <div className="guia-foco" style={{ left: caja.x - 6, top: caja.y - 6, width: caja.w + 12, height: caja.h + 12 }} />}
+      {!caja.sinFoco && paso.gesto !== 'mirar' && (
         <div className={`guia-gesto guia-${paso.gesto}`} style={{ left: caja.x + caja.w / 2, top: caja.y + caja.h / 2 }}>
           <span className="guia-ola" />
           <span className="guia-dedo" />

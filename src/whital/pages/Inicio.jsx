@@ -4,6 +4,7 @@ import Toast from '../../components/Toast'
 import { useToast } from '../../hooks/useToast'
 import { IconClose } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
+import { useGuia } from '../hooks/useGuia'
 import { setUserDoc } from '../../lib/firestoreCollections'
 import { marcarCobro } from '../lib/cobros'
 import Modal from '../components/Modal'
@@ -141,6 +142,7 @@ function CierreSemana({ cierre, user, show }) {
 
 export default function Inicio() {
   const { user } = useAuth()
+  const guia = useGuia()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
@@ -164,14 +166,9 @@ export default function Inicio() {
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to="/perfil" aria-label="Mi perfil" data-guia="avatar" style={{ width: 48, height: 48, borderRadius: 24, flexShrink: 0, overflow: 'hidden', background: 'var(--wine)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 600 }}>
-            {user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : nombre.charAt(0).toUpperCase()}
-          </Link>
-          <div>
-            <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
-            <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
-          </div>
+        <div>
+          <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
         </div>
 
         {error && <div className="card" style={{ padding: 12, fontSize: 12, color: 'var(--red)' }}>{error}</div>}
@@ -223,7 +220,7 @@ export default function Inicio() {
                   return vista.dias.map((d, i) => (
                     <button key={d.fecha} onClick={() => setDiaAbierto(d)} aria-label={`Gastos del ${d.label}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end' }}>
-                        <div className={d.esHoy ? 'barra-dia barra-hoy' : d.futuro ? '' : 'barra-dia'} style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--verde-vivo)' : 'var(--wine4)', animationDelay: `${i * 70}ms` }} />
+                        <div className={d.esHoy ? 'barra-dia barra-hoy' : d.futuro ? '' : 'barra-dia'} style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--vivo)' : 'var(--wine4)', animationDelay: `${i * 70}ms` }} />
                       </div>
                       <span style={{ fontSize: 9, color: d.esHoy ? 'var(--acento)' : 'var(--muted)', fontWeight: d.esHoy ? 700 : 500 }}>{d.label}</span>
                     </button>
@@ -250,7 +247,21 @@ export default function Inicio() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state" style={{ padding: '8px 0' }}>Nada pendiente para hoy</div>
+                <>
+                  <div className="empty-state" style={{ padding: '8px 0' }}>Nada pendiente para hoy</div>
+                  {guia.activa && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Sueldo <span className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)', padding: '2px 8px', fontSize: 9, marginLeft: 4 }}>Ejemplo</span></div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>Sueldo · esperando el depósito</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--muted)', textDecoration: 'line-through' }}>$4,000</span>
+                        <span className="pill" style={{ background: 'var(--beige2)', color: 'var(--acento)', padding: '5px 10px', fontSize: 11 }}>Ya llegó</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

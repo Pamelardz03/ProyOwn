@@ -6,6 +6,8 @@ import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
+import EjemploGuia from '../components/EjemploGuia'
+import { useGuia } from '../hooks/useGuia'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import Campo, { Aviso } from '../components/Campo'
@@ -143,6 +145,7 @@ function Fila({ p, hoy, onPausar }) {
 
 export default function Vitalls() {
   const { user } = useAuth()
+  const guia = useGuia()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
@@ -196,7 +199,7 @@ export default function Vitalls() {
             <div>
               <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Suscripciones y recurrentes</div>
               {suscripciones.length === 0
-                ? <div className="empty-state">Sin suscripciones</div>
+                ? <><div className="empty-state">Sin suscripciones</div>{guia.activa && <EjemploGuia tipo="vitall" />}</>
                 : <div className="row-list">{suscripciones.map(renderFila)}</div>}
             </div>
             <div>

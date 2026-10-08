@@ -1,66 +1,50 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AYUDA } from '../lib/ayuda'
+import { useGuia } from '../hooks/useGuia'
 import { GUIAS } from '../lib/guias'
+import EnPantalla from './EnPantalla'
 import GuiaAnimada from './GuiaAnimada'
 import Modal from './Modal'
 
-const clave = (ruta) => `whital:guia:${ruta}`
-const yaVista = (ruta) => {
-  try {
-    return !!localStorage.getItem(clave(ruta))
-  } catch {
-    return false
-  }
-}
-const marcarVista = (ruta) => {
-  try {
-    localStorage.setItem(clave(ruta), '1')
-  } catch {
-    /* sin almacenamiento: la guía se vuelve a ofrecer */
-  }
-}
-// Solo los pasos cuyo elemento existe ahora mismo en la pantalla.
-const pasosDisponibles = (ruta) => (GUIAS[ruta] || []).filter((p) => document.querySelector(p.selector))
+// Todos los pasos se muestran siempre: si la pantalla está vacía, muestra un ejemplo falso durante la guía.
+const pasosDisponibles = (ruta) => GUIAS[ruta] || []
 
-// Botón "?" fijo arriba a la derecha. La primera vez en cada pantalla abre la guía animada;
-// después abre la ayuda corta (con opción de volver a ver la guía).
+// Botón "?" fijo arriba a la derecha: abre la guía animada de la pantalla (siempre que se toca).
+// Las pantallas sin guía abren la ayuda corta.
 export default function AyudaPantalla() {
   const { pathname } = useLocation()
   const [abierta, setAbierta] = useState(false)
   const [guia, setGuia] = useState(null) // { ruta, pasos }
+  const { setActiva } = useGuia()
   const ayuda = AYUDA[pathname]
   if (!ayuda) return null
 
   const iniciarGuia = () => {
     const pasos = pasosDisponibles(pathname)
     if (!pasos.length) return false
-    marcarVista(pathname)
     setAbierta(false)
     setGuia({ ruta: pathname, pasos })
+    setActiva(true)
     return true
   }
   const abrir = () => {
-    if (!yaVista(pathname) && iniciarGuia()) return
-    setAbierta(true)
+    if (!iniciarGuia()) setAbierta(true)
   }
 
   return (
     <>
-      <button
-        aria-label="Ayuda de esta pantalla"
-        onClick={abrir}
-        className="btn-ayuda"
-      >
-        ?
-      </button>
-      {guia && guia.ruta === pathname && <GuiaAnimada pasos={guia.pasos} onTerminar={() => setGuia(null)} />}
+      <EnPantalla>
+        <button aria-label="Ayuda de esta pantalla" onClick={abrir} className="btn-ayuda">
+          ?
+        </button>
+      </EnPantalla>
+      {guia && guia.ruta === pathname && <GuiaAnimada pasos={guia.pasos} onTerminar={() => { setGuia(null); setActiva(false) }} />}
       <Modal
         abierto={abierta}
         onClose={() => setAbierta(false)}
         pie={
           <>
-            {GUIAS[pathname] && <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--muted)' }} onClick={iniciarGuia}>Ver guía</button>}
             <button className="segbtn" style={{ background: 'var(--wine)', color: '#fff' }} onClick={() => setAbierta(false)}>Entendido</button>
           </>
         }

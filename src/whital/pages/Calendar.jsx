@@ -3,6 +3,7 @@ import Toast from '../../components/Toast'
 import { IconChevronLeft, IconChevronRight, IconEdit } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
+import { useGuia } from '../hooks/useGuia'
 import { addUserDoc, deleteUserDoc } from '../../lib/firestoreCollections'
 import Campo, { Aviso } from '../components/Campo'
 import DetalleEliminable from '../components/DetalleEliminable'
@@ -136,6 +137,7 @@ function DiaSheet({ fecha, evento, hoy, user, show }) {
 
 export default function Calendar() {
   const { user } = useAuth()
+  const guia = useGuia()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
   const hoy = todayISO()
@@ -207,7 +209,7 @@ export default function Calendar() {
                 </div>
               </div>
 
-              <div>
+              <div data-guia="proximos">
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Próximos eventos</div>
                 <div className="chiprow" style={{ marginBottom: 12 }}>
                   {FILTROS.map(([k, t]) => (
@@ -224,6 +226,14 @@ export default function Calendar() {
                     </div>
                   ))}
                   {mostrados.length === 0 && <div className="empty-state">Sin eventos próximos para este filtro</div>}
+                  {mostrados.length === 0 && guia.activa && (
+                    <div className="row-list-item">
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR.nomina, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 13 }}>Sueldo <span className="pill" style={{ background: 'var(--beige2)', color: 'var(--muted)', padding: '2px 8px', fontSize: 9, marginLeft: 4 }}>Ejemplo</span></span>
+                      <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>15 oct</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--green)' }}>+$4,000</span>
+                    </div>
+                  )}
                 </div>
                 {filtrados.length > mostrados.length && (
                   <button onClick={() => setVisibles((n) => n + 20)} style={{ display: 'block', margin: '10px auto 0', fontSize: 12, fontWeight: 600, color: 'var(--acento)' }}>Ver más</button>

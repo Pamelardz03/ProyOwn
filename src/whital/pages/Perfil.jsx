@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconSalary } from '../../components/Icons'
+import { IconBars, IconBell, IconCard, IconChevronLeft, IconChevronRight, IconClock, IconEdit, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
 import IconEscudo from '../components/IconEscudo'
 import IconPaleta from '../components/IconPaleta'
@@ -50,7 +50,10 @@ export default function Perfil() {
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-        <h1>Perfil</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Link to="/" aria-label="Volver" className="back-btn"><IconChevronLeft /></Link>
+          <h1>Perfil</h1>
+        </div>
         {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
         {loading && !error && <div className="empty-state">Cargando…</div>}
 

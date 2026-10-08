@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
+import EnPantalla from './EnPantalla'
 
 // Foto de la cuenta fija arriba a la izquierda en todas las pantallas: lleva a Perfil.
-// Solo en las pantallas principales (Gastos, Compras, Calendario); en Inicio ya va junto al saludo
-// y en Perfil y sus subpantallas no se muestra.
-const PRINCIPALES = ['/gastos', '/whimms', '/vitalls', '/calendar']
+// Un solo tamaño y lugar (a la altura del "?"), solo en las pantallas principales: Inicio, Gastos,
+// Compras y Calendario. En Perfil y sus subpantallas no se muestra.
+const PRINCIPALES = ['/', '/gastos', '/whimms', '/vitalls', '/calendar']
 
 export default function AvatarPerfil() {
   const { pathname } = useLocation()
@@ -12,8 +13,10 @@ export default function AvatarPerfil() {
   if (!PRINCIPALES.includes(pathname)) return null
   const inicial = (user?.displayName || 'P').charAt(0).toUpperCase()
   return (
-    <Link to="/perfil" aria-label="Mi perfil" className="btn-avatar">
-      {user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : inicial}
-    </Link>
+    <EnPantalla>
+      <Link to="/perfil" aria-label="Mi perfil" className="btn-avatar" data-guia="avatar">
+        {user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" /> : inicial}
+      </Link>
+    </EnPantalla>
   )
 }

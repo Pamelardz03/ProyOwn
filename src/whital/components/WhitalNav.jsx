@@ -18,9 +18,9 @@ const DERECHA = [
   { to: '/calendar', label: 'Calendario', Icon: IconCalendar },
 ]
 
-function IconMas({ color }) {
+function IconMas() {
   return (
-    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
       <path d="M12 4.5v15M4.5 12h15" />
     </svg>
   )
@@ -49,8 +49,8 @@ export default function WhitalNav() {
     <>
       <nav className="bottom-nav">
         {IZQUIERDA.map(pestana)}
-        <button data-guia="mas" aria-label="Agregar" onClick={() => setAgregando(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
-          <IconMas color="var(--acento)" />
+        <button data-guia="mas" aria-label="Agregar" className="btn-mas" onClick={() => setAgregando(true)}>
+          <IconMas />
         </button>
         {DERECHA.map(pestana)}
       </nav>

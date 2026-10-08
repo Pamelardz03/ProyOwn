@@ -1,6 +1,6 @@
 // Guías animadas por pantalla (se ven la primera vez que se toca el "?" de esa pantalla).
-// Cada paso apunta a un elemento con `selector` (CSS). Si el elemento no existe en ese momento
-// (p. ej. la lista está vacía) el paso se salta solo.
+// Cada paso apunta a un elemento con `selector` (CSS). Los pasos nunca se saltan: si una pantalla puede
+// estar vacía (cuenta nueva), debe mostrar un ejemplo falso mientras dura la guía (`EjemploGuia`, `useGuia`).
 //   gesto: 'tocar' | 'deslizar' | 'mirar'  -> animación que se muestra sobre el elemento.
 // Reglas: máx. ~6 pasos por pantalla, título de 1-3 palabras, texto de una o dos líneas cortas.
 // Para apuntar a algo nuevo, ponle `data-guia="nombre"` en la pantalla y úsalo aquí.
@@ -21,6 +21,7 @@ export const GUIAS = {
   ],
   '/gastos': [
     { selector: '[data-guia="periodo"]', titulo: 'Periodo', texto: 'Cambia qué días quieres ver.', gesto: 'tocar' },
+    { selector: '[data-guia="totales"]', titulo: 'Gastos y compras', texto: 'Gastos: lo que gastaste. Compras Whimm: lo que pagaste por tus Whimms. Los dos son del periodo.', gesto: 'mirar' },
     { selector: '[data-guia="fila"]', titulo: 'Tus gastos', texto: 'Toca uno para editarlo. Deslízalo a la izquierda para eliminarlo.', gesto: 'deslizar' },
     MAS,
     MENU,
@@ -41,6 +42,7 @@ export const GUIAS = {
   '/calendar': [
     { selector: 'button[aria-label="Mes siguiente"]', titulo: 'Cambiar de mes', texto: 'Avanza o regresa con las flechas.', gesto: 'tocar' },
     { selector: '.screen .card', titulo: 'Tu mes', texto: 'Cada día marca cobros, pagos y compras. Toca un día para ver el detalle.', gesto: 'tocar' },
+    { selector: '[data-guia="proximos"]', titulo: 'Próximos eventos', texto: 'Tus siguientes cobros y pagos, en orden por fecha y con su monto. Filtra por tipo arriba.', gesto: 'tocar' },
     MENU,
   ],
   '/perfil': [

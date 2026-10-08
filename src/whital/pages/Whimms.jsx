@@ -4,6 +4,8 @@ import Toast from '../../components/Toast'
 import { IconChevronLeft, IconClose, IconEdit } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
+import EjemploGuia from '../components/EjemploGuia'
+import { useGuia } from '../hooks/useGuia'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import AjustarFoto from '../components/AjustarFoto'
@@ -612,6 +614,7 @@ function TarjetaFila({ w, r, posicion, progreso, hoy, onClick }) {
 
 export default function Whimms() {
   const { user } = useAuth()
+  const guia = useGuia()
   const location = useLocation()
   const { datos, loading, error } = useWhitalDatos()
   const { message, show } = useToast()
@@ -668,14 +671,15 @@ export default function Whimms() {
                 ))}
               </div>
 
-              {tab === 'fila' && (
+              {(guia.activa || tab === 'fila') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {enFila.map(({ r, w }, i) => deslizable(w, <TarjetaFila w={w} r={r} posicion={i + 1} progreso={progresoDe(w)} hoy={hoy} />))}
                   {enFila.length === 0 && <div className="empty-state">Sin Whimms en fila</div>}
+                  {enFila.length === 0 && guia.activa && <EjemploGuia tipo="whimm" />}
                 </div>
               )}
 
-              {tab === 'pagando' && (
+              {!guia.activa && tab === 'pagando' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {pagando.map((w) => {
                     const pago = datos.pagosFijos.find((p) => p.id === w.pagoFijoMsiId)
@@ -706,7 +710,7 @@ export default function Whimms() {
                 </div>
               )}
 
-              {tab === 'comprados' && (
+              {!guia.activa && tab === 'comprados' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {comprados.map((w) => deslizable(w,
                     <div className="card card-solid" style={{ padding: 13, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>

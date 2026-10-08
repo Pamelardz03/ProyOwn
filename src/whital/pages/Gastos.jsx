@@ -5,6 +5,8 @@ import Toggle from '../../components/Toggle'
 import { IconChevronLeft, IconChevronRight, IconEdit, IconReceipt } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
+import EjemploGuia from '../components/EjemploGuia'
+import { useGuia } from '../hooks/useGuia'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
 import BotonEliminar from '../components/BotonEliminar'
 import InputConSugerencias from '../components/InputConSugerencias'
@@ -152,6 +154,7 @@ function Tarjeta({ icono, titulo, sub, extra, monto, onEditar, etiquetaEditar })
 
 export default function Gastos() {
   const { user } = useAuth()
+  const guia = useGuia()
   const navigate = useNavigate()
   const location = useLocation()
   const { datos, loading, error } = useWhitalDatos()
@@ -256,7 +259,7 @@ export default function Gastos() {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div data-guia="totales" style={{ display: 'flex', gap: 8 }}>
                 <div className="card" style={{ flex: 1, padding: 12 }}>
                   <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Gastos</div>
                   <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 4, color: 'var(--wine3)' }}>{fmt(totalGastos)}</div>
@@ -294,6 +297,7 @@ export default function Gastos() {
                   )
                 )}
                 {lista.length === 0 && <div className="empty-state">Sin gastos en este periodo</div>}
+                {lista.length === 0 && guia.activa && <EjemploGuia tipo="gasto" />}
               </div>
             </>
           )}
