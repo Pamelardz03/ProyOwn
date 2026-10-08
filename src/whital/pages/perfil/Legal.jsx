@@ -6,7 +6,7 @@ import { DOCUMENTOS } from '../../lib/legal'
 export default function Legal({ id }) {
   return (
     <div className="screen" style={{ paddingBottom: 40 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div data-guia="documento" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <EncabezadoSub titulo={DOCUMENTOS[id].titulo} />
         <DocumentoLegal id={id} />
       </div>

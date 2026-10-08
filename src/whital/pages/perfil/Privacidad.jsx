@@ -46,12 +46,12 @@ export default function Privacidad() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <EncabezadoSub titulo="Privacidad y datos" />
 
-          <div className="card" style={{ padding: 14, fontSize: 12, lineHeight: 1.55 }}>
+          <div data-guia="priv-guarda" className="card" style={{ padding: 14, fontSize: 12, lineHeight: 1.55 }}>
             <div className="eyebrow" style={{ marginBottom: 6 }}>Qué guarda Whital</div>
             Tu nombre y correo de Google, lo que registras (gastos, sueldos, pagos fijos y Whimms, con sus fotos) y tu configuración. Está en tu cuenta de Firebase (Google Cloud), y solo tu sesión puede leerlo. No se vende ni se comparte, y no hay anuncios.
           </div>
 
-          <div className="row-list">
+          <div data-guia="priv-descargar" className="row-list">
             <button className="row-list-item" style={fila} onClick={exportar} disabled={exportando}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{exportando ? 'Preparando…' : 'Descargar mis datos'}</div>
@@ -65,7 +65,7 @@ export default function Privacidad() {
             Cada domingo de madrugada se guarda una copia de tus datos (se conservan las últimas 8). Se borran junto con tu cuenta.
           </div>
 
-          <div style={{ marginTop: 6 }}>
+          <div data-guia="priv-peligro" style={{ marginTop: 6 }}>
             <div className="eyebrow" style={{ margin: '0 2px 8px', color: 'var(--red)' }}>Zona de peligro</div>
             <button className="segbtn" style={{ background: 'var(--red-bg)', color: 'var(--red)', padding: 14, width: '100%' }} onClick={() => { setConfirmar(true); setTexto('') }}>
               Eliminar mi cuenta y mis datos

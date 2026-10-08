@@ -49,7 +49,7 @@ export default function Notificaciones() {
           {loading && !error && <div className="empty-state">Cargando…</div>}
           {!loading && (
             <>
-              <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
+              <div data-guia="avisos-info" style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
                 Frecuencia general de cada aviso. Cada Whimm, Vitall o sueldo puede tener la suya en su ficha (Recordarme) y esa manda.
               </div>
 
@@ -58,7 +58,7 @@ export default function Notificaciones() {
               {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no admite notificaciones.</Aviso>}
 
               {GRUPOS.map((grupo) => (
-                <div key={grupo}>
+                <div key={grupo} data-guia={grupo === GRUPOS[0] ? 'avisos-grupo' : undefined}>
                   <div className="eyebrow" style={{ margin: '0 2px 8px' }}>{grupo}</div>
                   <div className="row-list">
                     {TIPOS.filter((t) => t.grupo === grupo).map((t) => (

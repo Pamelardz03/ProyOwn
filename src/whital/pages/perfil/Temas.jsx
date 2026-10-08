@@ -33,7 +33,7 @@ export default function Temas() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
           <EncabezadoSub titulo="Temas" />
 
-          <div>
+          <div data-guia="paleta">
             <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Paleta</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {PALETAS.map((p) => (
@@ -48,7 +48,7 @@ export default function Temas() {
             </div>
           </div>
 
-          <div>
+          <div data-guia="fondo">
             <div className="eyebrow" style={{ margin: '0 2px 8px' }}>Fondo</div>
             <div style={{ display: 'flex', gap: 8 }}>
               {FONDOS.map((f) => (

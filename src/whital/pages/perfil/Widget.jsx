@@ -43,19 +43,19 @@ export default function Widget() {
       <div className="screen">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <EncabezadoSub titulo="Widget" />
-          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+          <div data-guia="widget-info" style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
             El widget de la app de Android muestra cuánto puedes gastar hoy y tu próxima compra. Pega este código en la app una sola vez.
           </div>
 
           {!token ? (
-            <button className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.6 : 1 }} onClick={() => generar(false)}>{trabajando ? 'Generando…' : 'Generar mi código'}</button>
+            <button data-guia="widget-codigo" className="btn-primary" disabled={trabajando} style={{ opacity: trabajando ? 0.6 : 1 }} onClick={() => generar(false)}>{trabajando ? 'Generando…' : 'Generar mi código'}</button>
           ) : (
             <>
-              <div className="card" style={{ padding: 14 }}>
+              <div data-guia="widget-codigo" className="card" style={{ padding: 14 }}>
                 <div className="eyebrow">Tu código</div>
                 <div className="mono" style={{ fontSize: 13, marginTop: 8, wordBreak: 'break-all', userSelect: 'text', WebkitUserSelect: 'text', lineHeight: 1.5 }}>{token}</div>
               </div>
-              <button className="btn-primary" onClick={copiar}>Copiar código</button>
+              <button data-guia="widget-copiar" className="btn-primary" onClick={copiar}>Copiar código</button>
               {!confirmarRenovar ? (
                 <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--muted)' }} onClick={() => setConfirmarRenovar(true)}>Renovar código</button>
               ) : (

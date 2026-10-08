@@ -75,12 +75,12 @@ export default function Sueldos() {
           {loading && !error && <div className="empty-state">Cargando…</div>}
           {!loading && (
             <>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div data-guia="sueldo-botones" style={{ display: 'flex', gap: 8 }}>
                 <button className="segbtn" style={{ background: 'var(--wine)', color: '#fff' }} onClick={() => setManual({})}>+ Sueldo fijo</button>
                 <button className="segbtn" style={{ background: 'var(--beige2)', color: 'var(--acento)' }} onClick={() => setRapidoAbierto(true)}>+ Ingreso rápido</button>
               </div>
 
-              <div>
+              <div data-guia="sueldos-fijos">
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Sueldos fijos</div>
                 {datos.sueldosFijos.length === 0 ? (
                   <div className="empty-state">Sin sueldos fijos</div>
@@ -110,7 +110,7 @@ export default function Sueldos() {
                 )}
               </div>
 
-              <div>
+              <div data-guia="sueldos-rapidos">
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Ingresos rápidos</div>
                 {rapidos.length === 0 ? (
                   <div className="empty-state">Sin ingresos rápidos</div>

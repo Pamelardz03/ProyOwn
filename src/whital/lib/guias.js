@@ -48,6 +48,47 @@ export const GUIAS = {
   '/perfil': [
     { selector: '.screen a[href*="configuracion"]', titulo: 'Ajustar saldo', texto: 'Si tu saldo no cuadra con el banco, corrígelo aquí.', gesto: 'tocar' },
     { selector: '.screen .row-list', titulo: 'Tu cuenta', texto: 'Sueldos, pagos fijos, avisos, temas y más.', gesto: 'tocar' },
-    MENU,
+    { selector: '[data-guia="legales"]', titulo: 'Términos y privacidad', texto: 'Consulta las reglas de uso y cómo se cuidan tus datos.', gesto: 'tocar' },
+    { selector: '[data-guia="cerrar-sesion"]', titulo: 'Cerrar sesión', texto: 'Sal de tu cuenta desde aquí.', gesto: 'tocar' },
+  ],
+  '/perfil/sueldos': [
+    { selector: '[data-guia="sueldo-botones"]', titulo: 'Agregar ingresos', texto: 'Sueldo fijo para lo que cobras siempre; ingreso rápido para algo extra.', gesto: 'tocar' },
+    { selector: '[data-guia="sueldos-fijos"]', titulo: 'Sueldos fijos', texto: 'Toca uno para editarlo, desliza para eliminarlo. Marca "Ya llegó" cuando se deposite.', gesto: 'deslizar' },
+    { selector: '[data-guia="sueldos-rapidos"]', titulo: 'Ingresos rápidos', texto: 'Tus ingresos extra recientes, del más nuevo al más viejo.', gesto: 'mirar' },
+  ],
+  '/perfil/pagos-fijos': [
+    { selector: '[data-guia="fijo-total"]', titulo: 'Total al mes', texto: 'Lo que pagas en un mes entre todos tus pagos fijos.', gesto: 'mirar' },
+    { selector: '[data-guia="fijo-lista"]', titulo: 'Tus pagos fijos', texto: 'Toca uno para abrirlo en Vitalls y editarlo.', gesto: 'tocar' },
+  ],
+  '/perfil/metricas': [
+    { selector: '[data-guia="metricas"]', titulo: 'Tus números', texto: 'Promedios, mayores gastos, compras y pagos fijos en un vistazo.', gesto: 'mirar' },
+  ],
+  '/perfil/notificaciones': [
+    { selector: '[data-guia="avisos-info"]', titulo: 'Frecuencia general', texto: 'Cada Whimm, Vitall o sueldo puede tener la suya y esa manda.', gesto: 'mirar' },
+    { selector: '[data-guia="avisos-grupo"]', titulo: 'Cada cuánto avisar', texto: 'Elige la frecuencia de cada tipo de aviso.', gesto: 'tocar' },
+  ],
+  '/perfil/configuracion': [
+    { selector: '[data-guia="ajustar-saldo"]', titulo: 'Ajustar saldo', texto: 'Si tu saldo no cuadra con el banco, escribe el del banco y se corrige.', gesto: 'tocar' },
+    { selector: '[data-guia="config-lineas"]', titulo: 'Saldo y presupuesto', texto: 'Toca un valor para cambiarlo. El presupuesto semanal es tu caja de cada semana.', gesto: 'tocar' },
+    { selector: '[data-guia="datos-prueba"]', titulo: 'Datos de prueba', texto: 'Llena la app con ejemplos para explorarla. Bórralos cuando quieras.', gesto: 'mirar' },
+  ],
+  '/perfil/temas': [
+    { selector: '[data-guia="paleta"]', titulo: 'Paleta', texto: 'Toca una para cambiar el color de acento al instante.', gesto: 'tocar' },
+    { selector: '[data-guia="fondo"]', titulo: 'Fondo', texto: 'Elige un fondo claro u oscuro.', gesto: 'tocar' },
+  ],
+  '/perfil/widget': [
+    { selector: '[data-guia="widget-info"]', titulo: 'Para qué sirve', texto: 'Muestra cuánto puedes gastar hoy sin abrir la app.', gesto: 'mirar' },
+    { selector: '[data-guia="widget-codigo"]', titulo: 'Tu código', texto: 'Genéralo y pégalo una sola vez en la app de Android.', gesto: 'tocar' },
+  ],
+  '/perfil/terminos': [
+    { selector: '[data-guia="documento"]', titulo: 'Términos', texto: 'Las reglas de uso de Whital. Desliza para leerlos.', gesto: 'deslizar' },
+  ],
+  '/perfil/politica': [
+    { selector: '[data-guia="documento"]', titulo: 'Privacidad', texto: 'Qué datos guarda Whital y cómo se cuidan. Desliza para leerla.', gesto: 'deslizar' },
+  ],
+  '/perfil/privacidad': [
+    { selector: '[data-guia="priv-guarda"]', titulo: 'Tus datos', texto: 'Qué guarda Whital: solo tú puedes verlo.', gesto: 'mirar' },
+    { selector: '[data-guia="priv-descargar"]', titulo: 'Descargar', texto: 'Baja un archivo con todo lo que registraste.', gesto: 'tocar' },
+    { selector: '[data-guia="priv-peligro"]', titulo: 'Eliminar cuenta', texto: 'Borra tu cuenta y tus datos para siempre. Pide confirmación.', gesto: 'tocar' },
   ],
 }

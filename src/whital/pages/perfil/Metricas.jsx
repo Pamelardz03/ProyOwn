@@ -30,7 +30,7 @@ export default function Metricas() {
         {error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{error}</div>}
         {loading && !error && <div className="empty-state">Cargando…</div>}
         {tarjetas && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div data-guia="metricas" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {tarjetas.map(([etiqueta, valor, pista]) => (
               <div key={etiqueta} className="card" style={{ padding: 14 }}>
                 <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{etiqueta}</div>

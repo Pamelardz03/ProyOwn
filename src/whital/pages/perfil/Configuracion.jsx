@@ -56,9 +56,9 @@ export default function Configuracion() {
           {loading && !error && <div className="empty-state">Cargando…</div>}
           {base && (
             <>
-              <AjustarSaldo datos={datos} hoy={hoy} user={user} show={show} saldoReal={saldoReal} />
+              <div data-guia="ajustar-saldo"><AjustarSaldo datos={datos} hoy={hoy} user={user} show={show} saldoReal={saldoReal} /></div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div data-guia="config-lineas" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <LineaEditable key={`saldo-${editando === 'saldo'}`} etiqueta="Saldo inicial" valorActual={Number(datos.config?.saldoInicial) || 0} editando={editando === 'saldo'} onAbrir={() => setEditando('saldo')} onCerrar={() => setEditando(null)} onGuardar={(n) => guardarConfig({ saldoInicial: n }, 'Saldo inicial guardado')} />
                 <LineaEditable key={`pres-${editando === 'presupuesto'}`} etiqueta="Presupuesto semanal" valorActual={base.presupuestoSemanal} editando={editando === 'presupuesto'} onAbrir={() => setEditando('presupuesto')} onCerrar={() => setEditando(null)} onGuardar={(n) => (n > 0 ? guardarConfig({ presupuestoSemanal: n }, 'Presupuesto guardado') : show('Debe ser mayor a 0'))} />
               </div>
@@ -86,7 +86,7 @@ export default function Configuracion() {
                 </div>
               )}
 
-              <DatosDePrueba datos={datos} user={user} show={show} />
+              <div data-guia="datos-prueba"><DatosDePrueba datos={datos} user={user} show={show} /></div>
             </>
           )}
         </div>

@@ -98,7 +98,7 @@ export default function Perfil() {
           ))}
         </div>
 
-        <div className="row-list">
+        <div className="row-list" data-guia="legales">
           {LEGALES.map(({ to, titulo }) => (
             <Link key={to} to={to} className="row-list-item">
               <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{titulo}</div>
@@ -119,7 +119,7 @@ export default function Perfil() {
               <div style={{ fontSize: 17, fontWeight: 600 }}>{nombre}</div>
               {user?.email && <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>}
             </div>
-            <button onClick={() => logout()} style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>Cerrar sesión</button>
+            <button data-guia="cerrar-sesion" onClick={() => logout()} style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>Cerrar sesión</button>
           </div>
         </div>
 

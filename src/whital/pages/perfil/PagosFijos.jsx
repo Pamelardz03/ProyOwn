@@ -23,10 +23,11 @@ export default function PagosFijos() {
         {loading && !error && <div className="empty-state">Cargando…</div>}
         {metricas && (
           <>
-            <div className="card" style={{ padding: 16 }}>
+            <div data-guia="fijo-total" className="card" style={{ padding: 16 }}>
               <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>Total fijo mensual</div>
               <div className="mono" style={{ fontSize: 22, fontWeight: 500, marginTop: 4 }}>{fmt(metricas.totalFijoMensual)}</div>
             </div>
+            <div data-guia="fijo-lista">
             {metricas.pagosFijosVigentes.length === 0 ? (
               <div className="empty-state">Sin pagos fijos</div>
             ) : (
@@ -43,6 +44,7 @@ export default function PagosFijos() {
                 ))}
               </div>
             )}
+            </div>
           </>
         )}
       </div>
