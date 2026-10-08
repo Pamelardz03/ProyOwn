@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 
-// Ventana en medio de la pantalla (como el detalle de Whimm de la app original).
+// Ventana en medio de la pantalla.
 // `pie` son los botones fijos de abajo (Editar / Eliminar).
 export default function Modal({ abierto, onClose, children, pie, nivel = 0 }) {
   if (!abierto) return null

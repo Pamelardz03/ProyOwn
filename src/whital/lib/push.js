@@ -7,7 +7,7 @@ import { setUserDoc } from '../../lib/firestoreCollections'
 
 const VAPID_KEY = 'BIykhENRPUQXJwrJtLwSxbx3M2Ds9wTgt6XkkBVqC9ZxlA86B8d0LFEl3VCtgw1eBvlk9k_GT55NNjOUUL4s3Hg'
 
-export const pushSoportado = () => isSupported().catch(() => false)
+const pushSoportado = () => isSupported().catch(() => false)
 
 // Devuelve 'activado' | 'denegado' | 'no-soportado'. Seguro de llamar varias veces
 // (renueva el token si cambió).

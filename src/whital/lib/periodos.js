@@ -12,7 +12,7 @@ function corta(iso) {
   return d ? `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}` : ''
 }
 
-export function addYearsISO(iso, n) {
+function addYearsISO(iso, n) {
   const d = parseISODate(iso)
   if (!d) return iso
   const y = d.getFullYear() + n

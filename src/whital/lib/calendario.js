@@ -5,7 +5,7 @@ import { addDaysISO, ocurrenciasPagoFijo, ocurrenciasSueldo, toISO } from './bud
 
 export const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-export function rangoDelMes(anio, mes) {
+function rangoDelMes(anio, mes) {
   const inicio = toISO(new Date(anio, mes, 1))
   const fin = toISO(new Date(anio, mes + 1, 0))
   return { inicio, fin }
@@ -14,7 +14,7 @@ export function rangoDelMes(anio, mes) {
 // Casillas del mes en cuadrícula Dom-Sáb: null para los huecos iniciales.
 export function casillasDelMes(anio, mes) {
   const { inicio, fin } = rangoDelMes(anio, mes)
-  const huecos = new Date(anio, mes, 1).getDay() // la cuadrícula empieza en domingo, como la app original
+  const huecos = new Date(anio, mes, 1).getDay() // la cuadrícula empieza en domingo
   const dias = []
   for (let f = inicio; f <= fin; f = addDaysISO(f, 1)) dias.push(f)
   return [...Array(huecos).fill(null), ...dias]

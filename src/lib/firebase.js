@@ -11,9 +11,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-// Mientras no exista .env.local con las llaves reales de Firebase (ver README),
-// la app sigue funcionando en "modo local" para poder revisar el diseño sin
-// tronar — no hay login ni guardado real todavía, solo datos de ejemplo.
+// Sin .env.local con las llaves de Firebase (ver README) no hay login ni guardado:
+// firebaseReady es false y el login avisa que falta configurar.
 export const firebaseReady = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId)
 
 export const app = firebaseReady ? initializeApp(firebaseConfig) : null

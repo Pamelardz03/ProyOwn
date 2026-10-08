@@ -1,28 +1,15 @@
 // ============================================================================
-// WHITAL — motor de presupuesto nuevo, reescrito desde cero (sección 4 del doc
-// WHITAL — Estado Actual del Sistema y Reglas de Arquitectura, 2 oct).
+// WHITAL — motor de presupuesto. Funciones puras: sin estado persistido.
 //
-// Filosofía (sección A del doc): RECÁLCULO PURO EN VIVO. A diferencia del
-// motor real de producción (src/lib/budget.js, 3 bolsillos persistidos en
-// Firestore que se liquidan día por día), este motor NUNCA persiste un saldo
-// derivado. Cada vez que se necesita el estado (Inicio, Gastos, Whimms...) se
-// recalcula desde cero a partir de la línea de tiempo completa de eventos
-// reales (sueldos, gastos, vencimientos, compras). Esto es deliberadamente
-// más simple y más parecido al motor original pre-"tanda 32" — decisión
-// explícita de Pame tras conocer el motor real (ver
-// organizador-gastos-reglas-actuales.md sección 10, punto 4, en el doc del
-// proyecto de Claude).
-//
-// Este archivo se validó con 11 pruebas en un script de Node aislado ANTES
-// de tocar nada de la UI real, a pedido explícito de Pame ("Validar con
-// scripts de Node aislados antes de UI"). Nunca se persiste ni se asienta
-// día por día — cada llamada recalcula todo desde los arrays de Firestore.
+// RECÁLCULO PURO EN VIVO: nunca se guarda un saldo derivado. Cada vez que se
+// necesita el estado (Inicio, Gastos, Whimms...) se recalcula desde cero a partir
+// de la línea de tiempo completa de eventos reales (sueldos, gastos, vencimientos,
+// compras). Este archivo también lo copia functions/scripts/copiar-lib.mjs para
+// que los avisos del servidor usen la MISMA lógica: no importar nada del navegador.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
-// Helpers de fecha (mismos que src/lib/date.js del motor real — duplicados
-// aquí a propósito para que src/whital/ sea un árbol aislado del motor
-// viejo y no haya riesgo de romper producción si algo de date.js cambia).
+// Helpers de fecha ffechas ISO (YYYY-MM-DD), sin zona horaria.
 // ---------------------------------------------------------------------------
 export function parseISODate(iso) {
   if (!iso) return null

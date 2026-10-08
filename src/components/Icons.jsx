@@ -20,15 +20,6 @@ export function IconReceipt({ size = 20, color = '#b3ad8e' }) {
   )
 }
 
-export function IconBag({ size = 20, color = '#b3ad8e' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 7h10l-.8 9.2a1.8 1.8 0 0 1-1.8 1.6H7.6a1.8 1.8 0 0 1-1.8-1.6L5 7z" />
-      <path d="M7.5 7V5.5a2.5 2.5 0 0 1 5 0V7" />
-    </svg>
-  )
-}
-
 export function IconCalendar({ size = 20, color = '#b3ad8e' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -169,38 +160,3 @@ export function IconSalary({ size = 17, color = 'var(--wine)' }) {
   )
 }
 
-export function IconWarning({ size = 16, color = 'var(--red)' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 3 2.5 16.5h15L10 3z" />
-      <path d="M10 8.3v3.5" />
-      <circle cx="10" cy="14" r=".2" />
-    </svg>
-  )
-}
-
-export function IconTrendDown({ size = 13, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 6v8M6.5 10.5 10 14l3.5-3.5" />
-    </svg>
-  )
-}
-
-export function IconTrendUp({ size = 13, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 14V6M6.5 9.5 10 6l3.5 3.5" />
-    </svg>
-  )
-}
-
-export function IconInfo({ size = 15, color = 'var(--muted)' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10" cy="10" r="8" />
-      <path d="M10 9v5" />
-      <circle cx="10" cy="6.3" r=".2" />
-    </svg>
-  )
-}

@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext'
 
 // Lee en vivo (onSnapshot) una colección del usuario logueado:
 // /users/{uid}/{name}. Sin Firebase configurado o sin sesión, regresa
-// vacío en vez de tronar (modo local sigue funcionando sin datos).
+// vacío en vez de tronar.
 export function useUserCollection(name) {
   const { user } = useAuth()
   const [data, setData] = useState([])

@@ -4,7 +4,7 @@ import { useSwipeX } from '../../hooks/useSwipe'
 import Modal from './Modal'
 
 // Pregunta de confirmación (ventana en medio) antes de borrar algo.
-export function ConfirmarEliminar({ titulo, mensaje = '¿Eliminar? No se puede deshacer.', onConfirmar, onCerrar }) {
+function ConfirmarEliminar({ titulo, mensaje = '¿Eliminar? No se puede deshacer.', onConfirmar, onCerrar }) {
   return (
     <Modal abierto onClose={onCerrar} nivel={2}>
       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{titulo}</div>

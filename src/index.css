@@ -90,10 +90,6 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .fab{position:absolute;right:16px;bottom:84px;width:56px;height:56px;border-radius:28px;background:var(--wine);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(58,15,31,.35);z-index:20}
 
 .sheet-backdrop{position:absolute;inset:0;background:rgba(26,18,8,.45);z-index:30}
-.sheet{position:absolute;left:0;right:0;bottom:0;max-height:75%;background:var(--card-solid);border-radius:22px 22px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.18);z-index:31;display:flex;flex-direction:column}
-.sheet-grabber{display:flex;justify-content:center;padding:10px 0 4px}
-.sheet-grabber span{width:36px;height:4px;border-radius:2px;background:var(--beige3);display:block}
-.sheet-body{overflow-y:auto;padding:8px 18px 24px}
 
 .pick-option{display:flex;align-items:center;gap:12px;padding:13px;border-radius:12px;background:var(--beige2);text-align:left;width:100%}
 .pick-option .icon{width:36px;height:36px;border-radius:10px;background:var(--wine);display:flex;align-items:center;justify-content:center;flex-shrink:0}

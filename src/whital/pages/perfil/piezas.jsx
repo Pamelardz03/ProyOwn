@@ -155,7 +155,7 @@ export function IngresoRapidoForm({ hoy, user, show, onCerrar }) {
   )
 }
 
-// Línea editable "Saldo inicial: $33 · Editar" (como en la app original).
+// Línea editable "Saldo inicial: $33 · Editar".
 export function LineaEditable({ etiqueta, valorActual, editando, onAbrir, onCerrar, onGuardar }) {
   const [valor, setValor] = useState(String(valorActual))
   if (!editando) {

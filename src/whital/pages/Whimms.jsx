@@ -129,7 +129,7 @@ function RepartoPrioridad({ libre, n, user, show }) {
 }
 
 // ---------------------------------------------------------------------------
-// Detalle del Whimm: ventana en medio, igual que en la app original.
+// Detalle del Whimm: ventana en medio.
 // ---------------------------------------------------------------------------
 function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, onCerrar, onEditar }) {
   const [accion, setAccion] = useState(null) // 'comprar' | 'apartar' | 'msi'
