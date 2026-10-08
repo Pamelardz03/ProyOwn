@@ -393,7 +393,32 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
       const total = actual.movidos.length + actual.criticos.length
       // Si tiene fecha límite y retrasa a otros: ¿sin la fecha retrasaría menos?
       const sinFecha = valores.fechaLimite && total > 0 ? evaluarImpactoWhimm({ whimm: { ...candidato, fechaLimite: null }, whimmOriginal: whimm || null, ...base }) : null
-      return { actual, total, sinFecha, totalSinFecha: sinFecha ? sinFecha.movidos.length + sinFecha.criticos.length : null }
+      // Si atrasa a otros: ¿con qué prioridad (necesidad/deseo) ya no atrasaría a nadie? Se prueban de la
+      // más alta a la más baja que sea menor a la actual, buscando la más alta que no atrasa (búsqueda binaria).
+      let sugerencia = null
+      if (total > 0) {
+        const pesoActual = 2 * valores.necesidad + valores.deseo
+        const totalCon = (n, d) => {
+          const r = evaluarImpactoWhimm({ whimm: { ...candidato, necesidad: n, deseo: d }, whimmOriginal: whimm || null, ...base })
+          return r.movidos.length + r.criticos.length
+        }
+        const combos = []
+        for (let n = 1; n <= 5; n++) for (let d = 1; d <= 5; d++) if (2 * n + d < pesoActual) combos.push({ n, d, peso: 2 * n + d })
+        combos.sort((a, b) => a.peso - b.peso || a.n - b.n)
+        if (combos.length && totalCon(combos[0].n, combos[0].d) === 0) {
+          let bajo = 0
+          let alto = combos.length - 1
+          while (bajo < alto) {
+            const medio = Math.ceil((bajo + alto) / 2)
+            if (totalCon(combos[medio].n, combos[medio].d) === 0) bajo = medio
+            else alto = medio - 1
+          }
+          sugerencia = { necesidad: combos[bajo].n, deseo: combos[bajo].d }
+        } else {
+          sugerencia = { ninguna: true }
+        }
+      }
+      return { actual, total, sinFecha, totalSinFecha: sinFecha ? sinFecha.movidos.length + sinFecha.criticos.length : null, sugerencia }
     } catch {
       return null
     }
@@ -525,6 +550,18 @@ function WhimmEdicion({ whimm, datos, user, show, onCerrar }) {
                   </div>
                 ))}
                 {impacto.total > 3 && <div style={{ marginTop: 2 }}>…y {impacto.total - 3} más.</div>}
+                {impacto.sugerencia && (
+                  <div style={{ marginTop: 8 }}>
+                    {impacto.sugerencia.ninguna ? (
+                      'Ni con la prioridad más baja evitas atrasar a otros; puedes agregarlo igual.'
+                    ) : (
+                      <>
+                        Para no atrasar a nadie: necesidad {impacto.sugerencia.necesidad} · deseo {impacto.sugerencia.deseo} (queda más abajo en la fila).{' '}
+                        <button type="button" style={{ fontWeight: 700, textDecoration: 'underline' }} onClick={() => { setNecesidad(impacto.sugerencia.necesidad); setDeseo(impacto.sugerencia.deseo) }}>Aplicar</button>
+                      </>
+                    )}
+                  </div>
+                )}
                 {impacto.sinFecha && impacto.totalSinFecha < impacto.total && (
                   <div style={{ marginTop: 8 }}>
                     Sin fecha límite {impacto.totalSinFecha === 0 ? 'no atrasaría a nadie' : `atrasaría a ${impacto.totalSinFecha}`}.{' '}
