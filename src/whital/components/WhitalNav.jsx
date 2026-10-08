@@ -49,6 +49,7 @@ export default function WhitalNav() {
     <>
       <nav className="bottom-nav">
         {IZQUIERDA.map(pestana)}
+        <span aria-hidden="true" />
         <button data-guia="mas" aria-label="Agregar" className="btn-mas" onClick={() => setAgregando(true)}>
           <IconMas />
         </button>

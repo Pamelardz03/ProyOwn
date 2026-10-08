@@ -97,7 +97,10 @@
 
 /* ===== Menú de abajo: 5 columnas iguales (el + queda al centro) y + en cuadrado redondeado ===== */
 .whital nav.bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center}
-.btn-mas{width:54px;height:54px;border-radius:17px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;transform:translateY(-10px);box-shadow:0 6px 14px rgba(0,0,0,.25)}
+.btn-mas{position:absolute;left:50%;top:0;transform:translate(-50%,-52%);width:56px;height:56px;border-radius:18px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 18px rgba(0,0,0,.28)}
+/* El menú tiene un hueco curvo en el centro donde queda el +. El fondo va en ::before para poder recortarlo. */
+.whital nav.bottom-nav{background:none;border-top:0;isolation:isolate}
+.whital nav.bottom-nav::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--card-solid);border-top:1px solid var(--beige3);-webkit-mask:radial-gradient(circle 46px at 50% 0,transparent 44px,#000 45.5px);mask:radial-gradient(circle 46px at 50% 0,transparent 44px,#000 45.5px)}
 .whital[data-fondo=beige] .btn-mas{color:#f3efe2}
 
 /* ===== Perfil: las tarjetas y filas, un poco más oscuras que el fondo de Perfil ===== */

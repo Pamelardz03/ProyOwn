@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
-import { IconChevronLeft, IconClose, IconEdit } from '../../components/Icons'
+import { IconChevronLeft, IconChevronRight, IconClose, IconEdit } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import EjemploGuia from '../components/EjemploGuia'
@@ -50,15 +50,29 @@ function sitioDe(url) {
   }
 }
 
+// Dato informativo: sin relleno ni color de botón (solo se lee). Los botones de acción son otra cosa.
 function Dato({ label, valor, color, sub }) {
   return (
-    <div style={{ flex: 1, background: 'var(--beige2)', borderRadius: 12, padding: 12 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500 }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3, color }}>{valor}</div>
       {sub && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
     </div>
   )
 }
+
+// Sección del detalle: título pequeño y contenido. Mantiene separadas la información y las acciones.
+function Seccion({ titulo, children }) {
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>{titulo}</div>
+      {children}
+    </div>
+  )
+}
+
+// Recuadro solo con borde = información. Los botones con relleno o con borde de acento = acciones.
+const CAJA_INFO = { border: '1px solid var(--beige3)', borderRadius: 14, padding: 14, display: 'flex', gap: 14 }
 
 function Nivel({ valor, onChange }) {
   return (
@@ -191,9 +205,15 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
       borrarFotoPropia(whimm.imagenUrl, user.uid)
     }, 'Whimm eliminado')
 
-  const botonAccion = (k, texto) => (
-    <button key={k} onClick={() => setAccion(accion === k ? null : k)} style={{ width: '100%', background: accion === k ? 'var(--wine)' : 'var(--beige2)', color: accion === k ? '#fff' : 'var(--wine)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600 }}>{texto}</button>
+  // Acción desplegable: borde de acento y flecha; al abrirla muestra su formulario con su propio botón de confirmar.
+  const botonAccion = (k, texto, detalle) => (
+    <button key={k} onClick={() => setAccion(accion === k ? null : k)} aria-expanded={accion === k} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: `1.5px solid ${accion === k ? 'var(--acento)' : 'var(--beige3)'}`, color: 'var(--acento)', borderRadius: 12, padding: '12px 14px', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>
+      <span style={{ flex: 1 }}>{texto}</span>
+      {detalle && <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>{detalle}</span>}
+      <span style={{ display: 'flex', transform: accion === k ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><IconChevronRight size={14} color="var(--acento)" /></span>
+    </button>
   )
+  const formAccion = { display: 'flex', flexDirection: 'column', gap: 10, border: '1px solid var(--beige3)', borderRadius: 12, padding: 12 }
 
   const pie = (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -220,115 +240,113 @@ function WhimmDetalle({ whimm, r, posicion, progreso, datos, hoy, user, show, on
         </button>
       </div>
 
-      <div className="mono" style={{ fontSize: 22, fontWeight: 500 }}>{fmt(estado === 'comprado' || estado === 'pagando' ? whimm.precioComprado ?? precio : precio)}</div>
+      <div className="mono" style={{ fontSize: 24, fontWeight: 500 }}>{fmt(estado === 'comprado' || estado === 'pagando' ? whimm.precioComprado ?? precio : precio)}</div>
       {(estado === 'comprado' || estado === 'pagando') && whimm.precioComprado != null && whimm.precioComprado !== precio && (
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Estimado original: {fmt(precio)}</div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, margin: '16px 0 10px' }}>
-        <Dato label="Categoría" valor={whimm.categoria || '—'} />
-        <Dato label="Estado" valor={estadoTexto} color={tarde ? 'var(--red)' : undefined} />
-      </div>
-
-      {enFila && (
-        <>
-          <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>¿Cuándo puedo comprarlo?</div>
+      <Seccion titulo="Resumen">
+        <div style={CAJA_INFO}>
+          <Dato label="Estado" valor={estadoTexto} color={tarde ? 'var(--red)' : undefined} />
+          {enFila && <Dato label="Fecha estimada" valor={r?.fechaProyectada ? (r.estatus === 'comprable_hoy' ? 'Hoy' : fechaCorta(r.fechaProyectada)) : 'Sin fecha segura'} sub={r?.fechaProyectada && r.estatus !== 'comprable_hoy' ? enDias(r.fechaProyectada, hoy) : null} />}
+          {enFila && <Dato label="Fecha límite" valor={whimm.fechaLimite ? fechaCorta(whimm.fechaLimite) : '—'} color={tarde ? 'var(--red)' : undefined} sub={whimm.fechaLimite ? enDias(whimm.fechaLimite, hoy) : null} />}
+          {estado === 'comprado' && <Dato label="Comprado el" valor={whimm.compradoEn ? fechaCorta(whimm.compradoEn) : '—'} />}
+          {estado === 'comprado' && <Dato label="Precio pagado" valor={fmt(whimm.precioComprado ?? precio)} />}
+        </div>
+        {enFila && (
+          <div style={{ ...CAJA_INFO, flexDirection: 'column', gap: 8, marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}>¿Cuándo puedo comprarlo?</div>
             <Barra precio={precio} progreso={progreso} alto={10} />
           </div>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-            <Dato label="Fecha estimada" valor={r?.fechaProyectada ? (r.estatus === 'comprable_hoy' ? 'Hoy' : fechaCorta(r.fechaProyectada)) : 'Sin fecha segura'} sub={r?.fechaProyectada && r.estatus !== 'comprable_hoy' ? enDias(r.fechaProyectada, hoy) : null} />
-            <Dato label="Fecha límite" valor={whimm.fechaLimite ? fechaCorta(whimm.fechaLimite) : '—'} color={tarde ? 'var(--red)' : undefined} sub={whimm.fechaLimite ? enDias(whimm.fechaLimite, hoy) : null} />
-          </div>
-          {r?.intercambiado && <Aviso tono="amber">Espera al lunes por pasarte del presupuesto.</Aviso>}
-        </>
-      )}
+        )}
+        {r?.intercambiado && <div style={{ marginTop: 10 }}><Aviso tono="amber">Espera al lunes por pasarte del presupuesto.</Aviso></div>}
+      </Seccion>
 
-      <div style={{ display: 'flex', gap: 10, margin: '10px 0 16px' }}>
-        <Dato label="Necesidad" valor={`${normalizarNivel(whimm.necesidad)}/${NIVEL_MAX}`} />
-        <Dato label="Deseo" valor={`${normalizarNivel(whimm.deseo)}/${NIVEL_MAX}`} />
-        {r && <Dato label="Calificación" valor={scoreDe10(r.score)} />}
-      </div>
+      <Seccion titulo="Importancia">
+        <div style={CAJA_INFO}>
+          <Dato label="Necesidad" valor={`${normalizarNivel(whimm.necesidad)}/${NIVEL_MAX}`} />
+          <Dato label="Deseo" valor={`${normalizarNivel(whimm.deseo)}/${NIVEL_MAX}`} />
+          {r && <Dato label="Calificación" valor={scoreDe10(r.score)} />}
+        </div>
+      </Seccion>
 
       {estado === 'pagando' && (
-        <div style={{ background: 'var(--beige2)', borderRadius: 12, padding: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 500, marginBottom: 8 }}>Pagando a meses (MSI)</div>
-          {pago ? (
-            <>
-              <Barra precio={progPago.total || 1} progreso={progPago.pagados} alto={10} texto={false} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{progPago.pagados} de {progPago.total} pagos</span>
-                <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--wine4)' }}>{fmt(pago.monto)}/mes</span>
-              </div>
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {fechasPago.map((p) => (
-                  <div key={p.fecha} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: p.omitida ? 0.5 : 1 }}>
-                    <span style={{ color: p.fecha <= hoy ? 'var(--muted)' : 'var(--text)', textDecoration: p.omitida ? 'line-through' : 'none' }}>{fechaCorta(p.fecha)}{p.fecha <= hoy && !p.omitida ? ' · pagado' : ''}</span>
-                    <span className="mono" style={{ fontWeight: 600 }}>{fmt(p.monto)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--red)' }}>No encuentro el pago a meses ligado.</div>
-          )}
-        </div>
+        <Seccion titulo="Pagando a meses (MSI)">
+          <div style={{ ...CAJA_INFO, flexDirection: 'column', gap: 0 }}>
+            {pago ? (
+              <>
+                <Barra precio={progPago.total || 1} progreso={progPago.pagados} alto={10} texto={false} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                  <span className="mono" style={{ fontSize: 11, fontWeight: 600 }}>{progPago.pagados} de {progPago.total} pagos</span>
+                  <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: 'var(--wine4)' }}>{fmt(pago.monto)}/mes</span>
+                </div>
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {fechasPago.map((p) => (
+                    <div key={p.fecha} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: p.omitida ? 0.5 : 1 }}>
+                      <span style={{ color: p.fecha <= hoy ? 'var(--muted)' : 'var(--text)', textDecoration: p.omitida ? 'line-through' : 'none' }}>{fechaCorta(p.fecha)}{p.fecha <= hoy && !p.omitida ? ' · pagado' : ''}</span>
+                      <span className="mono" style={{ fontWeight: 600 }}>{fmt(p.monto)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--red)' }}>No encuentro el pago a meses ligado.</div>
+            )}
+          </div>
+        </Seccion>
       )}
-
-      {estado === 'comprado' && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-          <Dato label="Fecha de compra" valor={whimm.compradoEn ? fechaCorta(whimm.compradoEn) : '—'} />
-          <Dato label="Precio pagado" valor={fmt(whimm.precioComprado ?? precio)} />
-        </div>
-      )}
-
-      {enFila && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-          {botonAccion('comprar', 'Ya lo compré')}
-          {accion === 'comprar' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}><Campo label="Precio pagado"><input className="fld" type="number" inputMode="decimal" value={precioPagado} onChange={(e) => setPrecioPagado(e.target.value)} /></Campo></div>
-                <div style={{ flex: 1 }}><Campo label="Fecha"><input className="fld" type="date" value={fechaCompra} onChange={(e) => setFechaCompra(e.target.value)} /></Campo></div>
-              </div>
-              <button className="btn-primary" onClick={comprar}>Marcar como comprado</button>
-            </div>
-          )}
-          {botonAccion('apartar', estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos')}
-          {accion === 'apartar' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Campo label={`Monto a apartar · faltan ${fmt(faltante)}`}><input className="fld" type="number" inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} /></Campo>
-              <button className="btn-primary" onClick={apartar}>Apartar</button>
-            </div>
-          )}
-          {botonAccion('msi', 'Pagar a meses (MSI)')}
-          {accion === 'msi' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1 }}><Campo label="Meses"><input className="fld" type="number" inputMode="numeric" value={numPagos} onChange={(e) => setNumPagos(e.target.value)} /></Campo></div>
-                <div style={{ flex: 1 }}><Campo label="Primer pago"><input className="fld" type="date" value={primerPago} onChange={(e) => setPrimerPago(e.target.value)} /></Campo></div>
-              </div>
-              <button className="btn-primary" onClick={pagarAMeses}>Confirmar {fmt(precio / Math.max(Math.round(num(numPagos)), 2))} al mes</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {estado === 'pagando' && <div style={{ marginBottom: 14 }}><BotonEliminar texto="Cancelar los meses" mensaje="Se borra el plan de pagos y el Whimm vuelve a tu fila." onConfirmar={cancelarMSI} /></div>}
-      {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', background: 'var(--beige2)', borderRadius: 12, padding: 12, fontSize: 12, fontWeight: 600, color: 'var(--acento)', marginBottom: 14 }}>Regresar a la fila</button>}
 
       {links.length > 0 && (
-        <>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Dónde lo encontré</div>
+        <Seccion titulo="Dónde lo encontré">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {links.map((lk, i) => (
-              <div key={i} style={{ background: 'var(--beige2)', borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div key={i} style={{ ...CAJA_INFO, alignItems: 'center', padding: '10px 14px' }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{sitioDe(lk)}</div>
-                <a href={lk} target="_blank" rel="noreferrer" style={{ background: 'var(--wine)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 11, fontWeight: 600 }}>Ver</a>
+                <a href={lk} target="_blank" rel="noreferrer" style={{ border: '1.5px solid var(--acento)', color: 'var(--acento)', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600 }}>Abrir</a>
               </div>
             ))}
           </div>
-        </>
+        </Seccion>
+      )}
+
+      {(enFila || estado === 'pagando' || estado === 'comprado') && (
+        <Seccion titulo="Acciones">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {enFila && (
+              <>
+                {botonAccion('comprar', 'Ya lo compré', 'Registrar precio y fecha')}
+                {accion === 'comprar' && (
+                  <div style={formAccion}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ flex: 1 }}><Campo label="Precio pagado"><input className="fld" type="number" inputMode="decimal" value={precioPagado} onChange={(e) => setPrecioPagado(e.target.value)} /></Campo></div>
+                      <div style={{ flex: 1 }}><Campo label="Fecha"><input className="fld" type="date" value={fechaCompra} onChange={(e) => setFechaCompra(e.target.value)} /></Campo></div>
+                    </div>
+                    <button className="btn-primary" onClick={comprar}>Confirmar compra</button>
+                  </div>
+                )}
+                {botonAccion('apartar', estado === 'apartando' ? 'Actualizar monto apartado' : 'Apartar fondos', `Faltan ${fmt(faltante)}`)}
+                {accion === 'apartar' && (
+                  <div style={formAccion}>
+                    <Campo label="Monto a apartar"><input className="fld" type="number" inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} /></Campo>
+                    <button className="btn-primary" onClick={apartar}>Confirmar apartado</button>
+                  </div>
+                )}
+                {botonAccion('msi', 'Pagar a meses (MSI)', 'En pagos mensuales')}
+                {accion === 'msi' && (
+                  <div style={formAccion}>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ flex: 1 }}><Campo label="Meses"><input className="fld" type="number" inputMode="numeric" value={numPagos} onChange={(e) => setNumPagos(e.target.value)} /></Campo></div>
+                      <div style={{ flex: 1 }}><Campo label="Primer pago"><input className="fld" type="date" value={primerPago} onChange={(e) => setPrimerPago(e.target.value)} /></Campo></div>
+                    </div>
+                    <button className="btn-primary" onClick={pagarAMeses}>Confirmar {fmt(precio / Math.max(Math.round(num(numPagos)), 2))} al mes</button>
+                  </div>
+                )}
+              </>
+            )}
+            {estado === 'pagando' && <BotonEliminar texto="Cancelar los meses" mensaje="Se borra el plan de pagos y el Whimm vuelve a tu fila." onConfirmar={cancelarMSI} />}
+            {estado === 'comprado' && <button onClick={regresarAFila} style={{ width: '100%', border: '1.5px solid var(--beige3)', color: 'var(--acento)', background: 'transparent', borderRadius: 12, padding: '12px 14px', fontSize: 13, fontWeight: 600, textAlign: 'left' }}>Regresar a la fila</button>}
+          </div>
+        </Seccion>
       )}
     </Modal>
   )
