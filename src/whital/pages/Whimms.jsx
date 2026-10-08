@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Toast from '../../components/Toast'
-import { IconChevronLeft, IconClose, IconEdit, IconPlus } from '../../components/Icons'
+import { IconChevronLeft, IconClose, IconEdit } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, setUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
@@ -662,7 +662,7 @@ export default function Whimms() {
             <>
               <RepartoPrioridad libre={libre} n={simultaneos} user={user} show={show} />
 
-              <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
+              <div data-guia="tabs-whimms" style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
                 {tabs.map(([k, t]) => (
                   <button key={k} className="segbtn" style={{ background: tab === k ? 'var(--wine)' : 'transparent', color: tab === k ? '#fff' : 'var(--muted)' }} onClick={() => setTab(k)}>{t}</button>
                 ))}
@@ -725,8 +725,6 @@ export default function Whimms() {
           )}
         </div>
       </div>
-
-      <button className="fab" onClick={() => setEdicion({})} aria-label="Agregar Whimm"><IconPlus /></button>
 
       {detalle && base && !edicion && (
         <WhimmDetalle

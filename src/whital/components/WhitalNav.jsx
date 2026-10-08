@@ -1,34 +1,60 @@
+import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { IconHome, IconReceipt, IconCalendar, IconPerson } from '../../components/Icons'
+import { IconHome, IconReceipt, IconCalendar } from '../../components/Icons'
 import IconCompras from './IconCompras'
+import MenuAgregar from './MenuAgregar'
 import { ultimaCompras } from '../lib/ultimaCompras'
 
-const ITEMS = [
+const TAMANO_ICONO = 27
+const INACTIVO = 'var(--muted)'
+
+// Perfil ya no es una pestaña: se entra con la foto de la cuenta en Inicio.
+const IZQUIERDA = [
   { to: '/', label: 'Inicio', Icon: IconHome, end: true },
   { to: '/gastos', label: 'Gastos', Icon: IconReceipt },
+]
+const DERECHA = [
   { to: '/whimms', label: 'Compras', Icon: IconCompras, compras: true },
   { to: '/calendar', label: 'Calendario', Icon: IconCalendar },
-  { to: '/perfil', label: 'Perfil', Icon: IconPerson },
 ]
+
+function IconMas({ color }) {
+  return (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round">
+      <path d="M12 4.5v15M4.5 12h15" />
+    </svg>
+  )
+}
 
 export default function WhitalNav() {
   const { pathname } = useLocation()
+  const [agregando, setAgregando] = useState(false)
+
+  const pestana = ({ to, label, Icon, end, compras }) => (
+    <NavLink key={to} to={compras ? ultimaCompras() : to} end={end}>
+      {({ isActive }) => {
+        const activo = compras ? pathname === '/whimms' || pathname === '/vitalls' : isActive
+        const color = activo ? 'var(--acento)' : INACTIVO
+        return (
+          <>
+            <Icon size={TAMANO_ICONO} color={color} />
+            <span style={{ color, fontWeight: activo ? 700 : 600 }}>{label}</span>
+          </>
+        )
+      }}
+    </NavLink>
+  )
+
   return (
-    <nav className="bottom-nav">
-      {ITEMS.map(({ to, label, Icon, end, compras }) => (
-        <NavLink key={to} to={compras ? ultimaCompras() : to} end={end}>
-          {({ isActive }) => {
-            const activo = compras ? pathname === '/whimms' || pathname === '/vitalls' : isActive
-            const color = activo ? 'var(--acento)' : 'var(--beige4)'
-            return (
-              <>
-                <Icon color={color} />
-                <span style={{ color }}>{label}</span>
-              </>
-            )
-          }}
-        </NavLink>
-      ))}
-    </nav>
+    <>
+      <nav className="bottom-nav">
+        {IZQUIERDA.map(pestana)}
+        <button data-guia="mas" aria-label="Agregar" onClick={() => setAgregando(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
+          <IconMas color="var(--acento)" />
+        </button>
+        {DERECHA.map(pestana)}
+      </nav>
+      <MenuAgregar abierto={agregando} onClose={() => setAgregando(false)} />
+    </>
   )
 }

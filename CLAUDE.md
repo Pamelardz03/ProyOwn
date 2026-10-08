@@ -31,11 +31,15 @@ Ya no existe la "app clásica" (`src/pages`, `src/lib/budget.js`...): se elimin�
 10. **Android:** el widget y el reloj solo leen lo que arma `functions/widget.js`; no calculan presupuesto. Cualquier número nuevo en pantalla del widget se calcula en el motor y se agrega a ese payload.
 11. **Estilos:** `src/index.css` = base y utilidades compartidas; `src/whital/whital.css` = temas y overrides dentro de `.whital`; `loginWhital.css` = login/saludo (`wl-*`). Colores siempre con variables de tema (`var(--wine)`...), nunca hex sueltos en pantallas nuevas.
 
+12. **Pantalla nueva = ayuda nueva.** Cada ruta agrega su bloque en `whital/lib/ayuda.js` (máx. 3 puntos de una línea); el botón "?" de arriba a la derecha (`AyudaPantalla`) muestra solo la ayuda de la pantalla actual. Si la pantalla tiene acciones, también agrega sus pasos en `whital/lib/guias.js` (guía animada de la primera vez; se apunta con `data-guia` o un selector estable). Textos de onboarding y ayuda: cortos, sin párrafos.
+13. **Preguntas iniciales** (`PrimerosPasos`) guardan el perfil en `config.perfil` (`prioridad`, `ingresosCantidad`, `ingresoMensualAprox`, `frecuenciaPago`). Por ahora solo se recopilan; si el motor empieza a usarlos, pasan por `parametrosMotor` (regla 6).
+
 ## Regla de la caja semanal (resumen de `cajaSemanal` en `lib/budget.js`)
 
 - La unidad es la **semana lunes–domingo**: cada lunes la caja = `presupuestoSemanal` + lo que se decidió mantener. Lo "por día" es solo guía.
 - Pasarte de un día sale de la misma caja; pasarte de la semana lo cubre Whimms y **no** afecta semanas siguientes.
 - Al cerrar la semana, lo que sobró se manda a Whimms o se mantiene (`cierresSemana[lunes]`); sin decisión, no se arrastra.
+- **Primera semana proporcional:** `config.inicioFecha` (la guarda `PrimerosPasos`) marca el día en que la persona empezó; esa semana vale `presupuesto/7 × días que quedaban` (700 empezando jueves = 400). Sin `inicioFecha` (cuentas anteriores) la semana vale completa.
 - `presupuestoSemanal` viene de la configuración del usuario; 840 es solo el valor por defecto.
 - **Pendientes de diseño conocidos:** el monto aplica retroactivamente a semanas pasadas (falta guardarlo con vigencia por semana), `MODELO_SEMANAL_DESDE` está fija en código, el día de inicio de semana no es configurable, y no hay "mantener siempre" ni mantener solo una parte.
 

@@ -1,4 +1,6 @@
 /* Estilos propios de Whital (solo dentro de .whital). */
+/* Franja superior reservada para el botón "?" de ayuda. */
+.whital .screen{padding-top:44px}
 .whital .segbtn{border-radius:12px}
 .whital .fld{border-radius:12px}
 /* Sin barras de desplazamiento visibles (se sigue pudiendo hacer scroll). */
@@ -46,7 +48,44 @@
 /* Pantalla completa: la app llega hasta los bordes (con el color del tema) y respeta la
    muesca, la barra de estado y la barra de gestos. */
 .whital.app-shell{padding-top:env(safe-area-inset-top)}
-.whital nav.bottom-nav{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
-.whital .fab{bottom:calc(84px + env(safe-area-inset-bottom))}
+.whital nav.bottom-nav{height:calc(70px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
 .whital .toast{bottom:calc(78px + env(safe-area-inset-bottom))}
 .whital .screen{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+
+/* ===== Inicio: verde con movimiento (se apaga con "reducir movimiento") ===== */
+.whital{--verde-vivo:#4fc16a;--verde-brillo:#9be8a8}
+.hero-vivo{position:relative;overflow:hidden}
+.hero-vivo>*{position:relative;z-index:1}
+.hero-vivo::before,.hero-vivo::after{content:"";position:absolute;border-radius:50%;pointer-events:none;filter:blur(26px);z-index:0}
+.hero-vivo::before{width:190px;height:190px;right:-50px;top:-70px;background:radial-gradient(circle,rgba(79,193,106,.75),transparent 70%);animation:verde-flota 7s ease-in-out infinite}
+.hero-vivo::after{width:150px;height:150px;left:-40px;bottom:-60px;background:radial-gradient(circle,rgba(155,232,168,.5),transparent 70%);animation:verde-flota 9s ease-in-out infinite reverse}
+.tile-hoy{box-shadow:inset 0 0 0 1px rgba(155,232,168,.55),0 0 14px rgba(79,193,106,.35);animation:verde-latido 2.8s ease-in-out infinite}
+.punto-vivo{width:7px;height:7px;border-radius:50%;background:var(--verde-brillo);box-shadow:0 0 0 0 rgba(155,232,168,.7);animation:verde-pulso 1.8s ease-out infinite;flex-shrink:0}
+.barra-dia{transform-origin:bottom;animation:barra-sube .6s cubic-bezier(.2,.8,.2,1) both}
+.barra-hoy{box-shadow:0 0 10px rgba(79,193,106,.7);animation:barra-sube .6s cubic-bezier(.2,.8,.2,1) both,verde-latido 2.4s ease-in-out .8s infinite}
+@keyframes verde-flota{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-26px,22px) scale(1.18)}}
+@keyframes verde-latido{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
+@keyframes verde-pulso{0%{box-shadow:0 0 0 0 rgba(155,232,168,.7)}100%{box-shadow:0 0 0 9px rgba(155,232,168,0)}}
+@keyframes barra-sube{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.hero-vivo::before,.hero-vivo::after,.tile-hoy,.punto-vivo,.barra-dia,.barra-hoy{animation:none}}
+
+/* ===== Botón "?" de ayuda y guías animadas (usan el color del tema) ===== */
+.btn-ayuda{position:absolute;top:calc(10px + env(safe-area-inset-top));right:14px;width:30px;height:30px;border-radius:15px;background:var(--wine);color:#fff;font-size:15px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.guia-capa{position:absolute;inset:0;z-index:60}
+.guia-foco{position:absolute;border-radius:16px;box-shadow:0 0 0 9999px rgba(20,12,6,.62);outline:2px solid var(--acento);transition:left .3s ease,top .3s ease,width .3s ease,height .3s ease;pointer-events:none;animation:guia-anillo 1.6s ease-in-out infinite}
+.guia-gesto{position:absolute;width:0;height:0;pointer-events:none;z-index:1}
+.guia-dedo,.guia-ola{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%}
+.guia-dedo{background:#fff;border:3px solid var(--acento);box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.guia-ola{border:2px solid #fff;opacity:0}
+.guia-tocar .guia-dedo{animation:guia-toca 1.7s ease-in-out infinite}
+.guia-tocar .guia-ola{animation:guia-ola 1.7s ease-out infinite}
+.guia-deslizar .guia-dedo{animation:guia-desliza 1.9s ease-in-out infinite}
+.guia-card{position:absolute;left:16px;right:16px;padding:16px 18px;border-radius:18px;box-shadow:0 12px 32px rgba(0,0,0,.35);animation:guia-entra .3s ease both}
+@keyframes guia-anillo{0%,100%{outline-offset:0}50%{outline-offset:5px}}
+@keyframes guia-toca{0%{transform:translate(26px,34px);opacity:0}25%{transform:translate(0,0);opacity:1}40%{transform:scale(.78)}55%{transform:scale(1)}85%{opacity:1}100%{opacity:0}}
+@keyframes guia-ola{0%,38%{opacity:0;transform:scale(1)}42%{opacity:.9}100%{opacity:0;transform:scale(3.4)}}
+@keyframes guia-desliza{0%{transform:translateX(56px);opacity:0}15%{opacity:1}80%{transform:translateX(-64px);opacity:1}100%{transform:translateX(-64px);opacity:0}}
+@keyframes guia-entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.guia-foco,.guia-dedo,.guia-ola,.guia-card{animation:none}}
+.btn-avatar{position:absolute;top:calc(8px + env(safe-area-inset-top));left:14px;width:32px;height:32px;border-radius:16px;overflow:hidden;background:var(--wine);color:#fff;font-size:14px;font-weight:700;z-index:25;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.btn-avatar img{width:100%;height:100%;object-fit:cover}

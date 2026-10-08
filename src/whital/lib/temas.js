@@ -17,6 +17,12 @@ export const FONDOS = [
   { id: 'oscuro', nombre: 'Gris oscuro', fondo: '#1e1f22', tarjeta: '#26282c', texto: '#ecebe6', barra: '#1e1f22' },
 ]
 
+// Fondo de las pantallas de Perfil: un tono claro de la paleta (u oscuro, si el fondo es oscuro) para que
+// se note que es otra zona de la app, con el contraste de texto del tema.
+const PERFIL_CLARO = { vino: '#dde4c8', rosa: '#f6d6e4', salvia: '#d3e2dc', oceano: '#d0e4e7', ciruela: '#e2d8f2', terracota: '#f1d8c8' }
+const PERFIL_OSCURO = { vino: '#35222c', rosa: '#3b2230', salvia: '#233633', oceano: '#1e3441', ciruela: '#2e2542', terracota: '#3b2a22' }
+export const colorPerfil = (paleta, fondo) => (fondo === 'oscuro' ? PERFIL_OSCURO : PERFIL_CLARO)[paleta] || (fondo === 'oscuro' ? PERFIL_OSCURO : PERFIL_CLARO).vino
+
 export const TEMA_DEFECTO = { paleta: 'vino', fondo: 'beige' }
 
 // 'bosque' se llamaba así antes: ahora es 'salvia'.

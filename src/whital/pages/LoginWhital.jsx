@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import LogoWhital from '../components/LogoWhital'
 import '../loginWhital.css'
@@ -51,8 +52,8 @@ export default function LoginWhital() {
         </button>
         {error && <div className="wl-error">{error}</div>}
         <div className="wl-frase" style={{ fontSize: 11, animationDelay: '1.3s' }}>
-          Al continuar aceptas los <a href={`${import.meta.env.BASE_URL}terminos.html`} style={{ color: 'inherit', textDecoration: 'underline' }}>Términos de uso</a> y la{' '}
-          <a href={`${import.meta.env.BASE_URL}privacidad.html`} style={{ color: 'inherit', textDecoration: 'underline' }}>Política de privacidad</a>.
+          Al continuar aceptas los <Link to="/terminos" style={{ color: 'inherit', textDecoration: 'underline' }}>Términos y condiciones</Link> y la{' '}
+          <Link to="/politica" style={{ color: 'inherit', textDecoration: 'underline' }}>Política de privacidad</Link>.
         </div>
       </div>
     </div>

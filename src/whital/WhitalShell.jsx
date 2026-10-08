@@ -1,25 +1,27 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AvisosNotificaciones from './components/AvisosNotificaciones'
+import AvatarPerfil from './components/AvatarPerfil'
+import AyudaPantalla from './components/AyudaPantalla'
 import Bienvenida from './components/Bienvenida'
 import PrimerosPasos from './components/PrimerosPasos'
 import WhitalNav from './components/WhitalNav'
 import { useTema } from './hooks/useTema'
 import { repintarBarra } from './lib/barra'
-import { FONDOS } from './lib/temas'
+import { FONDOS, colorPerfil } from './lib/temas'
 import './whital.css'
 import Calendar from './pages/Calendar'
 import Gastos from './pages/Gastos'
 import Historial from './pages/Historial'
 import Inicio from './pages/Inicio'
 import Perfil from './pages/Perfil'
-import Agregar from './pages/perfil/Agregar'
 import Configuracion from './pages/perfil/Configuracion'
 import Temas from './pages/perfil/Temas'
 import Metricas from './pages/perfil/Metricas'
 import Notificaciones from './pages/perfil/Notificaciones'
 import PagosFijos from './pages/perfil/PagosFijos'
 import Sueldos from './pages/perfil/Sueldos'
+import Legal from './pages/perfil/Legal'
 import Privacidad from './pages/perfil/Privacidad'
 import Widget from './pages/perfil/Widget'
 import Vitalls from './pages/Vitalls'
@@ -48,15 +50,19 @@ export default function WhitalShell() {
   useAtajoDelLauncher()
   const location = useLocation()
   const tema = useTema()
+  // Las pantallas de Perfil llevan un fondo propio (tono claro del tema).
+  const fondoPerfil = location.pathname.startsWith('/perfil') ? colorPerfil(tema.paleta, tema.fondo) : null
   // Chrome reinicia el color de la barra de estado al cambiar de pantalla: se vuelve a pintar.
   useEffect(() => {
-    repintarBarra(FONDOS.find((f) => f.id === tema.fondo)?.barra || '#f3efe2')
-  }, [location.pathname, tema.fondo])
+    repintarBarra(fondoPerfil || FONDOS.find((f) => f.id === tema.fondo)?.barra || '#f3efe2')
+  }, [location.pathname, tema.fondo, fondoPerfil])
   return (
-    <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo}>
+    <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo} style={fondoPerfil ? { background: fondoPerfil } : undefined}>
       <Bienvenida />
       <PrimerosPasos />
       <AvisosNotificaciones />
+      <AvatarPerfil />
+      <AyudaPantalla />
       <Routes>
         <Route path="/" element={<Inicio />} />
         <Route path="/gastos" element={<Gastos key={location.key} />} />
@@ -69,12 +75,13 @@ export default function WhitalShell() {
         <Route path="/perfil/sueldos" element={<Sueldos key={location.key} />} />
         <Route path="/perfil/metricas" element={<Metricas />} />
         <Route path="/perfil/notificaciones" element={<Notificaciones />} />
-        <Route path="/perfil/agregar" element={<Agregar />} />
         <Route path="/perfil/configuracion" element={<Configuracion />} />
         <Route path="/perfil/temas" element={<Temas />} />
         <Route path="/perfil/apariencia" element={<Navigate to="/perfil/temas" replace />} />
         <Route path="/perfil/widget" element={<Widget />} />
         <Route path="/perfil/privacidad" element={<Privacidad />} />
+        <Route path="/perfil/terminos" element={<Legal id="terminos" />} />
+        <Route path="/perfil/politica" element={<Legal id="privacidad" />} />
         <Route path="/ajustes" element={<Navigate to="/perfil" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

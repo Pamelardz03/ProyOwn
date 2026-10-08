@@ -164,9 +164,14 @@ export default function Inicio() {
   return (
     <div className="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div>
-          <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
-          <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link to="/perfil" aria-label="Mi perfil" data-guia="avatar" style={{ width: 48, height: 48, borderRadius: 24, flexShrink: 0, overflow: 'hidden', background: 'var(--wine)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 600 }}>
+            {user?.photoURL ? <img src={user.photoURL} alt="" referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : nombre.charAt(0).toUpperCase()}
+          </Link>
+          <div>
+            <div className="eyebrow">{diaSemanaCorto(hoy)} · {fechaCorta(hoy)}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, marginTop: 2 }}>Hola, {nombre}</div>
+          </div>
         </div>
 
         {error && <div className="card" style={{ padding: 12, fontSize: 12, color: 'var(--red)' }}>{error}</div>}
@@ -177,15 +182,15 @@ export default function Inicio() {
             {vista.cierrePendiente && <CierreSemana cierre={vista.cierrePendiente} user={user} show={show} />}
             <Avisos avisos={avisos} />
 
-            <div className="hero">
+            <div className="hero hero-vivo">
               <div className="eyebrow" style={{ color: 'rgba(255,255,255,.75)' }}>Saldo real en banco</div>
               <div className="mono stat-display" style={{ fontSize: 40, lineHeight: 1.05, marginTop: 6 }}>
                 {fmt(vista.saldoReal)}
                 <span style={{ fontSize: 16, opacity: 0.7 }}> MXN</span>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-                <div style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
-                  <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>Para gastar hoy</div>
+                <div className="tile-hoy" style={{ flex: 1, background: 'rgba(255,255,255,.12)', borderRadius: 12, padding: '11px 12px' }}>
+                  <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}><span className="punto-vivo" />Para gastar hoy</div>
                   <div className="mono" style={{ fontSize: 15, fontWeight: 500, marginTop: 3, color: vista.paraHoy < 0 ? '#ffb4b4' : 'inherit' }}>
                     {fmt(vista.paraHoy)}
                   </div>
@@ -204,7 +209,7 @@ export default function Inicio() {
               </div>
             </div>
 
-            <div className="card" style={{ padding: 18 }}>
+            <div className="card" data-guia="semana" style={{ padding: 18 }}>
               <div className="eyebrow" style={{ marginBottom: 2 }}>Esta semana · gasto por día</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: vista.caja.restante < 0 ? 'var(--red)' : 'var(--text)' }}>
                 {vista.caja.restante < 0 ? `Te pasaste ${fmt(-vista.caja.restante)} de la semana` : `Te quedan ${fmt(vista.caja.restante)} de ${fmt(vista.caja.total)}`}
@@ -215,10 +220,10 @@ export default function Inicio() {
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 64, marginTop: 14 }}>
                 {(() => {
                   const max = Math.max(...vista.dias.map((d) => d.gastado), vista.presupuestoSemanal / 7, 1)
-                  return vista.dias.map((d) => (
+                  return vista.dias.map((d, i) => (
                     <button key={d.fecha} onClick={() => setDiaAbierto(d)} aria-label={`Gastos del ${d.label}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: '100%', height: 44, display: 'flex', alignItems: 'flex-end' }}>
-                        <div style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--wine)' : 'var(--wine4)' }} />
+                        <div className={d.esHoy ? 'barra-dia barra-hoy' : d.futuro ? '' : 'barra-dia'} style={{ width: '100%', height: `${Math.max((d.gastado / max) * 100, d.gastado > 0 ? 6 : 2)}%`, borderRadius: 4, background: d.futuro ? 'var(--beige2)' : d.esHoy ? 'var(--verde-vivo)' : 'var(--wine4)', animationDelay: `${i * 70}ms` }} />
                       </div>
                       <span style={{ fontSize: 9, color: d.esHoy ? 'var(--acento)' : 'var(--muted)', fontWeight: d.esHoy ? 700 : 500 }}>{d.label}</span>
                     </button>
@@ -227,7 +232,7 @@ export default function Inicio() {
               </div>
             </div>
 
-            <div className="card" style={{ padding: 18 }}>
+            <div className="card" data-guia="acciones" style={{ padding: 18 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Acciones del día de hoy</div>
               {vista.accionesHoy.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -296,8 +301,8 @@ export default function Inicio() {
               )}
             </div>
 
-            <div>
-              <Encabezado eyebrow="Cajitas Nu" titulo={`Próximo cobro: ${fechaCorta(vista.cajitas.proximoCobro)}`} />
+            <div data-guia="cajitas">
+              <Encabezado eyebrow="Cajitas" titulo={`Próximo cobro: ${fechaCorta(vista.cajitas.proximoCobro)}`} />
               <div className="row-list">
                 {[['Saldo principal', vista.cajitas.saldoPrincipal], ['Cajita Vitalls', vista.cajitas.cajitaVitalls], ['Cajita Whimms', vista.cajitas.cajitaWhimms]].map(([nombreCaja, monto]) => (
                   <div key={nombreCaja} className="row-list-item">

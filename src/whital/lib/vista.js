@@ -68,6 +68,7 @@ export function parametrosMotor(datos, hoyISO) {
     ajustesSaldo,
     saldoInicial: Number(config?.saldoInicial) || 0,
     cierresSemana: config?.cierresSemana || {},
+    inicioISO: config?.inicioFecha || null, // día en que la persona empezó: la primera semana vale solo por lo que quedaba
     presupuestoSemanal: Number.isFinite(presupuesto) && presupuesto > 0 ? presupuesto : PRESUPUESTO_SEMANAL_DEFAULT,
     whimmsSimultaneos: Number(config?.whimmsSimultaneos) > 0 ? Math.round(Number(config.whimmsSimultaneos)) : 1,
     hoyISO,

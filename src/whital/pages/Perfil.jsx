@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconPlus, IconSalary } from '../../components/Icons'
+import { IconBars, IconBell, IconCard, IconChevronRight, IconClock, IconEdit, IconSalary } from '../../components/Icons'
 import { useAuth } from '../../lib/AuthContext'
 import IconEscudo from '../components/IconEscudo'
 import IconPaleta from '../components/IconPaleta'
@@ -17,12 +17,16 @@ const PESTANAS = [
   { to: '/perfil/pagos-fijos', Icon: IconCard, titulo: 'Pagos fijos', pista: 'Todos tus pagos recurrentes' },
   { to: '/perfil/sueldos', Icon: IconSalary, titulo: 'Sueldos', pista: 'Sueldos fijos e ingresos rápidos' },
   { to: '/perfil/metricas', Icon: IconBars, titulo: 'Métricas', pista: 'Promedios, cantidades y gastos' },
-  { to: '/perfil/agregar', Icon: IconPlus, titulo: 'Agregar', pista: 'Gasto, Whimm, Vitall, sueldo…' },
   { to: '/perfil/notificaciones', Icon: IconBell, titulo: 'Notificaciones', pista: 'Qué avisar y cada cuánto' },
   { to: '/perfil/temas', Icon: IconPaleta, titulo: 'Temas', pista: 'Paleta de colores y fondo' },
   { to: '/perfil/widget', Icon: IconWidget, titulo: 'Widget', pista: 'Código para la app de Android' },
   { to: '/perfil/privacidad', Icon: IconEscudo, titulo: 'Privacidad y datos', pista: 'Descargar tus datos, políticas y eliminar la cuenta' },
   { to: '/perfil/configuracion', Icon: IconEdit, titulo: 'Configuración', pista: 'Saldo inicial y presupuesto' },
+]
+
+const LEGALES = [
+  { to: '/perfil/terminos', titulo: 'Términos y condiciones' },
+  { to: '/perfil/politica', titulo: 'Política de privacidad' },
 ]
 
 const etiqueta = { fontSize: 10, color: 'var(--muted)', fontWeight: 500 }
@@ -91,6 +95,15 @@ export default function Perfil() {
           ))}
         </div>
 
+        <div className="row-list">
+          {LEGALES.map(({ to, titulo }) => (
+            <Link key={to} to={to} className="row-list-item">
+              <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{titulo}</div>
+              <IconChevronRight />
+            </Link>
+          ))}
+        </div>
+
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Cuenta</div>
           <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -103,7 +116,7 @@ export default function Perfil() {
               <div style={{ fontSize: 17, fontWeight: 600 }}>{nombre}</div>
               {user?.email && <div className="mono" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>}
             </div>
-            <button onClick={() => logout()} style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>Cerrar sesión</button>
+            <button onClick={() => logout()} style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>Cerrar sesión</button>
           </div>
         </div>
 

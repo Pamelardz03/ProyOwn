@@ -314,24 +314,35 @@ export function saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, g
 // ---------------------------------------------------------------------------
 const MODELO_SEMANAL_DESDE = '2026-10-05' // lunes en que arrancó este modelo; antes no hay cierres que elegir
 
-export function cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, hoyISO }) {
+// Si la persona empezó a media semana, esa primera semana solo vale por los días que quedaban
+// (presupuesto / 7 por día): con 700 por semana, empezar un jueves da 4 días = 400.
+// Sin fecha de inicio (cuentas anteriores) la semana vale completa.
+export function presupuestoDeLaSemana(lunesISO, presupuesto, inicioISO) {
+  if (!inicioISO || startOfWeekISO(inicioISO) !== lunesISO) return presupuesto
+  const dias = Math.min(Math.max(diasEntreISO(inicioISO, addDaysISO(lunesISO, 7)), 1), 7)
+  return (presupuesto * dias) / 7
+}
+
+export function cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, inicioISO, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const lunesHoy = startOfWeekISO(hoyISO)
   const primerGasto = (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha && g.fecha <= hoyISO).map((g) => g.fecha).sort(compareISOAsc)[0]
-  const primera = primerGasto && startOfWeekISO(primerGasto) > MODELO_SEMANAL_DESDE ? startOfWeekISO(primerGasto) : MODELO_SEMANAL_DESDE
+  let primera = primerGasto && startOfWeekISO(primerGasto) > MODELO_SEMANAL_DESDE ? startOfWeekISO(primerGasto) : MODELO_SEMANAL_DESDE
+  if (inicioISO && startOfWeekISO(inicioISO) > primera) primera = startOfWeekISO(inicioISO)
 
   let arrastre = 0
   let ultimaCerrada = null
   for (let lunes = primera; lunes < lunesHoy; lunes = addDaysISO(lunes, 7)) {
     const gastado = gastoSemanaReal(gastos, lunes, addDaysISO(lunes, 6))
-    const total = presupuesto + arrastre
+    const base = presupuestoDeLaSemana(lunes, presupuesto, inicioISO)
+    const total = base + arrastre
     const sobra = Math.max(total - gastado, 0)
     const decision = cierresSemana?.[lunes] || null
     ultimaCerrada = { semanaInicio: lunes, semanaFin: addDaysISO(lunes, 6), gastado, presupuesto, arrastrePrevio: arrastre, total, sobra, pasado: Math.max(gastado - total, 0), decision }
     arrastre = decision === 'mantener' ? sobra : 0
   }
 
-  const total = presupuesto + arrastre
+  const total = presupuestoDeLaSemana(lunesHoy, presupuesto, inicioISO) + arrastre
   const gastado = gastoSemanaReal(gastos, lunesHoy, hoyISO)
   const gastadoHoy = (gastos || []).filter((g) => g?.categoria !== 'Vitall' && g?.fecha === hoyISO).reduce((sum, g) => sum + gastoNeto(g), 0)
   const diasRestantes = Math.max(diasEntreISO(hoyISO, addDaysISO(lunesHoy, 7)), 1)
@@ -358,12 +369,12 @@ export function cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, hoyISO 
 // Línea de caja: saldo proyectado de cada día desde hoy (índice 0) hasta el
 // horizonte, SIN contar compras de Whimms futuras. Hoy solo suma el gasto
 // esperado de hoy (los demás eventos de hoy ya están en el saldo real).
-function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO }) {
+function lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, inicioISO, hoyISO }) {
   const presupuesto = presupuestoDe(presupuestoSemanal)
   const horizonte = addDaysISO(hoyISO, HORIZONTE_PROYECCION_DIAS)
   const saldoHoy = saldoRealEnBanco({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, hoyISO })
 
-  const caja = cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, hoyISO })
+  const caja = cajaSemanal({ gastos, presupuestoSemanal, cierresSemana, inicioISO, hoyISO })
   const restanteSemana = Math.max(caja.restante, 0)
 
   const delta = new Map()
@@ -414,8 +425,8 @@ function apartadoTotalPendiente(whimms) {
 // El cierre semanal es implícito: lo no gastado de una semana se queda en el
 // saldo (bono) y lo gastado de más ya salió de él (déficit).
 // ---------------------------------------------------------------------------
-export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO })
+export function computeBolsas({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, inicioISO, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, inicioISO, hoyISO })
   const bolsaWhimms = minimosDesdeElFinal(linea.saldos)[0] - apartadoTotalPendiente(whimms)
 
   const semanaHoyInicio = startOfWeekISO(hoyISO)
@@ -527,8 +538,8 @@ export function computeWhimmPrioridad(whimm, hoyISO) {
 // `montoApartado` (Apartar fondos extra) es dinero ya reservado: no se ofrece a
 // otros Whimms y reduce lo que le falta al suyo.
 // ---------------------------------------------------------------------------
-export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, cierresSemana, whimmsSimultaneos = 1, hoyISO }) {
-  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, hoyISO })
+export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pagosFijos, gastos, saldoInicial, ajustesSaldo, presupuestoSemanal, cierresSemana, inicioISO, whimmsSimultaneos = 1, hoyISO }) {
+  const linea = lineaDeCaja({ saldoInicial, sueldosFijos, sueldosRapidos, gastos, pagosFijos, whimms, ajustesSaldo, presupuestoSemanal, cierresSemana, inicioISO, hoyISO })
   const apartado = apartadoTotalPendiente(whimms)
   const saldosBase = linea.saldos.map((s) => s - apartado)
 
@@ -679,7 +690,7 @@ export function proyectarColaWhimms({ whimms, sueldosFijos, sueldosRapidos, pago
   // primero a los Whimms SIN fecha límite, de menor score, que hoy ya se podían
   // comprar: vuelven a estar disponibles el lunes. Solo ellos; si el exceso es
   // mayor y toca a uno con fecha, `evaluarIntercambio` lo advierte.
-  const exceso = Math.max(gastoSemanaReal(gastos, semanaInicio, hoyISO) - presupuestoDe(presupuestoSemanal), 0)
+  const exceso = Math.max(gastoSemanaReal(gastos, semanaInicio, hoyISO) - presupuestoDeLaSemana(semanaInicio, presupuestoDe(presupuestoSemanal), inicioISO), 0)
   if (exceso > 0) {
     const candidatos = resultado.filter((r) => r.estatus === 'comprable_hoy' && !r.fechaLimite).sort((a, b) => a.score - b.score)
     let cubierto = 0
@@ -821,8 +832,8 @@ export function evaluarIntercambio({ gastoNuevo, ...base }) {
     else avisos.push(item)
   })
 
-  const presupuesto = presupuestoDe(base.presupuestoSemanal)
   const semanaInicio = startOfWeekISO(gastoNuevo?.fecha || base.hoyISO)
+  const presupuesto = presupuestoDeLaSemana(semanaInicio, presupuestoDe(base.presupuestoSemanal), base.inicioISO)
   const gastadoSemana = gastoSemanaReal([...(base.gastos || []), gastoNuevo], semanaInicio, addDaysISO(semanaInicio, 6))
   return {
     puedeIntercambiar: criticos.length === 0,

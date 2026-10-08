@@ -1,5 +1,8 @@
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
+import DocumentoLegal from './whital/components/DocumentoLegal'
+import { useTema } from './whital/hooks/useTema'
+import { DOCUMENTOS } from './whital/lib/legal'
 import LoginWhital from './whital/pages/LoginWhital'
 import WhitalShell from './whital/WhitalShell'
 
@@ -27,11 +30,33 @@ function Gate() {
   return <WhitalShell />
 }
 
+// Términos y política vistos desde el login (sin sesión), con el tema guardado en el dispositivo.
+function LegalPublico({ id }) {
+  const tema = useTema()
+  return (
+    <div className="app-shell whital" data-paleta={tema.paleta} data-fondo={tema.fondo}>
+      <div className="screen" style={{ paddingBottom: 40 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Link to="/" aria-label="Volver" className="back-btn">‹</Link>
+            <h1>{DOCUMENTOS[id].titulo}</h1>
+          </div>
+          <DocumentoLegal id={id} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <Gate />
+        <Routes>
+          <Route path="/terminos" element={<LegalPublico id="terminos" />} />
+          <Route path="/politica" element={<LegalPublico id="privacidad" />} />
+          <Route path="*" element={<Gate />} />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   )

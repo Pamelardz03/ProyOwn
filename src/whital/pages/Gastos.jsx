@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
-import { IconChevronLeft, IconChevronRight, IconEdit, IconPlus, IconReceipt } from '../../components/Icons'
+import { IconChevronLeft, IconChevronRight, IconEdit, IconReceipt } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
@@ -222,7 +222,7 @@ export default function Gastos() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <h1>Gastos</h1>
 
-          <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
+          <div data-guia="periodo" style={{ display: 'flex', gap: 6, background: 'var(--beige2)', padding: 4, borderRadius: 12 }}>
             {PERIODOS.map((p) => (
               <button key={p} className="segbtn" onClick={() => { setPeriodo(p); setRef(hoy) }} style={{ background: periodo === p ? 'var(--wine)' : 'transparent', color: periodo === p ? '#fff' : 'var(--muted)' }}>
                 {PERIODO_LABEL[p]}
@@ -300,7 +300,6 @@ export default function Gastos() {
         </div>
       </div>
 
-      <button className="fab" onClick={() => setSheet({})} aria-label="Agregar gasto"><IconPlus /></button>
       <Sheet abierto={hojaAbierta} onClose={cerrar} titulo={gastoEnHoja ? 'Editar gasto' : 'Nuevo gasto'}>
         {hojaAbierta && base && <GastoForm key={gastoEnHoja?.id || 'nuevo'} inicial={gastoEnHoja} datos={datos} hoy={hoy} onGuardar={guardar} onEliminar={eliminar} />}
       </Sheet>

@@ -26,7 +26,7 @@ export default function FilaDeslizable({ children, onEliminar, titulo, mensaje, 
 
   return (
     <>
-      <div style={{ position: 'relative', borderRadius: radio, overflow: 'hidden' }}>
+      <div data-guia="fila" style={{ position: 'relative', borderRadius: radio, overflow: 'hidden' }}>
         {/* La papelera ocupa solo lo que ya se destapó (nunca queda detrás de la fila),
             así no se ve a través de las tarjetas semitransparentes. */}
         <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: Math.max(0, -x), overflow: 'hidden', display: 'flex', justifyContent: 'flex-end', pointerEvents: abierto ? 'auto' : 'none', transition: dragging ? 'none' : 'width .12s ease' }}>

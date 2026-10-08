@@ -15,7 +15,7 @@ export default function PestanasCompras({ activa }) {
 
   const opciones = [['whimms', 'Whimms', '/whimms'], ['vitalls', 'Vitalls', '/vitalls']]
   return (
-    <div style={{ display: 'flex', gap: 6, background: 'var(--beige2)', borderRadius: 14, padding: 4 }}>
+    <div data-guia="pestanas" style={{ display: 'flex', gap: 6, background: 'var(--beige2)', borderRadius: 14, padding: 4 }}>
       {opciones.map(([id, texto, ruta]) => (
         <button
           key={id}

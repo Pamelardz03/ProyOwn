@@ -6,8 +6,6 @@ import EncabezadoSub from '../../components/EncabezadoSub'
 import Modal from '../../components/Modal'
 import { eliminarMiCuenta, exportarMisDatos } from '../../lib/cuenta'
 
-const base = import.meta.env.BASE_URL
-
 const fila = { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', width: '100%', textAlign: 'left' }
 
 // Privacidad y datos: qué guarda la app, descargar tus datos, políticas y eliminar la cuenta.
@@ -60,12 +58,6 @@ export default function Privacidad() {
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Un archivo con todo lo que registraste</div>
               </div>
             </button>
-            <a className="row-list-item" style={fila} href={`${base}privacidad.html`} target="_blank" rel="noreferrer">
-              <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Política de privacidad</div>
-            </a>
-            <a className="row-list-item" style={fila} href={`${base}terminos.html`} target="_blank" rel="noreferrer">
-              <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Términos de uso</div>
-            </a>
           </div>
 
           <div className="card" style={{ padding: 14, fontSize: 12, lineHeight: 1.55 }}>

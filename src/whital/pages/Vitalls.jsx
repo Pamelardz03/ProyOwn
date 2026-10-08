@@ -4,7 +4,6 @@ import InputConSugerencias from '../components/InputConSugerencias'
 import PestanasCompras from '../components/PestanasCompras'
 import Toast from '../../components/Toast'
 import Toggle from '../../components/Toggle'
-import { IconPlus } from '../../components/Icons'
 import { useToast } from '../../hooks/useToast'
 import { useAuth } from '../../lib/AuthContext'
 import { addUserDoc, deleteUserDoc, updateUserDoc } from '../../lib/firestoreCollections'
@@ -210,7 +209,6 @@ export default function Vitalls() {
         )}
       </div>
 
-      <button className="fab" onClick={() => setSheet({})} aria-label="Agregar Vitall"><IconPlus /></button>
       <Sheet abierto={!!hoja} onClose={cerrar} titulo={hoja?.pago ? hoja.pago.name : 'Nuevo Vitall'}>
         {hoja && <VitallForm key={hoja.pago?.id || 'nuevo'} plazosInicial={hoja.plazos} pago={hoja.pago} datos={datos} hoy={hoy} user={user} show={show} onCerrar={cerrar} />}
       </Sheet>

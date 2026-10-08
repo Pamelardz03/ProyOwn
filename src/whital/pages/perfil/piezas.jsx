@@ -49,7 +49,7 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Campo label="Nombre"><input className="fld" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sueldo, domingo de mi papá…" /></Campo>
+      <Campo label="Nombre" nota="Debe ser un ingreso constante y fijo."><input className="fld" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Trabajo, Beca, Pensión" /></Campo>
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ flex: 1 }}><Campo label="Monto"><input className="fld" type="number" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} /></Campo></div>
         <div style={{ flex: 1 }}>
@@ -58,7 +58,7 @@ export function SueldoForm({ sueldo, hoy, user, show, onCerrar }) {
           </Campo>
         </div>
       </div>
-      <Campo label="Cobra desde">
+      <Campo label="Próximo cobro" nota={`Pon la fecha de tu próximo cobro: lo que ya cobraste ya está en tu saldo.${frecuencia === 'Quincenal' ? ' Se cobra el 15 y el último día de cada mes.' : ''}`}>
         <input className="fld" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
       </Campo>
       {!nuevo && (frecuencia !== sueldo.frecuencia || fechaInicio !== sueldo.fechaInicio) && (
