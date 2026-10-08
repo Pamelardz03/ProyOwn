@@ -19,15 +19,6 @@ export default function Notificaciones() {
 
   const general = { ...(datos.config?.recordatorioCadaMin != null ? { registro: datos.config.recordatorioCadaMin } : {}), ...(datos.config?.notificaciones || {}) }
 
-  const horario = datos.config?.horarioAvisos === 'todo' ? 'todo' : 'dia'
-  const cambiarHorario = async (valor) => {
-    try {
-      await setUserDoc(user.uid, 'config', 'presupuesto', { horarioAvisos: valor })
-      show('Guardado')
-    } catch {
-      show('No se pudo guardar')
-    }
-  }
 
   const cambiar = async (clave, min) => {
     try {
@@ -65,16 +56,6 @@ export default function Notificaciones() {
               {permiso === 'default' && <button className="btn-primary" onClick={pedirPermiso}>Activar avisos en este dispositivo</button>}
               {permiso === 'denied' && <Aviso tono="amber">Notificaciones bloqueadas en el navegador.</Aviso>}
               {permiso === 'no-soportado' && <Aviso tono="amber">Este navegador no admite notificaciones.</Aviso>}
-
-              <div className="row-list">
-                <div className="row-list-item" style={{ gap: 12 }}>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>Horario de avisos</div>
-                  <select className="fld" style={{ width: 150, flexShrink: 0, padding: '9px 10px' }} aria-label="Horario de avisos" value={horario} onChange={(e) => cambiarHorario(e.target.value)}>
-                    <option value="dia">8:00 a 22:00</option>
-                    <option value="todo">Todo el día</option>
-                  </select>
-                </div>
-              </div>
 
               {GRUPOS.map((grupo) => (
                 <div key={grupo}>

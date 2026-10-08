@@ -15,17 +15,13 @@ import { calcularVistaInicio } from './whital/vista.js'
 initializeApp({ storageBucket: 'admin-gastos-985f7.firebasestorage.app' })
 const db = getFirestore()
 
-const HORA_DESDE = 8 // no avisar antes de las 8:00
-const HORA_HASTA = 22 // ni a partir de las 22:00
 const MAX_POR_CORRIDA = 3
 const TOLERANCIA_MS = 2 * 60000 // la corrida puede llegar unos segundos antes de tiempo
 const urlDe = (a) => (a.ir?.ruta === '/gastos' && a.ir.estado?.nuevo ? './?ir=gastos&nuevo=1' : './')
 
 async function avisarUsuario(uid, dispositivos, ahora) {
   const datos = await cargarDatos(uid)
-  // Horario de avisos de la persona (por defecto 8:00 a 22:00; "todo" = sin límite).
-  const hora = new Date(ahora).getHours()
-  if (datos.config?.horarioAvisos !== 'todo' && (hora < HORA_DESDE || hora >= HORA_HASTA)) return 0
+  // Sin horario propio: los avisos salen a cualquier hora y el teléfono decide cuándo silenciarlos (No molestar).
   const hoy = todayISO()
   const vista = calcularVistaInicio(datos, hoy)
   const general = { ...(datos.config?.recordatorioCadaMin != null ? { registro: datos.config.recordatorioCadaMin } : {}), ...(datos.config?.notificaciones || {}) }
