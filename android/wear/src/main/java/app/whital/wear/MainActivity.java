@@ -1,7 +1,11 @@
 package app.whital.wear;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -27,6 +31,7 @@ public class MainActivity extends Activity {
     private TextView montoHoy;
     private TextView semana;
     private TextView aviso;
+    private TextView pegar;
 
     private int dp(int v) {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
@@ -65,6 +70,22 @@ public class MainActivity extends Activity {
         semana = texto("", 14, false, Color.WHITE);
         aviso = texto("", 10, false, 0xFFFFC9C9);
 
+        // Solo en un teléfono (para probar): el reloj recibe el código solo, aquí se pega del portapapeles.
+        pegar = texto("Pegar código", 13, true, VINO);
+        GradientDrawable fondoPegar = new GradientDrawable();
+        fondoPegar.setCornerRadius(dp(20));
+        fondoPegar.setColor(Color.WHITE);
+        pegar.setBackground(fondoPegar);
+        pegar.setPadding(dp(16), dp(8), dp(16), dp(8));
+        pegar.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = cm == null ? null : cm.getPrimaryClip();
+            if (clip != null && clip.getItemCount() > 0 && clip.getItemAt(0).getText() != null) {
+                Datos.guardarToken(this, clip.getItemAt(0).getText().toString());
+                onResume();
+            }
+        });
+
         TextView mas = texto("+", 30, true, VINO);
         mas.setContentDescription("Registrar un gasto");
         GradientDrawable fondo = new GradientDrawable();
@@ -79,6 +100,9 @@ public class MainActivity extends Activity {
         lpSemana.topMargin = dp(4);
         raiz.addView(semana, lpSemana);
         raiz.addView(aviso, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams lpPegar = new LinearLayout.LayoutParams(-2, -2);
+        lpPegar.topMargin = dp(8);
+        raiz.addView(pegar, lpPegar);
         LinearLayout.LayoutParams lpMas = new LinearLayout.LayoutParams(dp(48), dp(48));
         lpMas.topMargin = dp(8);
         raiz.addView(mas, lpMas);
@@ -126,8 +150,10 @@ public class MainActivity extends Activity {
             semana.setText("Guarda el código del widget en el teléfono");
             semana.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
             aviso.setText("");
+            pegar.setVisibility(getPackageManager().hasSystemFeature(PackageManager.FEATURE_WATCH) ? android.view.View.GONE : android.view.View.VISIBLE);
             return;
         }
+        pegar.setVisibility(android.view.View.GONE);
         semana.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         montoHoy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40);
         if (p.getBoolean("hayDatos", false)) {
