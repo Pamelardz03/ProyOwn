@@ -30,6 +30,8 @@ const LEGALES = [
 ]
 
 const etiqueta = { fontSize: 10, color: 'var(--muted)', fontWeight: 500 }
+// Tarjeta que lleva a su pestaña: sin subrayado ni color de enlace.
+const TARJETA_ENLACE = { padding: 14, color: 'inherit', textDecoration: 'none', display: 'block' }
 const cifra = { fontSize: 17, fontWeight: 500, marginTop: 4 }
 
 export default function Perfil() {
@@ -66,19 +68,19 @@ export default function Perfil() {
                 <div className="mono" style={cifra}>{fmt(vista.saldoReal)}</div>
                 <Link to="/perfil/configuracion" style={{ fontSize: 10, color: 'var(--acento)', fontWeight: 600, textDecoration: 'underline', marginTop: 2, display: 'inline-block' }}>Ajustar a mi banco</Link>
               </div>
-              <div className="card" style={{ padding: 14 }}>
+              <Link to="/whimms" className="card" style={TARJETA_ENLACE}>
                 <div style={etiqueta}>Para Whimms</div>
                 <div className="mono" style={{ ...cifra, color: 'var(--wine4)' }}>{fmt(Math.max(0, c.cajitaWhimms))}</div>
-              </div>
-              <div className="card" style={{ padding: 14 }}>
+              </Link>
+              <Link to="/vitalls" className="card" style={TARJETA_ENLACE}>
                 <div style={etiqueta}>Para Vitalls</div>
                 <div className="mono" style={{ ...cifra, color: 'var(--wine3)' }}>{fmt(c.cajitaVitalls)}</div>
-              </div>
-              <div className="card" style={{ padding: 14 }}>
+              </Link>
+              <Link to="/gastos" className="card" style={TARJETA_ENLACE}>
                 <div style={etiqueta}>Para gastos · esta semana</div>
                 <div className="mono" style={{ ...cifra, color: nivel.color }}>{fmt(Math.max(vista.caja.restante, 0))}</div>
                 <div style={{ fontSize: 10, color: nivel.color, marginTop: 2 }}>{fmt(Math.round(porDia))}/día · {nivel.texto}</div>
-              </div>
+              </Link>
             </div>
           </div>
         )}
