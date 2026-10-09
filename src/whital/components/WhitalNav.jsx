@@ -7,8 +7,9 @@ import { ultimaCompras } from '../lib/ultimaCompras'
 
 const TAMANO_ICONO = 27
 const INACTIVO = 'var(--muted)'
-// --wine4 es el tono vivo de cada paleta (el acento es casi negro en los temas claros y se confundía con el inactivo).
-const ACTIVO = 'var(--wine4)'
+// La pestaña activa lleva una píldora del color de la paleta (--wine) con el ícono en blanco: el cambio de color solo
+// no bastaba, el tono vivo de algunas paletas oscuras casi no se distingue del gris inactivo.
+const ICONO_ACTIVO = '#fff'
 
 // Perfil ya no es una pestaña: se entra con la foto de la cuenta en Inicio.
 const IZQUIERDA = [
@@ -36,11 +37,13 @@ export default function WhitalNav() {
     <NavLink key={to} to={compras ? ultimaCompras() : to} end={end}>
       {({ isActive }) => {
         const activo = compras ? pathname === '/whimms' || pathname === '/vitalls' : isActive
-        const color = activo ? ACTIVO : INACTIVO
+        const color = activo ? ICONO_ACTIVO : INACTIVO
         return (
           <>
-            <Icon size={TAMANO_ICONO} color={color} />
-            <span style={{ color, fontWeight: activo ? 700 : 600 }}>{label}</span>
+            <div style={{ padding: '4px 16px', borderRadius: 16, background: activo ? 'var(--wine)' : 'transparent', display: 'flex' }}>
+              <Icon size={TAMANO_ICONO} color={color} />
+            </div>
+            <span style={{ color: activo ? 'var(--text)' : INACTIVO, fontWeight: activo ? 700 : 600 }}>{label}</span>
           </>
         )
       }}
