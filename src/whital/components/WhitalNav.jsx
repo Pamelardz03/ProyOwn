@@ -7,8 +7,8 @@ import { ultimaCompras } from '../lib/ultimaCompras'
 
 const TAMANO_ICONO = 27
 const INACTIVO = 'var(--muted)'
-// El acento mezclado con negro para que la pestaña seleccionada resalte más que las demás.
-const ACTIVO = 'color-mix(in srgb, var(--acento) 60%, #000)'
+// --wine4 es el tono vivo de cada paleta (el acento es casi negro en los temas claros y se confundía con el inactivo).
+const ACTIVO = 'var(--wine4)'
 
 // Perfil ya no es una pestaña: se entra con la foto de la cuenta en Inicio.
 const IZQUIERDA = [
