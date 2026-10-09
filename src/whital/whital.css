@@ -98,17 +98,18 @@
 /* ===== Menú de abajo: 5 columnas iguales (el + queda al centro) y + en cuadrado redondeado ===== */
 .whital nav.bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center}
 .btn-mas{position:absolute;left:50%;top:0;transform:translate(-50%,-30%);width:56px;height:56px;border-radius:18px;background:var(--wine);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,0,0,.16)}
-/* El menú tiene un hueco curvo en el centro donde queda el +. El fondo va en ::before para poder recortarlo. */
+/* El menú tiene un hueco redondeado en el centro donde queda el +. El fondo (.nav-fondo) recorta lo que sobra del hueco:
+   el hueco pinta con una sombra gruesa todo lo que lo rodea y el contenedor la corta en los bordes del menú, así la curva
+   y su contorno salen de una sola forma. */
 .whital nav.bottom-nav{background:none;border-top:0;isolation:isolate}
-/* Hueco cuadrado redondeado alrededor del +: botón 56px + 8px de separación por lado; esquinas inferiores de 26px (concéntricas con las del botón) */
-.whital nav.bottom-nav::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--card-solid);border-top:1px solid var(--beige3);
-  -webkit-mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000),linear-gradient(#000,#000),radial-gradient(circle 26px at 100% 0,transparent 25px,#000 26px),radial-gradient(circle 26px at 0 0,transparent 25px,#000 26px);
-  mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000),linear-gradient(#000,#000),radial-gradient(circle 26px at 100% 0,transparent 25px,#000 26px),radial-gradient(circle 26px at 0 0,transparent 25px,#000 26px);
-  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-  -webkit-mask-size:calc(50% - 36px) 100%,calc(50% - 36px) 100%,100% calc(100% - 47px),26px 26px,26px 26px;
-  mask-size:calc(50% - 36px) 100%,calc(50% - 36px) 100%,100% calc(100% - 47px),26px 26px,26px 26px;
-  -webkit-mask-position:0 0,100% 0,0 47px,calc(50% - 36px) 21px,calc(50% + 10px) 21px;
-  mask-position:0 0,100% 0,0 47px,calc(50% - 36px) 21px,calc(50% + 10px) 21px}
+.nav-fondo{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+/* Hueco: botón 56px + 8px de separación por lado; esquinas inferiores de 26px (concéntricas con las del botón, de 18px) */
+.nav-hueco{position:absolute;left:50%;top:-30px;width:72px;height:77px;transform:translateX(-50%);border-radius:0 0 26px 26px;
+  box-shadow:0 0 0 1px var(--beige3),0 0 0 200px var(--card-solid)}
+/* Línea superior del menú, interrumpida por el hueco */
+.nav-fondo::before,.nav-fondo::after{content:"";position:absolute;top:0;height:1px;width:calc(50% - 37px);background:var(--beige3)}
+.nav-fondo::before{left:0}
+.nav-fondo::after{right:0}
 .whital[data-fondo=beige] .btn-mas{color:#f3efe2}
 
 /* ===== Perfil: las tarjetas y filas, un poco más oscuras que el fondo de Perfil ===== */
